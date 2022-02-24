@@ -2,7 +2,7 @@
 name = "subpub"
 version = "0.1.0"
 edition = "2021"
-description = "This helps publish crates from Substrate"
+description = "Automate the process of publishing crates from Substrate"
 
 [dependencies]
 anyhow = "1.0.55"
