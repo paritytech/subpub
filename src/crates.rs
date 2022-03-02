@@ -1,15 +1,23 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, ops::RangeBounds};
 use walkdir::WalkDir;
 use anyhow::anyhow;
 use std::collections::{ HashMap, HashSet };
 use crate::one_crate::CrateDetails;
+use semver::Version;
 
 #[derive(Debug, Clone)]
 pub struct Crates {
     // Details for a given crate, including dependencies.
     details: HashMap<String, CrateDetails>,
     // Which crates depend on a given crate.
-    dependees: HashMap<String, HashSet<String>>
+    dependees: HashMap<String, Dependees>
+}
+
+#[derive(Debug, Clone, Default)]
+struct Dependees {
+    deps: HashSet<String>,
+    build_deps: HashSet<String>,
+    dev_deps: HashSet<String>,
 }
 
 impl Crates {
@@ -36,10 +44,16 @@ impl Crates {
 
         // Build a reverse dependency map, since it's useful to know which crates
         // depend on a given crate in our workspace.
-        let mut dependees: HashMap<String, HashSet<String>> = HashMap::new();
+        let mut dependees: HashMap<String, Dependees> = HashMap::new();
         for crate_details in details.values() {
             for dep in &crate_details.deps {
-                dependees.entry(dep.clone()).or_default().insert(crate_details.name.clone());
+                dependees.entry(dep.clone()).or_default().deps.insert(crate_details.name.clone());
+            }
+            for dep in &crate_details.build_deps {
+                dependees.entry(dep.clone()).or_default().build_deps.insert(crate_details.name.clone());
+            }
+            for dep in &crate_details.dev_deps {
+                dependees.entry(dep.clone()).or_default().dev_deps.insert(crate_details.name.clone());
             }
         }
 
@@ -47,6 +61,145 @@ impl Crates {
             details,
             dependees,
         })
+    }
+
+    /// Bump the version of the crate given, and update it in all dependant crates as needed.
+    fn bump_crate_version(&mut self, name: &str) -> anyhow::Result<Version> {
+        // Bump the crate version.
+        let details = match self.details.get_mut(name) {
+            Some(details) => details,
+            None => anyhow::bail!("Crate '{name}' not found")
+        };
+        let new_version = details.bump_version()?;
+
+        // Find any crate which depends on this crate and bump the version there too.
+        for details in self.details.values() {
+            details.write_dependency_version(name, &new_version);
+        }
+        Ok(new_version)
+    }
+
+    /// return a list of the crates that will need publishing in order to ensure that the
+    /// crates provided to this can be published in their current state.
+    ///
+    /// **Note:** it may be that one or more of the crate names provided are already
+    /// published in their current state, in which case they won't be returned in the result.
+    fn what_needs_publishing(&self, crates: Vec<String>) -> anyhow::Result<Vec<String>> {
+
+        struct Details<'a> {
+            dependees: HashSet<String>,
+            details: &'a CrateDetails,
+            depth: usize,
+            needs_publishing: bool
+        }
+        let mut tree: HashMap<String, Details> = HashMap::new();
+
+        // Step 1: make a note of the crates we care about based on the names
+        // provided, which are the ones we ultimately want to be published
+        // in their current state.
+
+        fn note_crates<'a>(
+            all: &'a Crates,
+            tree: &mut HashMap<String, Details<'a>>,
+            crates: impl IntoIterator<Item=String>,
+            depth: usize
+        ) {
+            for name in crates {
+                let details = match all.details.get(&name) {
+                    Some(details) => details,
+                    // Crate doesn't exist; ignore it.
+                    None => continue
+                };
+
+                let entry = tree.entry(name).or_insert_with(|| Details {
+                    dependees: HashSet::new(),
+                    details,
+                    depth,
+                    needs_publishing: false,
+                });
+
+                // We care about the deepest depth we find, so update as needed.
+                if entry.depth < depth {
+                    entry.depth = depth
+                }
+                note_crates(all, tree, details.deps.iter().cloned(), depth + 1);
+            }
+        }
+        note_crates(self, &mut tree, crates, 0);
+
+        // Step 2: populate the dependees for each crate. We pay attention to deps and
+        // build deps but ignore dev deps, since those are irrelevant for publishing.
+        // We need to wait until we have our entire sub-tree to do this, built above.
+
+        fn populate_dependees<'a>(
+            all: &'a Crates,
+            tree: &mut HashMap<String, Details<'a>>,
+        ) {
+            let crates_in_sub_tree: HashSet<String> = tree.keys().cloned().collect();
+            for (name, details) in tree.iter_mut() {
+                let dependees = all.dependees
+                    .get(name)
+                    .expect("should exist");
+
+                details.dependees = dependees.build_deps
+                    .union(&dependees.deps)
+                    .cloned()
+                    .filter(|d| crates_in_sub_tree.contains(d))
+                    .collect();
+            }
+        }
+        populate_dependees(self, &mut tree);
+
+
+        // Step 3: work out which of the crates in this graph need publishing. We work
+        // from the deepest dependencies up, and for each dependency we find that needs
+        // publishing, we mark all crates that depend on it as also needing publishing.
+
+        fn set_needs_publishing(tree: &mut HashMap<String, Details>, name: &str) {
+            let entry = tree
+                .get_mut(name)
+                .expect("should exist");
+
+            entry.needs_publishing = true;
+            for dep in entry.dependees.clone().iter() {
+                set_needs_publishing(tree, dep);
+            }
+        }
+
+        let mut deepest_first: Vec<(String, usize)> = tree
+            .iter()
+            .map(|(name, details)| (name.clone(), details.depth))
+            .collect();
+        deepest_first.sort_by_key(|(_, depth)| std::cmp::Reverse(*depth));
+
+        for (name, _) in deepest_first.iter() {
+            let details = tree
+                .get_mut(name)
+                .expect("should exist");
+
+            // Ignore things that we already know need publishing
+            if details.needs_publishing {
+                continue
+            }
+
+            // If the crate itself needs publishing, mark it and anything
+            // depending on it as needing publishing.
+            if details.details.needs_publishing()? {
+                set_needs_publishing(&mut tree, name);
+            }
+        }
+
+        // Step 4: Return a filtered list of crates we need to bump versions/publish
+        // in order to publish the crates originally provided. Return the list im the
+        // order that you'd need to publish them.
+
+        let crates_that_need_publishing = deepest_first
+            .into_iter()
+            .map(|(name, _depth)| name)
+            .filter(|name| tree.get(name).unwrap().needs_publishing)
+            .collect();
+
+        Ok(crates_that_need_publishing)
     }
 }
 

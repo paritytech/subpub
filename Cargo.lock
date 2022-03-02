@@ -211,6 +211,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "semver"
+version = "1.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4a3381e03edd24287172047536f20cabde766e2cd3e65e6b00fb3af51c4f38d"
+
+[[package]]
 name = "serde"
 version = "1.0.136"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -228,6 +234,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "semver",
  "toml",
  "toml_edit",
  "walkdir",
