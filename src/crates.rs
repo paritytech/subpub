@@ -64,19 +64,20 @@ impl Crates {
     }
 
     /// Bump the version of the crate given, and update it in all dependant crates as needed.
-    fn bump_crate_version(&mut self, name: &str) -> anyhow::Result<Version> {
+    /// Return the old version and the new version.
+    pub fn bump_crate_version(&mut self, name: &str) -> anyhow::Result<(Version, Version)> {
         // Bump the crate version.
         let details = match self.details.get_mut(name) {
             Some(details) => details,
             None => anyhow::bail!("Crate '{name}' not found")
         };
-        let new_version = details.bump_version()?;
+        let (old_version, new_version) = details.bump_version()?;
 
         // Find any crate which depends on this crate and bump the version there too.
         for details in self.details.values() {
-            details.write_dependency_version(name, &new_version);
+            details.write_dependency_version(name, &new_version)?;
         }
-        Ok(new_version)
+        Ok((old_version, new_version))
     }
 
     /// return a list of the crates that will need publishing in order to ensure that the
@@ -84,7 +85,7 @@ impl Crates {
     ///
     /// **Note:** it may be that one or more of the crate names provided are already
     /// published in their current state, in which case they won't be returned in the result.
-    fn what_needs_publishing(&self, crates: Vec<String>) -> anyhow::Result<Vec<String>> {
+    pub fn what_needs_publishing(&self, crates: Vec<String>) -> anyhow::Result<Vec<String>> {
 
         struct Details<'a> {
             dependees: HashSet<String>,

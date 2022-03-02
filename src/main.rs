@@ -38,21 +38,44 @@ struct CommonOpts {
 }
 
 fn main() {
+    env_logger::init();
+
     let args = Args::parse();
 
-    match args.command {
+    let res = match args.command {
         Command::PrepareForPublish(opts) => prepare_for_publish(opts),
         Command::DoPublish(opts) => do_publish(opts),
+    };
+
+    if let Err(e) = res {
+        log::error!("{e}");
     }
 }
 
-fn prepare_for_publish(opts: CommonOpts) {
-    // Load crate details:
-    let crate_details = Crates::load_crates_in_workspace(opts.path);
+fn prepare_for_publish(opts: CommonOpts) -> anyhow::Result<()> {
+    let crate_details = Crates::load_crates_in_workspace(opts.path)?;
+    println!("You've said you'd like to publish these crates:\n");
+    for name in &opts.crates {
+        println!("  {name}");
+    }
 
-    println!("{crate_details:#?}");
+    let publish_these = crate_details.what_needs_publishing(opts.crates)?;
+    println!("\nThe following crates need publishing (in this order) in order to do this:\n");
+    for name in &publish_these {
+        println!("  {name}");
+    }
+
+    println!("\nI'm bumping the following crate versions to accomodate this:\n");
+    let mut updated_details = crate_details.clone();
+    for name in &publish_these {
+        let (old_version, new_version) = updated_details.bump_crate_version(&name)?;
+        println!("  {name}: {old_version} -> {new_version}");
+    }
+
+    println!("\nNow, you can create a release PR to have these version bumps merged");
+    Ok(())
 }
 
-fn do_publish(opts: CommonOpts) {
-
+fn do_publish(opts: CommonOpts) -> anyhow::Result<()>  {
+    Ok(())
 }

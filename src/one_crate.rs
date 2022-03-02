@@ -73,8 +73,10 @@ impl CrateDetails {
     /// 4.0.0-dev -> 4.0.0 (remove prerelease label)
     /// 4.0.0+buildmetadata -> 5.0.0+buildmetadata (preserve build metadata regardless)
     /// ```
-    pub fn bump_version(&mut self) -> anyhow::Result<Version> {
-        let name = &self.name;
+    ///
+    /// Return the old and new version.
+    pub fn bump_version(&mut self) -> anyhow::Result<(Version, Version)> {
+        let old_version = self.version.clone();
         let mut new_version = self.version.clone();
 
         if new_version.pre != semver::Prerelease::EMPTY {
@@ -96,7 +98,7 @@ impl CrateDetails {
         // If that worked, save the in-memory version too
         self.version = new_version.clone();
 
-        Ok(new_version)
+        Ok((old_version, new_version))
     }
 
     /// Set any references to the dependency provided to the version given.
@@ -147,10 +149,7 @@ impl CrateDetails {
 
     /// Strip dev dependencies.
     pub fn strip_dev_deps(&self) -> anyhow::Result<()> {
-        let name = &self.name;
-
         let mut toml = self.read_toml()?;
-
         if toml.remove("dev-dependencies").is_some() {
             // Only write the file if the remove actually did something, otherwise just leave it.
             self.write_toml(&toml)?;
