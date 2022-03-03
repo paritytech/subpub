@@ -1,4 +1,4 @@
-mod one_crate;
+mod crate_details;
 mod crates;
 mod version;
 mod crates_io;

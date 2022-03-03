@@ -147,16 +147,25 @@ impl CrateDetails {
     /// This checks whether we actually need to publish a new version of the crate. It'll return `false`
     /// only if, as far as we can see, the current version is published to crates.io, and there have been
     /// no changes to it since.
-    ///
-    /// TODO: Implement this optimisation.
     pub fn needs_publishing(&self) -> anyhow::Result<bool> {
         use std::io::{ Cursor, Read };
 
         let name = &self.name;
 
-        // Download and pass through a gzip decoder.
-        let crate_bytes = crates_io::download_crate(&self.name, &self.version)
+        let crate_bytes = crates_io::try_download_crate(&self.name, &self.version)
             .with_context(|| format!("Could not download crate {name}"))?;
+
+        let crate_bytes = match crate_bytes {
+            Some(bytes) => bytes,
+            None => {
+                // crate at current version doesn't exist; this def needs publishing, then.
+                // Especially useful since when we bump the version we'll end up in this branch
+                // which will be quicker.
+                return Ok(true)
+            }
+        };
+
+        // Crates on crates.io are gzipped tar files, so run them through a decoder.
         let crate_bytes = flate2::read::GzDecoder::new(Cursor::new(crate_bytes));
 
         // Iterate through the tar archive we decode.
@@ -173,10 +182,14 @@ impl CrateDetails {
 
             let mut file_contents = vec![];
             entry.read_to_end(&mut file_contents)?;
-// TODO log file contents to check we're decoding properly.
+// TODO remove logging of file contents to check we're decoding properly.
             println!("####################### FILE PATH: {:?}\n", path);
             std::io::stdout().write_all(&file_contents)?;
         }
+
+// Notes:
+// Cargo.toml.orig from crate needs comparing against Cargo.toml; the "Cargo.toml" in the crate is auto generated and normalized.
+// all tar files are in an initial dir like sp-std-4.0.0; strip this to know which file to compare against.
 
         Ok(true)
     }

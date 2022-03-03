@@ -2,7 +2,7 @@ use std::{path::PathBuf};
 use walkdir::WalkDir;
 use anyhow::anyhow;
 use std::collections::{ HashMap, HashSet };
-use crate::one_crate::{ CrateDetails };
+use crate::crate_details::{ CrateDetails };
 use crate::version::{ Version, bump_for_breaking_change };
 
 #[derive(Debug, Clone)]

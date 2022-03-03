@@ -5,7 +5,7 @@ use anyhow::Context;
 const CRATES_API: &str = "https://crates.io/api/v1";
 
 /// Download a crate from crates.io.
-pub fn download_crate(name: &str, version: &semver::Version) -> anyhow::Result<Vec<u8>> {
+pub fn try_download_crate(name: &str, version: &semver::Version) -> anyhow::Result<Option<Vec<u8>>> {
     let client = reqwest::blocking::Client::new();
     let version = version.to_string();
     let res = client.get(format!("{CRATES_API}/crates/{name}/{version}/download"))
@@ -14,10 +14,10 @@ pub fn download_crate(name: &str, version: &semver::Version) -> anyhow::Result<V
         .with_context(|| format!("Cannot download {name}"))?;
 
     if !res.status().is_success() {
-        anyhow::bail!("Non-200 response code attempting to download {name}");
+        return Ok(None);
     }
 
-    Ok(res.bytes()?.to_vec())
+    Ok(Some(res.bytes()?.to_vec()))
 }
 
 /// Which versions of this crate exist on crates.io?
