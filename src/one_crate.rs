@@ -1,7 +1,8 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, io::Write};
 use anyhow::{anyhow, Context};
 use semver::Version;
 use std::collections::HashSet;
+use crate::crates_io;
 
 #[derive(Debug, Clone)]
 pub struct CrateDetails {
@@ -75,30 +76,16 @@ impl CrateDetails {
     /// ```
     ///
     /// Return the old and new version.
-    pub fn bump_version(&mut self) -> anyhow::Result<(Version, Version)> {
-        let old_version = self.version.clone();
-        let mut new_version = self.version.clone();
-
-        if new_version.pre != semver::Prerelease::EMPTY {
-            // Remove pre-release tag like `-dev` if present
-            new_version.pre = semver::Prerelease::EMPTY;
-        } else if new_version.major == 0 {
-            // Else, bump minor if 0.x.0 crate
-            new_version.minor += 1;
-        } else {
-            // Else bump major version
-            new_version.major += 1;
-        }
-
+    pub fn write_own_version(&mut self, version: Version) -> anyhow::Result<()> {
         // Load TOML file and update the version in that.
         let mut toml = self.read_toml()?;
-        toml["version"] = toml_edit::value(new_version.to_string());
+        toml["package"]["version"] = toml_edit::value(version.to_string());
         self.write_toml(&toml)?;
 
         // If that worked, save the in-memory version too
-        self.version = new_version.clone();
+        self.version = version;
 
-        Ok((old_version, new_version))
+        Ok(())
     }
 
     /// Set any references to the dependency provided to the version given.
@@ -127,8 +114,8 @@ impl CrateDetails {
                 *dep = toml_edit::value(version.to_string());
             } else if let Some(table) = dep.as_table_like_mut() {
                 // If table, only update version if version is present
-                if let Some(version) = table.get_mut("version") {
-                    *version = toml_edit::value(version.to_string());
+                if let Some(v) = table.get_mut("version") {
+                    *v = toml_edit::value(version.to_string());
                 }
             }
         }
@@ -163,7 +150,47 @@ impl CrateDetails {
     ///
     /// TODO: Implement this optimisation.
     pub fn needs_publishing(&self) -> anyhow::Result<bool> {
+        use std::io::{ Cursor, Read };
+
+        let name = &self.name;
+
+        // Download and pass through a gzip decoder.
+        let crate_bytes = crates_io::download_crate(&self.name, &self.version)
+            .with_context(|| format!("Could not download crate {name}"))?;
+        let crate_bytes = flate2::read::GzDecoder::new(Cursor::new(crate_bytes));
+
+        // Iterate through the tar archive we decode.
+        let mut archive = tar::Archive::new(crate_bytes);
+        let entries = archive.entries()
+            .with_context(|| format!("Could not read files in published crate {name}"))?;
+
+        for entry in entries {
+            let mut entry = entry
+                .with_context(|| format!("Could not read files in published crate {name}"))?;
+            let path = entry.path()
+                .with_context(|| format!("Could not read path for crate {name}"))?
+                .into_owned();
+
+            let mut file_contents = vec![];
+            entry.read_to_end(&mut file_contents)?;
+// TODO log file contents to check we're decoding properly.
+            println!("####################### FILE PATH: {:?}\n", path);
+            std::io::stdout().write_all(&file_contents)?;
+        }
+
         Ok(true)
+    }
+
+    /// Does this create need a version bump in order to be published?
+    pub fn needs_version_bump_to_publish(&self) -> anyhow::Result<bool> {
+        if self.version.pre != semver::Prerelease::EMPTY {
+            // If prerelease eg `-dev`, we'll want to bump.
+            return Ok(true)
+        }
+
+        // Does the current version of this crate exist on crates.io?
+        let known_versions = crates_io::get_known_crate_versions(&self.name)?;
+        Ok(!known_versions.contains(&self.version))
     }
 
     fn read_toml(&self) -> anyhow::Result<toml_edit::Document> {

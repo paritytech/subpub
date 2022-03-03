@@ -1,9 +1,9 @@
-use std::{path::PathBuf, ops::RangeBounds};
+use std::{path::PathBuf};
 use walkdir::WalkDir;
 use anyhow::anyhow;
 use std::collections::{ HashMap, HashSet };
-use crate::one_crate::CrateDetails;
-use semver::Version;
+use crate::one_crate::{ CrateDetails };
+use crate::version::{ Version, bump_for_breaking_change };
 
 #[derive(Debug, Clone)]
 pub struct Crates {
@@ -63,6 +63,16 @@ impl Crates {
         })
     }
 
+    /// Does a crate need a version bump in order to publish?
+    pub fn does_crate_version_need_bumping_to_publish(&self, name: &str) -> anyhow::Result<bool> {
+        let details = match self.details.get(name) {
+            Some(details) => details,
+            None => anyhow::bail!("Crate '{name}' not found")
+        };
+
+        details.needs_version_bump_to_publish()
+    }
+
     /// Bump the version of the crate given, and update it in all dependant crates as needed.
     /// Return the old version and the new version.
     pub fn bump_crate_version(&mut self, name: &str) -> anyhow::Result<(Version, Version)> {
@@ -71,12 +81,18 @@ impl Crates {
             Some(details) => details,
             None => anyhow::bail!("Crate '{name}' not found")
         };
-        let (old_version, new_version) = details.bump_version()?;
+
+        let old_version = details.version.clone();
+        let new_version = bump_for_breaking_change(old_version.clone());
+
+        // Bump the crate version:
+        details.write_own_version(new_version.clone())?;
 
         // Find any crate which depends on this crate and bump the version there too.
         for details in self.details.values() {
             details.write_dependency_version(name, &new_version)?;
         }
+
         Ok((old_version, new_version))
     }
 

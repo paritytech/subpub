@@ -1,5 +1,7 @@
 mod one_crate;
 mod crates;
+mod version;
+mod crates_io;
 
 use clap::{ Parser, Subcommand };
 use std::path::PathBuf;
@@ -48,12 +50,12 @@ fn main() {
     };
 
     if let Err(e) = res {
-        log::error!("{e}");
+        log::error!("{e:?}");
     }
 }
 
 fn prepare_for_publish(opts: CommonOpts) -> anyhow::Result<()> {
-    let crate_details = Crates::load_crates_in_workspace(opts.path)?;
+    let mut crate_details = Crates::load_crates_in_workspace(opts.path)?;
     println!("You've said you'd like to publish these crates:\n");
     for name in &opts.crates {
         println!("  {name}");
@@ -65,11 +67,29 @@ fn prepare_for_publish(opts: CommonOpts) -> anyhow::Result<()> {
         println!("  {name}");
     }
 
-    println!("\nI'm bumping the following crate versions to accomodate this:\n");
-    let mut updated_details = crate_details.clone();
+    let mut no_need_to_bump = vec![];
+    let mut bump_these = vec![];
     for name in &publish_these {
-        let (old_version, new_version) = updated_details.bump_crate_version(&name)?;
-        println!("  {name}: {old_version} -> {new_version}");
+        if crate_details.does_crate_version_need_bumping_to_publish(&name)? {
+            let (old_version, new_version) = crate_details.bump_crate_version(&name)?;
+            bump_these.push((name, old_version, new_version));
+        } else {
+            no_need_to_bump.push(name);
+        }
+    }
+
+    if !bump_these.is_empty() {
+        println!("\nI'm bumping the following crate versions to accomodate this:\n");
+        for (name, old_version, new_version) in bump_these {
+            println!("  {name}: {old_version} -> {new_version}");
+        }
+    }
+
+    if !no_need_to_bump.is_empty() {
+        println!("\nThese crates did not need a version bump in order to publish:\n");
+        for name in no_need_to_bump {
+            println!("  {name}");
+        }
     }
 
     println!("\nNow, you can create a release PR to have these version bumps merged");
