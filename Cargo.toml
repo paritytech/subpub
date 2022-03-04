@@ -3,6 +3,7 @@ name = "subpub"
 version = "0.1.0"
 edition = "2021"
 description = "Automate the process of publishing crates from Substrate"
+license = "GPL-3.0"
 
 [dependencies]
 anyhow = "1.0.55"
