@@ -1,4 +1,4 @@
-use std::{path::PathBuf, io::Write};
+use std::{path::PathBuf, io::{Read, Cursor}};
 use anyhow::{anyhow, Context};
 use semver::Version;
 use std::collections::HashSet;
@@ -11,7 +11,9 @@ pub struct CrateDetails {
     pub deps: HashSet<String>,
     pub build_deps: HashSet<String>,
     pub dev_deps: HashSet<String>,
-    pub toml_path: PathBuf,
+
+    // Modifying the files on disk can only be done through the interface below.
+    toml_path: PathBuf,
 }
 
 impl CrateDetails {
@@ -148,8 +150,6 @@ impl CrateDetails {
     /// only if, as far as we can see, the current version is published to crates.io, and there have been
     /// no changes to it since.
     pub fn needs_publishing(&self) -> anyhow::Result<bool> {
-        use std::io::{ Cursor, Read };
-
         let name = &self.name;
 
         let crate_bytes = crates_io::try_download_crate(&self.name, &self.version)
@@ -165,33 +165,69 @@ impl CrateDetails {
             }
         };
 
-        // Crates on crates.io are gzipped tar files, so run them through a decoder.
+        // Crates on crates.io are gzipped tar files, so uncompress before decoding the archive.
         let crate_bytes = flate2::read::GzDecoder::new(Cursor::new(crate_bytes));
-
-        // Iterate through the tar archive we decode.
         let mut archive = tar::Archive::new(crate_bytes);
         let entries = archive.entries()
             .with_context(|| format!("Could not read files in published crate {name}"))?;
 
+        // Root path on disk to compare with.
+        let crate_root = self.toml_path.parent().expect("should always exist");
+
         for entry in entries {
-            let mut entry = entry
+            let entry = entry
                 .with_context(|| format!("Could not read files in published crate {name}"))?;
+
+            // Get the path of the current archive entry
             let path = entry.path()
                 .with_context(|| format!("Could not read path for crate {name}"))?
                 .into_owned();
 
-            let mut file_contents = vec![];
-            entry.read_to_end(&mut file_contents)?;
-// TODO remove logging of file contents to check we're decoding properly.
-            println!("####################### FILE PATH: {:?}\n", path);
-            std::io::stdout().write_all(&file_contents)?;
+            // Build a path given this and the root path to find the file to compare against.
+            let mut path = {
+                // Strip the beginning from the archive path
+                let mut components = path.components();
+                components.next();
+
+                // Join these to the crate root:
+                let root_path = crate_root.to_path_buf();
+                root_path.join(components.as_path())
+            };
+
+            // Ignore the auto-generated "Cargo.toml" file in the crate
+            if path.ends_with("Cargo.toml") {
+                continue
+            }
+
+            // Ignore this auto-generated file, too
+            if path.ends_with(".cargo_vcs_info.json") {
+                continue
+            }
+
+            // Compare the file Cargo.toml.orig against our Cargo.toml
+            if path.ends_with("Cargo.toml.orig") {
+                path.set_file_name("Cargo.toml");
+            }
+
+            let file = match std::fs::File::open(&path) {
+                // Can't find file that's in crate? needs publishing.
+                Err(_e) => {
+                    log::debug!("{name}: a file at {path:?} is published but does not exist locally");
+                    return Ok(true)
+                }
+                Ok(f) => f
+            };
+
+            if !are_contents_equal(file, entry)? {
+                log::debug!("{name}: the file at {path:?} is different from the published version");
+                return Ok(true)
+            }
         }
 
-// Notes:
-// Cargo.toml.orig from crate needs comparing against Cargo.toml; the "Cargo.toml" in the crate is auto generated and normalized.
-// all tar files are in an initial dir like sp-std-4.0.0; strip this to know which file to compare against.
-
-        Ok(true)
+        // We compared all files and they all came up equal,
+        // so no need to publish this.
+        log::debug!("{name}: this crate is identical to the published version");
+        Ok(false)
     }
 
     /// Does this create need a version bump in order to be published?
@@ -202,8 +238,9 @@ impl CrateDetails {
         }
 
         // Does the current version of this crate exist on crates.io?
+        // If so, we need to bump the current version.
         let known_versions = crates_io::get_known_crate_versions(&self.name)?;
-        Ok(!known_versions.contains(&self.version))
+        Ok(known_versions.contains(&self.version))
     }
 
     fn read_toml(&self) -> anyhow::Result<toml_edit::Document> {
@@ -268,4 +305,22 @@ fn filter_workspace_dependencies(val: &toml::Value) -> anyhow::Result<HashSet<St
     }
 
     Ok(deps)
+}
+
+/// Compare the content of 2 readers, returning whether they are equal or not.
+// Note: This could be optimised a fair bit.
+fn are_contents_equal<A: Read, B: Read>(mut a: A, mut b: B) -> anyhow::Result<bool> {
+    let mut a_vec = vec![];
+    a.read_to_end(&mut a_vec)?;
+
+    let mut b_vec = vec![];
+    b.read_to_end(&mut b_vec)?;
+
+    // if a_vec != b_vec {
+    //     let a = std::str::from_utf8(&a_vec).unwrap();
+    //     let b = std::str::from_utf8(&b_vec).unwrap();
+    //     println!("DIFFERENT:\n\n{a}\n\n###################################\n\n{b}");
+    // }
+
+    Ok(a_vec == b_vec)
 }
