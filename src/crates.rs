@@ -60,7 +60,10 @@ impl Crates {
 
         // Build a reverse dependency map, since it's useful to know which crates
         // depend on a given crate in our workspace.
-        let mut dependees: HashMap<String, Dependees> = HashMap::new();
+        let mut dependees: HashMap<String, Dependees> = details
+            .keys()
+            .map(|s| (s.clone(), Dependees::default()))
+            .collect();
         for crate_details in details.values() {
             for dep in &crate_details.deps {
                 dependees.entry(dep.clone()).or_default().deps.insert(crate_details.name.clone());
@@ -155,6 +158,8 @@ impl Crates {
                 if entry.depth < depth {
                     entry.depth = depth
                 }
+                // Recurse and add all dependencies to our tree, too. We need to check whether
+                // any of those need publishing as well.
                 note_crates(all, tree, details.deps.iter().cloned(), depth + 1);
             }
         }
@@ -245,12 +250,12 @@ fn crate_cargo_tomls(root: PathBuf) -> Vec<PathBuf> {
 
     WalkDir::new(root)
         .into_iter()
-        // Ignore hidden files and folders.
+        // Ignore hidden files and folders, and anything in "target" folders
         .filter_entry(|entry| {
             entry
                 .file_name()
                 .to_str()
-                .map(|s| !s.starts_with("."))
+                .map(|s| !s.starts_with(".") && s != "target")
                 .unwrap_or(false)
         })
         // Ignore errors

@@ -72,6 +72,9 @@ fn main() {
 
 fn prepare_for_publish(opts: CommonOpts) -> anyhow::Result<()> {
     let mut crate_details = Crates::load_crates_in_workspace(opts.path)?;
+
+println!("{crate_details:#?}");
+
     println!("You've said you'd like to publish these crates:\n");
     for name in &opts.crates {
         println!("  {name}");

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with subpub.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{path::PathBuf, io::{Read, Cursor}};
+use std::{path::{Path, PathBuf}, io::{Read, Cursor}};
 use anyhow::{anyhow, Context};
 use semver::Version;
 use std::collections::HashSet;
@@ -35,8 +35,7 @@ pub struct CrateDetails {
 impl CrateDetails {
     /// Read a Cargo.toml file, pulling out the information we care about.
     pub fn load(path: PathBuf) -> anyhow::Result<CrateDetails> {
-        let contents = std::fs::read(&path)?;
-        let val: toml::Value = toml::from_slice(&contents)?;
+        let val: toml_edit::Document = read_toml(&path)?;
 
         let name = val
             .get("package")
@@ -59,20 +58,19 @@ impl CrateDetails {
         let version = Version::parse(&version)
             .with_context(|| format!("Cannot parse SemVer compatible version from {name}"))?;
 
-        let deps = val
-            .get("dependencies")
-            .map(|deps| filter_workspace_dependencies(deps))
-            .unwrap_or(Ok(HashSet::new()))?;
+        let mut build_deps = HashSet::new();
+        let mut dev_deps = HashSet::new();
+        let mut deps = HashSet::new();
 
-        let build_deps = val
-            .get("build-dependencies")
-            .map(|deps| filter_workspace_dependencies(deps))
-            .unwrap_or(Ok(HashSet::new()))?;
-
-        let dev_deps = val
-            .get("dev-dependencies")
-            .map(|deps| filter_workspace_dependencies(deps))
-            .unwrap_or(Ok(HashSet::new()))?;
+        for item in get_target_dependencies(&val, "build-dependencies") {
+            build_deps.extend(filter_workspace_dependencies(item)?);
+        }
+        for item in get_target_dependencies(&val, "dev-dependencies") {
+            dev_deps.extend(filter_workspace_dependencies(item)?);
+        }
+        for item in get_target_dependencies(&val, "dependencies") {
+            deps.extend(filter_workspace_dependencies(item)?);
+        }
 
         Ok(CrateDetails {
             name,
@@ -138,14 +136,15 @@ impl CrateDetails {
             }
         }
 
-        if let Some(item) = toml.get_mut("dependencies") {
-            do_set(item, version, dependency);
-        }
-        if let Some(item) = toml.get_mut("build-dependencies") {
-            do_set(item, version, dependency);
-        }
-        if let Some(item) = toml.get_mut("dev-dependencies") {
-            do_set(item, version, dependency);
+        // TODO: can we do a mut version of get_target_dependencies??
+        for (name, item) in toml.iter_mut() {
+            if is_dependency_section(&name, "build-dependencies") {
+                do_set(item, version, dependency);
+            } else if is_dependency_section(&name, "dev-dependencies") {
+                do_set(item, version, dependency);
+            } else if is_dependency_section(&name, "dependencies") {
+                do_set(item, version, dependency);
+            }
         }
         self.write_toml(&toml)?;
 
@@ -260,12 +259,7 @@ impl CrateDetails {
     }
 
     fn read_toml(&self) -> anyhow::Result<toml_edit::Document> {
-        let name = &self.name;
-        let toml_string = std::fs::read_to_string(&self.toml_path)
-        .with_context(|| format!("Cannot read the Cargo.toml for {name}"))?;
-        let toml = toml_string.parse::<toml_edit::Document>()
-            .with_context(|| format!("Cannot parse the Cargo.toml for {name}"))?;
-        Ok(toml)
+        read_toml(&self.toml_path)
     }
 
     fn write_toml(&self, toml: &toml_edit::Document) -> anyhow::Result<()> {
@@ -276,9 +270,36 @@ impl CrateDetails {
     }
 }
 
+fn get_target_dependencies<'a>(document: &'a toml_edit::Document, label: &'a str) -> impl Iterator<Item = &'a toml_edit::Item> + 'a {
+    let target = document
+        .get("target")
+        .and_then(|t| t.as_table_like())
+        .into_iter()
+        .flat_map(|t| {
+            // For each item of the "target" table, see if we can find a `label` section in it.
+            t.iter()
+             .flat_map(|(_name, item)| item.as_table_like())
+             .flat_map(|t| t.get(label))
+        });
+
+    document
+        .get(label)
+        .into_iter()
+        .chain(target)
+}
+
+// Load a TOML file.
+fn read_toml(path: &Path) -> anyhow::Result<toml_edit::Document> {
+    let toml_string = std::fs::read_to_string(path)
+        .with_context(|| format!("Cannot read the Cargo.toml at {path:?}"))?;
+    let toml = toml_string.parse::<toml_edit::Document>()
+        .with_context(|| format!("Cannot parse the Cargo.toml at {path:?}"))?;
+    Ok(toml)
+}
+
 /// Given a path to some dependencies in a TOML file, pull out the package names
 /// for any path based dependencies (ie dependencies in the same workspace).
-fn filter_workspace_dependencies(val: &toml::Value) -> anyhow::Result<HashSet<String>> {
+fn filter_workspace_dependencies(val: &toml_edit::Item) -> anyhow::Result<HashSet<String>> {
     let arr = match val.as_table() {
         Some(arr) => arr,
         None => return Err(anyhow!("dependencies should be a TOML table."))
@@ -289,7 +310,7 @@ fn filter_workspace_dependencies(val: &toml::Value) -> anyhow::Result<HashSet<St
         // If props arent a table eg { path = "/foo" }, this is
         // not a workspace dependency (since it needs a "path" prop)
         // so skip over it.
-        let props = match props.as_table() {
+        let props = match props.as_table_like() {
             Some(props) => props,
             None => continue
         };
@@ -315,7 +336,7 @@ fn filter_workspace_dependencies(val: &toml::Value) -> anyhow::Result<HashSet<St
                     .map(|s| s.to_string())
                     .ok_or_else(|| anyhow!("{}.package is not a string.", name))
             })
-            .unwrap_or(Ok(name.clone()))?;
+            .unwrap_or(Ok(name.to_string()))?;
 
         deps.insert(package_name);
     }
