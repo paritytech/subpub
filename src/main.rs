@@ -17,8 +17,7 @@
 mod crate_details;
 mod crates;
 mod version;
-mod crates_io;
-mod cargo;
+mod external;
 
 use clap::{ Parser, Subcommand };
 use std::path::PathBuf;
@@ -74,21 +73,23 @@ fn main() {
 fn prepare_for_publish(opts: CommonOpts) -> anyhow::Result<()> {
     // Run the logic first, and then print the various details, so that
     // our logging is all nicely separated from our output.
-    let mut crate_details = Crates::load_crates_in_workspace(opts.path)?;
-    let publish_these = crate_details.what_needs_publishing(opts.crates.clone())?;
+    let mut crates = Crates::load_crates_in_workspace(opts.path)?;
+    let publish_these = crates.what_needs_publishing(opts.crates.clone())?;
+
     let mut no_need_to_bump = vec![];
     let mut bump_these = vec![];
     for name in &publish_these {
-        if crate_details.does_crate_version_need_bumping_to_publish(&name)? {
-            let (old_version, new_version) = crate_details.bump_crate_version_for_breaking_change(&name)?;
+        if crates.does_crate_version_need_bumping_to_publish(&name)? {
+            let (old_version, new_version) = crates.bump_crate_version_for_breaking_change(&name)?;
             bump_these.push((name, old_version, new_version));
         } else {
             no_need_to_bump.push(name);
         }
     }
-    crate_details.update_lockfile_for_crates(opts.crates.clone())?;
 
-    println!("You've said you'd like to publish these crates:\n");
+    crates.update_lockfile_for_crates(opts.crates.clone())?;
+
+    println!("\nYou've said you'd like to publish these crates:\n");
     for name in &opts.crates {
         println!("  {name}");
     }
@@ -119,5 +120,38 @@ fn prepare_for_publish(opts: CommonOpts) -> anyhow::Result<()> {
 }
 
 fn do_publish(opts: CommonOpts) -> anyhow::Result<()>  {
+    // Run the logic first, and then print the various details, so that
+    // our logging is all nicely separated from our output.
+    let crates = Crates::load_crates_in_workspace(opts.path)?;
+    let publish_these = crates.what_needs_publishing(opts.crates.clone())?;
+
+    // Check that no versions need bumping.
+    let mut bump_these = vec![];
+    for name in &publish_these {
+        if crates.does_crate_version_need_bumping_to_publish(&name)? {
+            bump_these.push(&**name);
+        }
+    }
+
+    if !bump_these.is_empty() {
+        anyhow::bail!(
+            "The following crates need a version bump before they can be published: {}",
+            bump_these.join(", ")
+        );
+    }
+
+    println!("\nYou've said you'd like to publish these crates:\n");
+    for name in &opts.crates {
+        println!("  {name}");
+    }
+
+    println!("\nThe following crates need publishing (in this order) in order to do this:\n");
+    for name in &publish_these {
+        println!("  {name}");
+    }
+
+    for name in publish_these {
+        crates.strip_dev_deps_and_publish(&name)?;
+    }
     Ok(())
 }

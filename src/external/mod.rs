@@ -14,23 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with subpub.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::process::Command;
-use std::path::Path;
+//! Expose external services here.
 
-/// Update the lockfile for dependencies given and any of their subdependencies.
-pub fn update_lockfile_for_crates<'a, I, S>(root: &Path, deps: I) -> anyhow::Result<()>
-where
-    S: AsRef<str>,
-    I: IntoIterator<Item=S>
-{
-    let mut cmd = Command::new("cargo");
-    cmd.arg("update");
-
-    for dep in deps.into_iter() {
-        cmd.arg("-p").arg(dep.as_ref());
-    }
-
-    cmd.current_dir(root);
-    cmd.status()?;
-    Ok(())
-}
+pub mod crates_io;
+pub mod cargo;

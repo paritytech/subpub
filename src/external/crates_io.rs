@@ -20,6 +20,40 @@ use anyhow::Context;
 
 const CRATES_API: &str = "https://crates.io/api/v1";
 
+pub fn does_crate_exist(name: &str, version: &semver::Version) -> anyhow::Result<bool> {
+    let client = reqwest::blocking::Client::new();
+    let url = format!("{CRATES_API}/crates/{name}/{version}");
+    let res = client.get(&url)
+        .header("User-Agent", "Called from https://github.com/paritytech/subpub for comparing published source against repo source")
+        .send()
+        .with_context(|| format!("Cannot download {name}"))?;
+
+    if !res.status().is_success() {
+        // We get a 200 back even if we ask for crates/versions that don't exist,
+        // so a non-200 means something worse went wrong.
+        anyhow::bail!("Non-200 status trying to connect to {url} ({})", res.status());
+    }
+
+    #[allow(unused)]
+    #[derive(serde::Deserialize)]
+    struct SuccessfulResponse {
+        version: SuccessfulResponseVersion,
+    }
+    #[allow(unused)]
+    #[derive(serde::Deserialize)]
+    struct SuccessfulResponseVersion {
+        num: String
+    }
+
+    // If the JSON response body looks like a successful one, we found
+    // that crate, else we did not.
+    if let Err(_e) = res.json::<SuccessfulResponse>() {
+        Ok(false)
+    } else {
+        Ok(true)
+    }
+}
+
 /// Download a crate from crates.io.
 pub fn try_download_crate(name: &str, version: &semver::Version) -> anyhow::Result<Option<Vec<u8>>> {
     let client = reqwest::blocking::Client::new();

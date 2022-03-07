@@ -18,7 +18,7 @@ use std::{path::{Path, PathBuf}, io::{Read, Cursor}};
 use anyhow::{anyhow, Context};
 use semver::Version;
 use std::collections::HashSet;
-use crate::crates_io;
+use crate::external;
 
 #[derive(Debug, Clone)]
 pub struct CrateDetails {
@@ -176,13 +176,20 @@ impl CrateDetails {
         Ok(())
     }
 
+    /// Publish the current code for this crate as-is. You may want to run
+    /// [`CrateDetails::strip_dev_deps()`] first.
+    pub fn publish(&self) -> anyhow::Result<()> {
+        let parent = self.toml_path.parent().expect("parent of toml path should exist");
+        external::cargo::publish_crate(parent, &self.name)
+    }
+
     /// This checks whether we actually need to publish a new version of the crate. It'll return `false`
     /// only if, as far as we can see, the current version is published to crates.io, and there have been
     /// no changes to it since.
     pub fn needs_publishing(&self) -> anyhow::Result<bool> {
         let name = &self.name;
 
-        let crate_bytes = crates_io::try_download_crate(&self.name, &self.version)
+        let crate_bytes = external::crates_io::try_download_crate(&self.name, &self.version)
             .with_context(|| format!("Could not download crate {name}"))?;
 
         let crate_bytes = match crate_bytes {
@@ -269,7 +276,7 @@ impl CrateDetails {
 
         // Does the current version of this crate exist on crates.io?
         // If so, we need to bump the current version.
-        let known_versions = crates_io::get_known_crate_versions(&self.name)?;
+        let known_versions = external::crates_io::get_known_crate_versions(&self.name)?;
         Ok(known_versions.contains(&self.version))
     }
 
