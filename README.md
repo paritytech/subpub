@@ -11,3 +11,5 @@ Roughly, this tool can take care of the following steps:
 - Compare local source against versions published on crates.io to find out whether a crate needs a version bump.
 - Perform the version bumping.
 - Publish this set of crates in the correct order to crates.io.
+
+Run the crate with `cargo run` to see the available commands and help text for them.
