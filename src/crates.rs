@@ -94,7 +94,7 @@ impl Crates {
 
     /// Bump the version of the crate given, and update it in all dependant crates as needed.
     /// Return the old version and the new version.
-    pub fn bump_crate_version(&mut self, name: &str) -> anyhow::Result<(Version, Version)> {
+    pub fn bump_crate_version_for_breaking_change(&mut self, name: &str) -> anyhow::Result<(Version, Version)> {
         // Bump the crate version.
         let details = match self.details.get_mut(name) {
             Some(details) => details,

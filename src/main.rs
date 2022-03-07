@@ -71,30 +71,29 @@ fn main() {
 }
 
 fn prepare_for_publish(opts: CommonOpts) -> anyhow::Result<()> {
+    // Run the logic first, and then print the various details, so that
+    // our logging is all nicely separated from our output.
     let mut crate_details = Crates::load_crates_in_workspace(opts.path)?;
-
-println!("{crate_details:#?}");
+    let publish_these = crate_details.what_needs_publishing(opts.crates.clone())?;
+    let mut no_need_to_bump = vec![];
+    let mut bump_these = vec![];
+    for name in &publish_these {
+        if crate_details.does_crate_version_need_bumping_to_publish(&name)? {
+            let (old_version, new_version) = crate_details.bump_crate_version_for_breaking_change(&name)?;
+            bump_these.push((name, old_version, new_version));
+        } else {
+            no_need_to_bump.push(name);
+        }
+    }
 
     println!("You've said you'd like to publish these crates:\n");
     for name in &opts.crates {
         println!("  {name}");
     }
 
-    let publish_these = crate_details.what_needs_publishing(opts.crates)?;
     println!("\nThe following crates need publishing (in this order) in order to do this:\n");
     for name in &publish_these {
         println!("  {name}");
-    }
-
-    let mut no_need_to_bump = vec![];
-    let mut bump_these = vec![];
-    for name in &publish_these {
-        if crate_details.does_crate_version_need_bumping_to_publish(&name)? {
-            let (old_version, new_version) = crate_details.bump_crate_version(&name)?;
-            bump_these.push((name, old_version, new_version));
-        } else {
-            no_need_to_bump.push(name);
-        }
     }
 
     if !bump_these.is_empty() {
@@ -102,6 +101,8 @@ println!("{crate_details:#?}");
         for (name, old_version, new_version) in bump_these {
             println!("  {name}: {old_version} -> {new_version}");
         }
+    } else {
+        println!("\nNo crates needed a version bump to accomodate this\n");
     }
 
     if !no_need_to_bump.is_empty() {
