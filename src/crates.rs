@@ -23,6 +23,7 @@ use crate::version::{ Version, bump_for_breaking_change };
 
 #[derive(Debug, Clone)]
 pub struct Crates {
+    root: PathBuf,
     // Details for a given crate, including dependencies.
     details: HashMap<String, CrateDetails>,
     // Which crates depend on a given crate.
@@ -40,7 +41,7 @@ impl Crates {
     /// Return a map of all substrate crates, in the form `crate_name => ( path, details )`.
     pub fn load_crates_in_workspace(root: PathBuf) -> anyhow::Result<Crates> {
         // Load details:
-        let details = crate_cargo_tomls(root)
+        let details = crate_cargo_tomls(root.clone())
             .into_iter()
             .map(|path| {
                 let details = CrateDetails::load(path)?;
@@ -77,9 +78,19 @@ impl Crates {
         }
 
         Ok(Crates {
+            root,
             details,
             dependees,
         })
+    }
+
+    /// Update the lockfile for the crates given and any of their dependencies if they've changed.
+    pub fn update_lockfile_for_crates<'a, I, S>(&self, crates: I) -> anyhow::Result<()>
+    where
+        S: AsRef<str>,
+        I: IntoIterator<Item=S>
+    {
+        crate::cargo::update_lockfile_for_crates(&self.root, crates)
     }
 
     /// Does a crate need a version bump in order to publish?

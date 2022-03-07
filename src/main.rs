@@ -18,6 +18,7 @@ mod crate_details;
 mod crates;
 mod version;
 mod crates_io;
+mod cargo;
 
 use clap::{ Parser, Subcommand };
 use std::path::PathBuf;
@@ -85,6 +86,7 @@ fn prepare_for_publish(opts: CommonOpts) -> anyhow::Result<()> {
             no_need_to_bump.push(name);
         }
     }
+    crate_details.update_lockfile_for_crates(opts.crates.clone())?;
 
     println!("You've said you'd like to publish these crates:\n");
     for name in &opts.crates {
