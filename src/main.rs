@@ -31,16 +31,32 @@ struct Args {
     command: Command,
 }
 
+// Separate help text to preserve newlines.
+const DO_PUBLISH_HELP: &str = "\
+Given some crates you'd like to publish, this will:
+  - Find everything that needs publishing to support this, and
+    complain if anything needs a version bump to be published (run
+    prepare-for-publish first).
+  - Publish each crate in the correct order, stripping dev
+    dependencies and waiting as needed between publishes.
+";
+
+// Separate help text to preserve newlines.
+const PREPARE_FOR_PUBLISH_HELP: &str = "\
+Given some crates you'd like to publish, this will:
+  - Find everything that needs publishing to support this (ie
+    all dependencies that have also changed since they were last
+    published.
+  - Bump any versions of crates that need publishing (this assumes
+    that we always do breaking change bumps)
+  - Update the lockfile to accomodate the above.
+";
+
 #[derive(Subcommand, Debug)]
 enum Command {
-    /// Given some crates you'd like to publish, this will bump all
-    /// versions as needed, and list all of the crates that actually need
-    /// publishing (which may include dependencies and dependencies of
-    /// dependencies and so on).
+    #[clap(long_about = PREPARE_FOR_PUBLISH_HELP)]
     PrepareForPublish(CommonOpts),
-    /// Make sure that all the crates needed to be published can be
-    /// (ie their versions are bumped accordingly), and publish them all in
-    /// the correct order.
+    #[clap(long_about = DO_PUBLISH_HELP)]
     DoPublish(CommonOpts)
 }
 
@@ -149,6 +165,8 @@ fn do_publish(opts: CommonOpts) -> anyhow::Result<()>  {
     for name in &publish_these {
         println!("  {name}");
     }
+
+    println!("\nNote: This will strip dev dependencies from crates being published! Remember to revert those changes after publishing.");
 
     for name in publish_these {
         crates.strip_dev_deps_and_publish(&name)?;
