@@ -62,13 +62,13 @@ impl CrateDetails {
         let mut dev_deps = HashSet::new();
         let mut deps = HashSet::new();
 
-        for item in get_target_dependencies(&val, "build-dependencies") {
+        for item in get_all_dependencies(&val, "build-dependencies") {
             build_deps.extend(filter_workspace_dependencies(item)?);
         }
-        for item in get_target_dependencies(&val, "dev-dependencies") {
+        for item in get_all_dependencies(&val, "dev-dependencies") {
             dev_deps.extend(filter_workspace_dependencies(item)?);
         }
-        for item in get_target_dependencies(&val, "dependencies") {
+        for item in get_all_dependencies(&val, "dependencies") {
             deps.extend(filter_workspace_dependencies(item)?);
         }
 
@@ -136,30 +136,30 @@ impl CrateDetails {
             }
         }
 
-        // TODO: can we do a mut version of get_target_dependencies??
-        for (name, item) in toml.iter_mut() {
-            if is_dependency_section(&name, "build-dependencies") {
-                do_set(item, version, dependency);
-            } else if is_dependency_section(&name, "dev-dependencies") {
-                do_set(item, version, dependency);
-            } else if is_dependency_section(&name, "dependencies") {
-                do_set(item, version, dependency);
-            }
-        }
+        edit_all_dependencies(&mut toml, "build-dependencies",
+            |item| do_set(item, version, dependency)
+        );
+        edit_all_dependencies(&mut toml, "dev-dependencies",
+            |item| do_set(item, version, dependency)
+        );
+        edit_all_dependencies(&mut toml, "dependencies",
+            |item| do_set(item, version, dependency)
+        );
+
         self.write_toml(&toml)?;
 
         Ok(true)
     }
 
-    /// Strip dev dependencies.
-    pub fn strip_dev_deps(&self) -> anyhow::Result<()> {
-        let mut toml = self.read_toml()?;
-        if toml.remove("dev-dependencies").is_some() {
-            // Only write the file if the remove actually did something, otherwise just leave it.
-            self.write_toml(&toml)?;
-        }
-        Ok(())
-    }
+    // /// Strip dev dependencies.
+    // pub fn strip_dev_deps(&self) -> anyhow::Result<()> {
+    //     let mut toml = self.read_toml()?;
+    //     if toml.remove("dev-dependencies").is_some() {
+    //         // Only write the file if the remove actually did something, otherwise just leave it.
+    //         self.write_toml(&toml)?;
+    //     }
+    //     Ok(())
+    // }
 
     /// This checks whether we actually need to publish a new version of the crate. It'll return `false`
     /// only if, as far as we can see, the current version is published to crates.io, and there have been
@@ -270,7 +270,9 @@ impl CrateDetails {
     }
 }
 
-fn get_target_dependencies<'a>(document: &'a toml_edit::Document, label: &'a str) -> impl Iterator<Item = &'a toml_edit::Item> + 'a {
+/// An iterator that hands back all "dependencies"/"dev-dependencies"/"build-dependencies" (according to the
+/// label provided), by looking in the top level `[label]` section as well as any `[target.'foo'.label]` sections.
+fn get_all_dependencies<'a>(document: &'a toml_edit::Document, label: &'a str) -> impl Iterator<Item = &'a toml_edit::Item> + 'a {
     let target = document
         .get("target")
         .and_then(|t| t.as_table_like())
@@ -286,6 +288,31 @@ fn get_target_dependencies<'a>(document: &'a toml_edit::Document, label: &'a str
         .get(label)
         .into_iter()
         .chain(target)
+}
+
+/// Similar to `get_all_dependencies`, but mutable iterates over just `[target.'foo'.label]` sections.
+fn get_target_dependencies_mut<'a>(document: &'a mut toml_edit::Document, label: &'a str) -> impl Iterator<Item = &'a mut toml_edit::Item> + 'a {
+    document
+        .get_mut("target")
+        .and_then(|t| t.as_table_like_mut())
+        .into_iter()
+        .flat_map(|t| {
+            // For each item of the "target" table, see if we can find a `label` section in it.
+            t.iter_mut()
+             .flat_map(|(_name, item)| item.as_table_like_mut())
+             .flat_map(|t| t.get_mut(label))
+        })
+}
+
+/// Allows a function to be provided that is passed each mutable `Item` we find when searching for
+/// "dependencies"/"dev-dependencies"/"build-dependencies".
+fn edit_all_dependencies<F: FnMut(&mut toml_edit::Item)>(document: &mut toml_edit::Document, label: &str, mut f: F) {
+    if let Some(item) = document.get_mut(label) {
+        f(item);
+    }
+    for item in get_target_dependencies_mut(document, label) {
+        f(item);
+    }
 }
 
 // Load a TOML file.
