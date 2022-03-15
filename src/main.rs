@@ -67,7 +67,7 @@ struct CommonOpts {
     path: PathBuf,
 
     /// Crates you'd like to publish.
-    #[clap(long)]
+    #[clap(short = 'c', long = "crate")]
     crates: Vec<String>,
 }
 
