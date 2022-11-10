@@ -26,7 +26,7 @@ use crate::external;
 pub struct Crates {
     root: PathBuf,
     // Details for a given crate, including dependencies.
-    details: HashMap<String, CrateDetails>,
+    pub details: HashMap<String, CrateDetails>,
     // Which crates depend on a given crate.
     dependees: HashMap<String, Dependees>
 }

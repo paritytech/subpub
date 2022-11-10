@@ -139,7 +139,14 @@ fn do_publish(opts: CommonOpts) -> anyhow::Result<()>  {
     // Run the logic first, and then print the various details, so that
     // our logging is all nicely separated from our output.
     let crates = Crates::load_crates_in_workspace(opts.path)?;
-    let publish_these = crates.what_needs_publishing(opts.crates.clone())?;
+
+    
+    let crates_to_publish = if opts.crates.len() == 1 && opts.crates[0] == "*" {
+      crates.details.keys().map(|field| field.into()).collect()
+    } else {
+      opts.crates.clone()
+    };
+    let publish_these = crates.what_needs_publishing(crates_to_publish)?;
 
     // Check that no versions need bumping.
     let mut bump_these = vec![];
