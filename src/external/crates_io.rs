@@ -20,7 +20,7 @@ use anyhow::Context;
 
 pub fn does_crate_exist(name: &str, version: &semver::Version) -> anyhow::Result<bool> {
     let client = reqwest::blocking::Client::new();
-    let crates_api = std::env::var("crates_api").unwrap_or_else(|_| "https://crates.io/api/v1".into());
+    let crates_api = std::env::var("CRATES_API").unwrap_or_else(|_| "https://crates.io/api/v1".into());
     let url = format!("{crates_api}/crates/{name}/{version}");
     let res = client.get(&url)
         .header("User-Agent", "Called from https://github.com/paritytech/subpub for comparing published source against repo source")
@@ -57,7 +57,7 @@ pub fn does_crate_exist(name: &str, version: &semver::Version) -> anyhow::Result
 pub fn try_download_crate(name: &str, version: &semver::Version) -> anyhow::Result<Option<Vec<u8>>> {
     let client = reqwest::blocking::Client::new();
     let version = version.to_string();
-    let crates_api = std::env::var("crates_api").unwrap_or_else(|_| "https://crates.io/api/v1".into());
+    let crates_api = std::env::var("CRATES_API").unwrap_or_else(|_| "https://crates.io/api/v1".into());
     let res = client.get(format!("{crates_api}/crates/{name}/{version}/download"))
         .header("User-Agent", "Called from https://github.com/paritytech/subpub for comparing published source against repo source")
         .send()
@@ -82,13 +82,19 @@ pub fn get_known_crate_versions(name: &str) -> anyhow::Result<HashSet<semver::Ve
     }
 
     let client = reqwest::blocking::Client::new();
-    let crates_api = std::env::var("crates_api").unwrap_or_else(|_| "https://crates.io/api/v1".into());
+    let crates_api = std::env::var("CRATES_API").unwrap_or_else(|_| "https://crates.io/api/v1".into());
     let res = client.get(format!("{crates_api}/crates/{name}"))
         .header("User-Agent", "Called from https://github.com/paritytech/subpub for checking crate versions")
         .send()
         .with_context(|| format!("Cannot get details for {name}"))?;
 
-    if !res.status().is_success() {
+    let res_status = res.status();
+
+    if res_status == reqwest::StatusCode::NOT_FOUND {
+      return Ok(HashSet::new());
+    }
+
+    if !res_status.is_success() {
         anyhow::bail!("Non-200 response code getting details for {name}");
     }
 
