@@ -160,16 +160,17 @@ fn print_order(opts: CommonOpts) -> anyhow::Result<()> {
     };
 
     let mut order: Vec<&String> = vec![];
-
-    let mut batch = 0;
     loop {
         let mut progressed = false;
         for (crate_name, details) in crates.details.iter() {
+            if order.iter().any(|ord_crate| *ord_crate == crate_name) {
+                continue;
+            }
             if details.deps.is_empty()
                 || details
                     .deps
                     .iter()
-                    .all(|dep| order.iter().any(|ord_dep_name| *ord_dep_name == dep))
+                    .all(|dep| order.iter().any(|ord_crate| *ord_crate == dep))
             {
                 order.push(crate_name);
                 progressed = true;
@@ -178,7 +179,6 @@ fn print_order(opts: CommonOpts) -> anyhow::Result<()> {
         if !progressed {
             break;
         }
-        batch = batch + 1;
     }
 
     let unmatched_crates = crates
