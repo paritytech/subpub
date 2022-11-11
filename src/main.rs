@@ -206,10 +206,14 @@ fn print_order(opts: CommonOpts) -> anyhow::Result<()> {
         .filter(|crate_name| sel_crates.iter().any(|sel_crate| sel_crate == **crate_name))
         .collect::<Vec<_>>();
 
-    println!("Publishing crates in this order:");
-    for sel_crate in &sel_order {
-        println!("    {}", sel_crate);
-    }
+    println!(
+        "Publishing crates in this order: {}",
+        sel_order
+            .iter()
+            .map(|crate_name| (**crate_name).into())
+            .collect::<Vec<String>>()
+            .join(", ")
+    );
 
     for crate_name in &sel_order {
         let opts = opts.clone();
