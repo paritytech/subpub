@@ -39,10 +39,21 @@ pub fn publish_crate(root: &Path, package: &str) -> anyhow::Result<()> {
     let mut cmd = Command::new("cargo");
 
     cmd.current_dir(&root)
+        .env("CARGO_LOG", "cargo")
+        .env("CARGO_REGISTRIES_LOCAL_INDEX", std::env::var("CARGO_INDEX").unwrap())
         .arg("publish")
+        .arg("--allow-dirty")
+        .arg("-vv")
         .arg("-p")
         .arg(package)
+        .arg("--registry")
+        .arg(std::env::var("CARGO_REGISTRY").unwrap())
+        .arg("--token")
+        .arg(std::env::var("CARGO_TOKEN").unwrap())
         .status()?;
+
+    let mut cmd = Command::new("git");
+    cmd.current_dir(&root).arg("reset").arg("--quiet").arg("--hard").status()?;
 
     Ok(())
 }

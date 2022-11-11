@@ -16,12 +16,12 @@
 
 mod crate_details;
 mod crates;
-mod version;
 mod external;
+mod version;
 
-use clap::{ Parser, Subcommand };
-use std::path::PathBuf;
+use clap::{Parser, Subcommand};
 use crates::Crates;
+use std::path::PathBuf;
 
 /// Release crates and their dependencies from a workspace
 #[derive(Parser, Debug)]
@@ -57,10 +57,12 @@ enum Command {
     #[clap(long_about = PREPARE_FOR_PUBLISH_HELP)]
     PrepareForPublish(CommonOpts),
     #[clap(long_about = DO_PUBLISH_HELP)]
-    DoPublish(CommonOpts)
+    DoPublish(CommonOpts),
+    #[clap(about = "Print order from least to most dependees")]
+    PrintOrder(CommonOpts),
 }
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 struct CommonOpts {
     /// Path to the workspace root.
     #[clap(long, default_value = ".")]
@@ -77,8 +79,9 @@ fn main() {
     let args = Args::parse();
 
     let res = match args.command {
-        Command::PrepareForPublish(opts) => prepare_for_publish(opts),
+        Command::PrepareForPublish(opts) => prepare_for_publish(opts, false),
         Command::DoPublish(opts) => do_publish(opts),
+        Command::PrintOrder(opts) => print_order(opts),
     };
 
     if let Err(e) = res {
@@ -86,7 +89,7 @@ fn main() {
     }
 }
 
-fn prepare_for_publish(opts: CommonOpts) -> anyhow::Result<()> {
+fn prepare_for_publish(opts: CommonOpts, publish: bool) -> anyhow::Result<()> {
     // Run the logic first, and then print the various details, so that
     // our logging is all nicely separated from our output.
     let mut crates = Crates::load_crates_in_workspace(opts.path)?;
@@ -96,7 +99,8 @@ fn prepare_for_publish(opts: CommonOpts) -> anyhow::Result<()> {
     let mut bump_these = vec![];
     for name in &publish_these {
         if crates.does_crate_version_need_bumping_to_publish(&name)? {
-            let (old_version, new_version) = crates.bump_crate_version_for_breaking_change(&name)?;
+            let (old_version, new_version) =
+                crates.bump_crate_version_for_breaking_change(&name)?;
             bump_these.push((name, old_version, new_version));
         } else {
             no_need_to_bump.push(name);
@@ -131,22 +135,102 @@ fn prepare_for_publish(opts: CommonOpts) -> anyhow::Result<()> {
         }
     }
 
-    println!("\nNow, you can create a release PR to have these version bumps merged");
+    if publish {
+        for name in publish_these {
+            crates.strip_dev_deps_and_publish(&name)?;
+        }
+    } else {
+        println!("\nNow, you can create a release PR to have these version bumps merged");
+    }
+
     Ok(())
 }
 
-fn do_publish(opts: CommonOpts) -> anyhow::Result<()>  {
+fn print_order(opts: CommonOpts) -> anyhow::Result<()> {
+    let crates = Crates::load_crates_in_workspace(opts.path.clone())?;
+
+    let sel_crates = if opts.crates.len() == 1 && opts.crates[0] == "*" {
+        crates
+            .details
+            .keys()
+            .map(|crate_name| crate_name.into())
+            .collect()
+    } else {
+        opts.crates.clone()
+    };
+
+    let mut order: Vec<&String> = vec![];
+
+    let mut batch = 0;
+    loop {
+        let mut progressed = false;
+        for (crate_name, details) in crates.details.iter() {
+            if details.deps.is_empty()
+                || details
+                    .deps
+                    .iter()
+                    .all(|dep| order.iter().any(|ord_dep_name| *ord_dep_name == dep))
+            {
+                order.push(crate_name);
+                progressed = true;
+            }
+        }
+        if !progressed {
+            break;
+        }
+        batch = batch + 1;
+    }
+
+    let unmatched_crates = crates
+        .details
+        .keys()
+        .filter(|crate_name| {
+            !order
+                .iter()
+                .any(|order_crate_name| order_crate_name == crate_name)
+        })
+        .collect::<Vec<_>>();
+    if !unmatched_crates.is_empty() {
+        anyhow::bail!(
+            "Unable to determine publish order for the following crates: {}",
+            unmatched_crates
+                .iter()
+                .map(|crate_name| (*crate_name).into())
+                .collect::<Vec<String>>()
+                .join(", ")
+        );
+    }
+
+    let sel_order = order
+        .iter()
+        .filter(|crate_name| sel_crates.iter().any(|sel_crate| sel_crate == **crate_name))
+        .collect::<Vec<_>>();
+
+    println!("Publishing crates in this order:");
+    for sel_crate in &sel_order {
+        println!("    {}", sel_crate);
+    }
+
+    for crate_name in &sel_order {
+        let opts = opts.clone();
+        prepare_for_publish(
+            CommonOpts {
+                crates: vec![(**crate_name).into()],
+                ..opts
+            },
+            true,
+        )?;
+        break;
+    }
+
+    Ok(())
+}
+
+fn do_publish(opts: CommonOpts) -> anyhow::Result<()> {
     // Run the logic first, and then print the various details, so that
     // our logging is all nicely separated from our output.
     let crates = Crates::load_crates_in_workspace(opts.path)?;
-
-    
-    let crates_to_publish = if opts.crates.len() == 1 && opts.crates[0] == "*" {
-      crates.details.keys().map(|field| field.into()).collect()
-    } else {
-      opts.crates.clone()
-    };
-    let publish_these = crates.what_needs_publishing(crates_to_publish)?;
+    let publish_these = crates.what_needs_publishing(opts.crates.clone())?;
 
     // Check that no versions need bumping.
     let mut bump_these = vec![];
