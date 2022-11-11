@@ -39,6 +39,7 @@ pub fn bump_for_breaking_change(version: Version) -> Version {
     } else {
         // Else bump major version
         new_version.major += 1;
+        new_version.minor = 0;
         new_version.patch = 0;
     }
 
