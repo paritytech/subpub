@@ -186,36 +186,28 @@ fn do_publish(opts: CommonOpts) -> anyhow::Result<()> {
 }
 
 fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
-    let crates = Crates::load_crates_in_workspace(opts.path.clone())?;
+    let mut crates = Crates::load_crates_in_workspace(opts.path.clone())?;
 
     let selected_crates = if opts.crates.len() > 0 {
         opts.crates.clone()
     } else {
-        crates
-            .details
-            .keys()
-            .map(|crate_name| crate_name.into())
-            .collect()
+        crates.details.keys().map(|krate| krate.into()).collect()
     };
 
-    let mut order: Vec<&String> = vec![];
+    let mut order: Vec<String> = vec![];
     loop {
         let mut progressed = false;
-        for (crate_name, details) in crates.details.iter() {
-            if order
-                .iter()
-                .any(|ord_crate_name| *ord_crate_name == crate_name)
-            {
+        for (krate, details) in &crates.details {
+            if order.iter().any(|ord_crate| ord_crate == krate) {
                 continue;
             }
             if details.deps.is_empty()
-                || details.deps.iter().all(|dep_crate_name| {
-                    order
-                        .iter()
-                        .any(|ord_crate_name| *ord_crate_name == dep_crate_name)
-                })
+                || details
+                    .deps
+                    .iter()
+                    .all(|dep_crate| order.iter().any(|ord_crate| ord_crate == dep_crate))
             {
-                order.push(crate_name);
+                order.push(krate.into());
                 progressed = true;
             }
         }
@@ -227,18 +219,14 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
     let unordered_crates = crates
         .details
         .keys()
-        .filter(|crate_name| {
-            !order
-                .iter()
-                .any(|ord_crate_name| ord_crate_name == crate_name)
-        })
+        .filter(|krate| !order.iter().any(|ord_crate| ord_crate == *krate))
         .collect::<Vec<_>>();
     if !unordered_crates.is_empty() {
         anyhow::bail!(
             "Unable to determine publish order for the following crates: {}",
             unordered_crates
                 .iter()
-                .map(|crate_name| (*crate_name).into())
+                .map(|krate| (*krate).into())
                 .collect::<Vec<String>>()
                 .join(", ")
         );
@@ -246,10 +234,10 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
 
     let selected_crates_order = order
         .iter()
-        .filter(|crate_name| {
+        .filter(|krate| {
             selected_crates
                 .iter()
-                .any(|sel_crate| sel_crate == **crate_name)
+                .any(|sel_crate| *sel_crate == **krate)
         })
         .collect::<Vec<_>>();
 
@@ -257,20 +245,62 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
         "Publishing crates in this order: {}",
         selected_crates_order
             .iter()
-            .map(|crate_name| (**crate_name).into())
+            .map(|krate| (*krate).into())
             .collect::<Vec<String>>()
             .join(", ")
     );
 
-    for crate_name in &selected_crates_order {
-        let opts = opts.clone();
-        prepare_for_publish(
-            CommonOpts {
-                crates: vec![(**crate_name).into()],
-                ..opts
-            },
-            true,
-        )?;
+    let mut published_crates: Vec<String> = vec![];
+    for selected_crate in selected_crates_order {
+        let what_needs_publishing = crates.what_needs_publishing(vec![selected_crate.into()])?;
+
+        let publish_these = what_needs_publishing
+            .iter()
+            .filter(|needs_publishing_crate| {
+                !published_crates
+                    .iter()
+                    .any(|published_crate| published_crate == *needs_publishing_crate)
+            })
+            .map(|krate| krate.into())
+            .collect::<Vec<String>>();
+        if publish_these.is_empty() {
+            continue;
+        }
+
+        let mut bump_these = vec![];
+        for krate in &publish_these {
+            if crates.does_crate_version_need_bumping_to_publish(&krate)? {
+                let (old_version, new_version) =
+                    crates.bump_crate_version_for_breaking_change(&krate)?;
+                bump_these.push((krate, old_version, new_version));
+            }
+        }
+
+        crates.update_lockfile_for_crates(vec![selected_crate.to_owned()])?;
+
+        println!(
+            "\nCrates will be published in this order for publishing {selected_crate}: {}",
+            publish_these
+                .iter()
+                .map(|krate| krate.into())
+                .collect::<Vec<String>>()
+                .join(", ")
+        );
+
+        if bump_these.is_empty() {
+            println!("\nNo crates needed a version bump to accomodate this\n");
+        } else {
+            println!("\nI'm bumping the following crate versions to accomodate this:\n");
+            for (name, old_version, new_version) in bump_these {
+                println!("  {name}: {old_version} -> {new_version}");
+            }
+        }
+
+        for krate in publish_these {
+            crates.strip_dev_deps_and_publish(&krate)?;
+            published_crates.push(krate);
+        }
+
         break;
     }
 
