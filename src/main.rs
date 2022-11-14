@@ -252,9 +252,9 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
 
     let mut published_crates: Vec<String> = vec![];
     for selected_crate in selected_crates_order {
-        let what_needs_publishing = crates.what_needs_publishing(vec![selected_crate.into()])?;
+        let crates_needing_publish = crates.what_needs_publishing(vec![selected_crate.into()])?;
 
-        let publish_these = what_needs_publishing
+        let crates_to_publish = crates_needing_publish
             .iter()
             .filter(|needs_publishing_crate| {
                 !published_crates
@@ -263,12 +263,12 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             })
             .map(|krate| krate.into())
             .collect::<Vec<String>>();
-        if publish_these.is_empty() {
+        if crates_to_publish.is_empty() {
             continue;
         }
 
         let mut bump_these = vec![];
-        for krate in &publish_these {
+        for krate in &crates_to_publish {
             if crates.does_crate_version_need_bumping_to_publish(&krate)? {
                 let (old_version, new_version) =
                     crates.bump_crate_version_for_breaking_change(&krate)?;
@@ -280,23 +280,21 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
 
         println!(
             "\nCrates will be published in this order for publishing {selected_crate}: {}",
-            publish_these
+            crates_to_publish
                 .iter()
                 .map(|krate| krate.into())
                 .collect::<Vec<String>>()
                 .join(", ")
         );
 
-        if bump_these.is_empty() {
-            println!("\nNo crates needed a version bump to accomodate this\n");
-        } else {
-            println!("\nI'm bumping the following crate versions to accomodate this:\n");
+        if !bump_these.is_empty() {
+            println!("\nBumping the following crate versions for publishing {selected_crate}:\n");
             for (name, old_version, new_version) in bump_these {
                 println!("  {name}: {old_version} -> {new_version}");
             }
         }
 
-        for krate in publish_these {
+        for krate in crates_to_publish {
             crates.strip_dev_deps_and_publish(&krate)?;
             published_crates.push(krate);
         }
