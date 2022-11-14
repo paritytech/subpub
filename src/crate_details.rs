@@ -21,7 +21,6 @@ use std::collections::HashSet;
 use std::{
     io::{Cursor, Read},
     path::{Path, PathBuf},
-    process::Command,
 };
 
 #[derive(Debug, Clone)]
@@ -162,6 +161,8 @@ impl CrateDetails {
 
     /// Strip dev dependencies.
     pub fn strip_dev_deps(&self, root: &PathBuf) -> anyhow::Result<()> {
+        crate::git::git_checkpoint(root, "[subpub] checkpoint")?;
+
         let mut toml = self.read_toml()?;
 
         // Remove [dev-dependencies]
@@ -180,27 +181,7 @@ impl CrateDetails {
         // Only write the toml file back if we did remove something.
         if removed_top_level || removed_target_deps {
             self.write_toml(&toml)?;
-            let mut cmd = Command::new("git");
-            if cmd
-                .current_dir(root)
-                .arg("add")
-                .arg("--quiet")
-                .arg(".")
-                .status()?
-                .success()
-            {
-                let mut cmd = Command::new("git");
-                cmd.current_dir(root)
-                    .arg("commit")
-                    .arg("-m")
-                    .arg("[subpub-revert]")
-                    .status()?;
-            } else {
-                anyhow::bail!(
-                    "Unable to commit modified {:?}",
-                    &self.toml_path.as_os_str()
-                );
-            }
+            crate::git::git_checkpoint(root, "[subpub] revert")?;
         }
 
         Ok(())

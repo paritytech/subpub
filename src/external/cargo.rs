@@ -53,23 +53,5 @@ pub fn publish_crate(root: &Path, package: &str) -> anyhow::Result<()> {
         .arg("--token")
         .arg(std::env::var("CARGO_TOKEN").unwrap())
         .status()?;
-
-    let mut cmd = Command::new("git");
-    if cmd
-        .current_dir(&root)
-        .arg("add")
-        .arg("--quiet")
-        .arg(".")
-        .status()?
-        .success()
-    {
-        let mut cmd = Command::new("git");
-        cmd.current_dir(&root)
-            .arg("commit")
-            .arg("-m")
-            .arg("[subpub] published {package}")
-            .status()?;
-    }
-
     Ok(())
 }

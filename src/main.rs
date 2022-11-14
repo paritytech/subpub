@@ -18,6 +18,7 @@ mod crate_details;
 mod crates;
 mod external;
 mod version;
+mod git;
 
 use clap::{Parser, Subcommand};
 use crates::Crates;
