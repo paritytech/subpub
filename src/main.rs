@@ -17,8 +17,8 @@
 mod crate_details;
 mod crates;
 mod external;
-mod version;
 mod git;
+mod version;
 
 use clap::{Parser, Subcommand};
 use crates::Crates;
@@ -194,6 +194,7 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
     } else {
         crates.details.keys().map(|krate| krate.into()).collect()
     };
+    println!("{:?}", selected_crates);
 
     let mut order: Vec<String> = vec![];
     loop {
@@ -241,6 +242,25 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
                 .any(|sel_crate| *sel_crate == **krate)
         })
         .collect::<Vec<_>>();
+
+    let unordered_selected_crates = selected_crates
+        .iter()
+        .filter(|sel_crate| {
+            !selected_crates_order
+                .iter()
+                .any(|sel_crate_ordered| sel_crate_ordered == sel_crate)
+        })
+        .collect::<Vec<_>>();
+    if unordered_selected_crates.len() {
+        anyhow::bail!(
+            "Unable to determine publish order for the following crates: {}",
+            unordered_selected_crates
+                .iter()
+                .map(|krate| (*krate).into())
+                .collect::<Vec<String>>()
+                .join(", ")
+        );
+    }
 
     println!(
         "Processing crates in this order: {}",
@@ -301,8 +321,6 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             crates.strip_dev_deps_and_publish(&krate)?;
             published_crates.push(krate);
         }
-
-        break;
     }
 
     Ok(())
