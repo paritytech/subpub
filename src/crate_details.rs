@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with subpub.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::external;
+use crate::{external, git};
 use anyhow::{anyhow, Context};
 use semver::Version;
 use std::collections::HashSet;
@@ -161,7 +161,7 @@ impl CrateDetails {
 
     /// Strip dev dependencies.
     pub fn strip_dev_deps(&self, root: &PathBuf) -> anyhow::Result<()> {
-        crate::git::git_checkpoint(root, "[subpub] checkpoint")?;
+        git::git_checkpoint(root, "[subpub] checkpoint")?;
 
         let mut toml = self.read_toml()?;
 
@@ -181,7 +181,7 @@ impl CrateDetails {
         // Only write the toml file back if we did remove something.
         if removed_top_level || removed_target_deps {
             self.write_toml(&toml)?;
-            crate::git::git_checkpoint(root, "[subpub] revert")?;
+            git::git_checkpoint(root, "[subpub] revert")?;
         }
 
         Ok(())
