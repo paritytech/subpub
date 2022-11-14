@@ -242,7 +242,7 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
         .collect::<Vec<_>>();
 
     println!(
-        "Publishing crates in this order: {}",
+        "Processing crates in this order: {}",
         selected_crates_order
             .iter()
             .map(|krate| (*krate).into())
@@ -264,6 +264,7 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             .map(|krate| krate.into())
             .collect::<Vec<String>>();
         if crates_to_publish.is_empty() {
+            println!("[{selected_crate}] Crate {selected_crate} and its dependencies do not need to be published");
             continue;
         }
 
