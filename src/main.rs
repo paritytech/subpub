@@ -267,31 +267,32 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             continue;
         }
 
-        let mut bump_these = vec![];
         for krate in &crates_to_publish {
             if crates.does_crate_version_need_bumping_to_publish(&krate)? {
                 let (old_version, new_version) =
                     crates.bump_crate_version_for_breaking_change(&krate)?;
-                bump_these.push((krate, old_version, new_version));
+                println!(
+                    "[{selected_crate}] Bumping crate {krate} from {new_version} to {old_version}"
+                );
             }
         }
 
         crates.update_lockfile_for_crates(vec![selected_crate.to_owned()])?;
 
-        println!(
-            "\nCrates will be published in this order for publishing {selected_crate}: {}",
-            crates_to_publish
-                .iter()
-                .map(|krate| krate.into())
-                .collect::<Vec<String>>()
-                .join(", ")
-        );
-
-        if !bump_these.is_empty() {
-            println!("\nBumping the following crate versions for publishing {selected_crate}:\n");
-            for (name, old_version, new_version) in bump_these {
-                println!("  {name}: {old_version} -> {new_version}");
-            }
+        if crates_to_publish.len() > 1 {
+            println!(
+              "[{selected_crate}] Crates will be published in the following order for publishing {selected_crate}: {}",
+              crates_to_publish
+                  .iter()
+                  .map(|krate| krate.into())
+                  .collect::<Vec<String>>()
+                  .join(", ")
+          );
+        } else {
+            println!(
+                "[{selected_crate}] Publishing crate {}",
+                crates_to_publish[0]
+            )
         }
 
         for krate in crates_to_publish {
