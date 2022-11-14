@@ -58,8 +58,8 @@ enum Command {
     PrepareForPublish(CommonOpts),
     #[clap(long_about = DO_PUBLISH_HELP)]
     DoPublish(CommonOpts),
-    #[clap(about = "Print order from least to most dependees")]
-    PrintOrder(CommonOpts),
+    #[clap(about = "Publish crates in order from least to most dependees")]
+    PublishInOrder(CommonOpts),
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -81,7 +81,7 @@ fn main() {
     let res = match args.command {
         Command::PrepareForPublish(opts) => prepare_for_publish(opts, false),
         Command::DoPublish(opts) => do_publish(opts),
-        Command::PrintOrder(opts) => print_order(opts),
+        Command::PublishInOrder(opts) => publish_in_order(opts),
     };
 
     if let Err(e) = res {
@@ -146,90 +146,6 @@ fn prepare_for_publish(opts: CommonOpts, publish: bool) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn print_order(opts: CommonOpts) -> anyhow::Result<()> {
-    let crates = Crates::load_crates_in_workspace(opts.path.clone())?;
-
-    let sel_crates = if opts.crates.len() == 1 && opts.crates[0] == "*" {
-        crates
-            .details
-            .keys()
-            .map(|crate_name| crate_name.into())
-            .collect()
-    } else {
-        opts.crates.clone()
-    };
-
-    let mut order: Vec<&String> = vec![];
-    loop {
-        let mut progressed = false;
-        for (crate_name, details) in crates.details.iter() {
-            if order.iter().any(|ord_crate| *ord_crate == crate_name) {
-                continue;
-            }
-            if details.deps.is_empty()
-                || details
-                    .deps
-                    .iter()
-                    .all(|dep| order.iter().any(|ord_crate| *ord_crate == dep))
-            {
-                order.push(crate_name);
-                progressed = true;
-            }
-        }
-        if !progressed {
-            break;
-        }
-    }
-
-    let unmatched_crates = crates
-        .details
-        .keys()
-        .filter(|crate_name| {
-            !order
-                .iter()
-                .any(|order_crate_name| order_crate_name == crate_name)
-        })
-        .collect::<Vec<_>>();
-    if !unmatched_crates.is_empty() {
-        anyhow::bail!(
-            "Unable to determine publish order for the following crates: {}",
-            unmatched_crates
-                .iter()
-                .map(|crate_name| (*crate_name).into())
-                .collect::<Vec<String>>()
-                .join(", ")
-        );
-    }
-
-    let sel_order = order
-        .iter()
-        .filter(|crate_name| sel_crates.iter().any(|sel_crate| sel_crate == **crate_name))
-        .collect::<Vec<_>>();
-
-    println!(
-        "Publishing crates in this order: {}",
-        sel_order
-            .iter()
-            .map(|crate_name| (**crate_name).into())
-            .collect::<Vec<String>>()
-            .join(", ")
-    );
-
-    for crate_name in &sel_order {
-        let opts = opts.clone();
-        prepare_for_publish(
-            CommonOpts {
-                crates: vec![(**crate_name).into()],
-                ..opts
-            },
-            true,
-        )?;
-        break;
-    }
-
-    Ok(())
-}
-
 fn do_publish(opts: CommonOpts) -> anyhow::Result<()> {
     // Run the logic first, and then print the various details, so that
     // our logging is all nicely separated from our output.
@@ -266,5 +182,97 @@ fn do_publish(opts: CommonOpts) -> anyhow::Result<()> {
     for name in publish_these {
         crates.strip_dev_deps_and_publish(&name)?;
     }
+    Ok(())
+}
+
+fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
+    let crates = Crates::load_crates_in_workspace(opts.path.clone())?;
+
+    let selected_crates = if opts.crates.len() > 0 {
+        opts.crates.clone()
+    } else {
+        crates
+            .details
+            .keys()
+            .map(|crate_name| crate_name.into())
+            .collect()
+    };
+
+    let mut order: Vec<&String> = vec![];
+    loop {
+        let mut progressed = false;
+        for (crate_name, details) in crates.details.iter() {
+            if order
+                .iter()
+                .any(|ord_crate_name| *ord_crate_name == crate_name)
+            {
+                continue;
+            }
+            if details.deps.is_empty()
+                || details.deps.iter().all(|dep_crate_name| {
+                    order
+                        .iter()
+                        .any(|ord_crate_name| *ord_crate_name == dep_crate_name)
+                })
+            {
+                order.push(crate_name);
+                progressed = true;
+            }
+        }
+        if !progressed {
+            break;
+        }
+    }
+
+    let unordered_crates = crates
+        .details
+        .keys()
+        .filter(|crate_name| {
+            !order
+                .iter()
+                .any(|ord_crate_name| ord_crate_name == crate_name)
+        })
+        .collect::<Vec<_>>();
+    if !unordered_crates.is_empty() {
+        anyhow::bail!(
+            "Unable to determine publish order for the following crates: {}",
+            unordered_crates
+                .iter()
+                .map(|crate_name| (*crate_name).into())
+                .collect::<Vec<String>>()
+                .join(", ")
+        );
+    }
+
+    let selected_crates_order = order
+        .iter()
+        .filter(|crate_name| {
+            selected_crates
+                .iter()
+                .any(|sel_crate| sel_crate == **crate_name)
+        })
+        .collect::<Vec<_>>();
+
+    println!(
+        "Publishing crates in this order: {}",
+        selected_crates_order
+            .iter()
+            .map(|crate_name| (**crate_name).into())
+            .collect::<Vec<String>>()
+            .join(", ")
+    );
+
+    for crate_name in &selected_crates_order {
+        let opts = opts.clone();
+        prepare_for_publish(
+            CommonOpts {
+                crates: vec![(**crate_name).into()],
+                ..opts
+            },
+            true,
+        )?;
+        break;
+    }
+
     Ok(())
 }

@@ -52,8 +52,8 @@ pub fn publish_crate(root: &Path, package: &str) -> anyhow::Result<()> {
         .arg(std::env::var("CARGO_TOKEN").unwrap())
         .status()?;
 
-    let mut cmd = Command::new("git");
-    cmd.current_dir(&root).arg("reset").arg("--quiet").arg("--hard").status()?;
+    // let mut cmd = Command::new("git");
+    // cmd.current_dir(&root).arg("reset").arg("--quiet").arg("--hard").status()?;
 
     Ok(())
 }

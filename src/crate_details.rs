@@ -134,7 +134,6 @@ impl CrateDetails {
             };
 
             if dep.is_str() {
-                // Set version if it's just a string
                 let mut table = toml_edit::table();
                 table["version"] = toml_edit::value(version.to_string());
                 table["registry"] = toml_edit::value("local".to_string());
