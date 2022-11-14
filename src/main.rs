@@ -264,7 +264,7 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             .map(|krate| krate.into())
             .collect::<Vec<String>>();
         if crates_to_publish.is_empty() {
-            println!("[{selected_crate}] Crate {selected_crate} and its dependencies do not need to be published");
+            println!("[{selected_crate}] Crate and its dependencies do not need to be published");
             continue;
         }
 

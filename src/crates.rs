@@ -108,7 +108,7 @@ impl Crates {
             None => anyhow::bail!("Crate '{name}' not found")
         };
 
-        details.strip_dev_deps()?;
+        details.strip_dev_deps(&self.root)?;
         details.publish()?;
 
         // Don't return until the crate has finished being published; it won't
