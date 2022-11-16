@@ -278,15 +278,26 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             .join(", ")
     );
 
-    let mut published_crates: Vec<String> = vec![];
+    let mut dealt_with_crates: Vec<String> = vec![];
     for selected_crate in selected_crates_order {
+        let details = crates.details.get(selected_crate).unwrap();
+
+        for krate in &order {
+            if krate == selected_crate {
+                break;
+            }
+            let crate_det = crates.details.get(krate).unwrap();
+            details.write_dependency_version(krate, &crate_det.version)?;
+        }
+        std::process::exit(0);
+
         let crates_needing_publish =
             crates.what_needs_publishing(vec![selected_crate.into()], &mut cio)?;
 
         let crates_to_publish = crates_needing_publish
             .iter()
             .filter(|needs_publishing_crate| {
-                !published_crates
+                !dealt_with_crates
                     .iter()
                     .any(|published_crate| published_crate == *needs_publishing_crate)
             })
@@ -294,6 +305,7 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             .collect::<Vec<String>>();
         if crates_to_publish.is_empty() {
             println!("[{selected_crate}] Crate and its dependencies do not need to be published");
+            dealt_with_crates.push(selected_crate.into());
             continue;
         }
 
@@ -327,7 +339,7 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
 
         for krate in crates_to_publish {
             crates.strip_dev_deps_and_publish(&krate, &mut cio)?;
-            published_crates.push(krate);
+            dealt_with_crates.push(krate);
         }
     }
 

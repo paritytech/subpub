@@ -4,12 +4,12 @@ use std::process::Command;
 const CHECKPOINT_SAVE: &'static str = "[subpub] CHECKPOINT_SAVE";
 const CHECKPOINT_REVERT: &'static str = "[subpub] CHECKPOINT_REVERT";
 
-pub enum GitCheckpointMode {
+pub enum GCM {
     Save,
     RevertLater,
 }
 
-pub fn git_checkpoint<P>(root: P, op: GitCheckpointMode) -> anyhow::Result<()>
+pub fn git_checkpoint<P>(root: P, op: GCM) -> anyhow::Result<()>
 where
     P: AsRef<Path>,
 {
@@ -49,8 +49,8 @@ where
             .arg("--quiet")
             .arg("-m")
             .arg(match op {
-                GitCheckpointMode::Save => CHECKPOINT_SAVE,
-                GitCheckpointMode::RevertLater => {
+                GCM::Save => CHECKPOINT_SAVE,
+                GCM::RevertLater => {
                     created_revert_commit = true;
                     CHECKPOINT_REVERT
                 }
@@ -64,17 +64,32 @@ where
 
     if !created_revert_commit {
         let mut cmd = Command::new("git");
-        if !cmd
+        let output = cmd
             .current_dir(&root)
-            .arg("commit")
-            .arg("--quiet")
-            .arg("--allow-empty")
-            .arg("-m")
-            .arg(CHECKPOINT_REVERT)
-            .status()?
-            .success()
-        {
-            anyhow::bail!("Unable to create empty commit");
+            .arg("log")
+            .arg("-1")
+            .arg("--pretty=%B")
+            .output()?;
+        if !output.status.success() {
+            anyhow::bail!("Unable to get commit message of last commit");
+        }
+
+        let last_commit_msg = String::from_utf8_lossy(&output.stdout[..]);
+        let last_commit_msg = last_commit_msg.trim();
+        if last_commit_msg != CHECKPOINT_REVERT {
+            let mut cmd = Command::new("git");
+            if !cmd
+                .current_dir(&root)
+                .arg("commit")
+                .arg("--quiet")
+                .arg("--allow-empty")
+                .arg("-m")
+                .arg(CHECKPOINT_REVERT)
+                .status()?
+                .success()
+            {
+                anyhow::bail!("Unable to create empty commit");
+            }
         }
     }
 

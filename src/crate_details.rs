@@ -149,21 +149,22 @@ impl CrateDetails {
             if dep.is_str() {
                 *dep = toml_edit::value(version.to_string());
                 details.write_toml(doc)?;
-                git_checkpoint(&root, GitCheckpointMode::Save)?;
+                git_checkpoint(&root, GCM::Save)?;
 
                 let mut table = toml_edit::table();
                 table["version"] = toml_edit::value(version.to_string());
                 table["registry"] = toml_edit::value("local".to_string());
                 *dep = table;
                 details.write_toml(doc)?;
-                git_checkpoint(&root, GitCheckpointMode::RevertLater)?;
+                git_checkpoint(&root, GCM::RevertLater)?;
             } else {
                 dep["version"] = toml_edit::value(version.to_string());
                 details.write_toml(doc)?;
-                git_checkpoint(&root, GitCheckpointMode::Save)?;
+                git_checkpoint(&root, GCM::Save)?;
 
                 dep["registry"] = toml_edit::value("local".to_string());
-                git_checkpoint(&root, GitCheckpointMode::RevertLater)?;
+                details.write_toml(doc)?;
+                git_checkpoint(&root, GCM::RevertLater)?;
             }
 
             Ok(())
@@ -204,9 +205,9 @@ impl CrateDetails {
 
         // Only write the toml file back if we did remove something.
         if removed_top_level || removed_target_deps {
-            git_checkpoint(&root, GitCheckpointMode::Save)?;
+            git_checkpoint(&root, GCM::Save)?;
             self.write_toml(&toml)?;
-            git_checkpoint(&root, GitCheckpointMode::RevertLater)?;
+            git_checkpoint(&root, GCM::RevertLater)?;
         }
 
         Ok(())
