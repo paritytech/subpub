@@ -23,7 +23,7 @@ mod version;
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use crates::Crates;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 /// Release crates and their dependencies from a workspace
@@ -34,33 +34,8 @@ struct Args {
     command: Command,
 }
 
-// Separate help text to preserve newlines.
-const DO_PUBLISH_HELP: &str = "\
-Given some crates you'd like to publish, this will:
-  - Find everything that needs publishing to support this, and
-    complain if anything needs a version bump to be published (run
-    prepare-for-publish first).
-  - Publish each crate in the correct order, stripping dev
-    dependencies and waiting as needed between publishes.
-";
-
-// Separate help text to preserve newlines.
-const PREPARE_FOR_PUBLISH_HELP: &str = "\
-Given some crates you'd like to publish, this will:
-  - Find everything that needs publishing to support this (ie
-    all dependencies that have also changed since they were last
-    published.
-  - Bump any versions of crates that need publishing (this assumes
-    that we always do breaking change bumps)
-  - Update the lockfile to accomodate the above.
-";
-
 #[derive(Subcommand, Debug)]
 enum Command {
-    #[clap(long_about = PREPARE_FOR_PUBLISH_HELP)]
-    PrepareForPublish(CommonOpts),
-    #[clap(long_about = DO_PUBLISH_HELP)]
-    DoPublish(CommonOpts),
     #[clap(about = "Publish crates in order from least to most dependees")]
     PublishInOrder(CommonOpts),
 }
@@ -82,112 +57,12 @@ fn main() {
     let args = Args::parse();
 
     let res = match args.command {
-        Command::PrepareForPublish(opts) => prepare_for_publish(opts, false),
-        Command::DoPublish(opts) => do_publish(opts),
         Command::PublishInOrder(opts) => publish_in_order(opts),
     };
 
     if let Err(e) = res {
         log::error!("{e:?}");
     }
-}
-
-fn prepare_for_publish(opts: CommonOpts, publish: bool) -> anyhow::Result<()> {
-    let mut cio = HashMap::new();
-    // Run the logic first, and then print the various details, so that
-    // our logging is all nicely separated from our output.
-    let mut crates = Crates::load_crates_in_workspace(opts.path)?;
-    let publish_these = crates.what_needs_publishing(opts.crates.clone(), &mut cio)?;
-
-    let mut no_need_to_bump = vec![];
-    let mut bump_these = vec![];
-    for name in &publish_these {
-        if crates.does_crate_version_need_bumping_to_publish(&name)? {
-            let (old_version, new_version) =
-                crates.bump_crate_version_for_breaking_change(&name)?;
-            bump_these.push((name, old_version, new_version));
-        } else {
-            no_need_to_bump.push(name);
-        }
-    }
-
-    crates.update_lockfile_for_crates(opts.crates.clone())?;
-
-    println!("\nYou've said you'd like to publish these crates:\n");
-    for name in &opts.crates {
-        println!("  {name}");
-    }
-
-    println!("\nThe following crates need publishing (in this order) in order to do this:\n");
-    for name in &publish_these {
-        println!("  {name}");
-    }
-
-    if !bump_these.is_empty() {
-        println!("\nI'm bumping the following crate versions to accomodate this:\n");
-        for (name, old_version, new_version) in bump_these {
-            println!("  {name}: {old_version} -> {new_version}");
-        }
-    } else {
-        println!("\nNo crates needed a version bump to accomodate this\n");
-    }
-
-    if !no_need_to_bump.is_empty() {
-        println!("\nThese crates did not need a version bump in order to publish:\n");
-        for name in no_need_to_bump {
-            println!("  {name}");
-        }
-    }
-
-    if publish {
-        for name in publish_these {
-            crates.strip_dev_deps_and_publish(&name, &mut cio)?;
-        }
-    } else {
-        println!("\nNow, you can create a release PR to have these version bumps merged");
-    }
-
-    Ok(())
-}
-
-fn do_publish(opts: CommonOpts) -> anyhow::Result<()> {
-    let mut cio = HashMap::new();
-    // Run the logic first, and then print the various details, so that
-    // our logging is all nicely separated from our output.
-    let mut crates = Crates::load_crates_in_workspace(opts.path)?;
-    let publish_these = crates.what_needs_publishing(opts.crates.clone(), &mut cio)?;
-
-    // Check that no versions need bumping.
-    let mut bump_these = vec![];
-    for name in &publish_these {
-        if crates.does_crate_version_need_bumping_to_publish(&name)? {
-            bump_these.push(&**name);
-        }
-    }
-
-    if !bump_these.is_empty() {
-        anyhow::bail!(
-            "The following crates need a version bump before they can be published: {}",
-            bump_these.join(", ")
-        );
-    }
-
-    println!("\nYou've said you'd like to publish these crates:\n");
-    for name in &opts.crates {
-        println!("  {name}");
-    }
-
-    println!("\nThe following crates need publishing (in this order) in order to do this:\n");
-    for name in &publish_these {
-        println!("  {name}");
-    }
-
-    println!("\nNote: This will strip dev dependencies from crates being published! Remember to revert those changes after publishing.");
-
-    for name in publish_these {
-        crates.strip_dev_deps_and_publish(&name, &mut cio)?;
-    }
-    Ok(())
 }
 
 fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
@@ -279,8 +154,14 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             .join(", ")
     );
 
-    let mut dealt_with_crates: Vec<String> = vec![];
+    let mut dealt_with_crates: HashSet<String> = HashSet::new();
     for selected_crate in selected_crates_order {
+        if dealt_with_crates.get(selected_crate).is_some() {
+            println!("[{selected_crate}] Crate has already been dealt with");
+            continue;
+        }
+        dealt_with_crates.insert(selected_crate.into());
+
         let details = crates.details.get(selected_crate).unwrap();
 
         for prev_crate in &order {
@@ -294,37 +175,22 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             details.write_dependency_version(prev_crate, &prev_crate_details.version)?;
         }
 
-        let crates_needing_publish =
+        let crates_set_to_publish =
             crates.what_needs_publishing(vec![selected_crate.into()], &mut cio)?;
-
-        let crates_to_publish = crates_needing_publish
+        let crates_to_publish = crates_set_to_publish
             .iter()
-            .filter(|needs_publishing_crate| {
+            .filter(|crate_set_to_publish| {
                 !dealt_with_crates
                     .iter()
-                    .any(|published_crate| published_crate == *needs_publishing_crate)
+                    .any(|dealt_with_crate| dealt_with_crate == *crate_set_to_publish)
             })
             .map(|krate| krate.into())
             .collect::<Vec<String>>();
+
         if crates_to_publish.is_empty() {
             println!("[{selected_crate}] Crate and its dependencies do not need to be published");
-            dealt_with_crates.push(selected_crate.into());
             continue;
-        }
-
-        for krate in &crates_to_publish {
-            if crates.does_crate_version_need_bumping_to_publish(&krate)? {
-                let (old_version, new_version) =
-                    crates.bump_crate_version_for_breaking_change(&krate)?;
-                println!(
-                    "[{selected_crate}] Bumping crate {krate} from {new_version} to {old_version}"
-                );
-            }
-        }
-
-        crates.update_lockfile_for_crates(vec![selected_crate.to_owned()])?;
-
-        if crates_to_publish.len() > 1 {
+        } else if crates_to_publish.len() > 1 {
             println!(
               "[{selected_crate}] Crates will be published in the following order for publishing {selected_crate}: {}",
               crates_to_publish
@@ -340,9 +206,41 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             )
         }
 
+        for krate in &crates_to_publish {
+            if crates.does_crate_version_need_bumping_to_publish(&krate, &mut cio)? {
+                let (old_version, new_version) =
+                    crates.bump_crate_version_for_breaking_change(&krate)?;
+                println!(
+                    "[{selected_crate}] Bumping crate {krate} from {new_version} to {old_version}"
+                );
+            }
+        }
+
         for krate in crates_to_publish {
             crates.strip_dev_deps_and_publish(&krate, &mut cio)?;
-            dealt_with_crates.push(krate);
+
+            let published_crate_details = crates
+                .details
+                .get(&krate)
+                .with_context(|| format!("Crate not found: {krate}"))?;
+
+            let mut update = false;
+            for next_crate in &order {
+                if *next_crate == krate {
+                    update = true;
+                } else if update {
+                    let next_crate_details = crates
+                        .details
+                        .get(next_crate)
+                        .with_context(|| format!("Crate not found: {next_crate}"))?;
+                    next_crate_details
+                        .write_dependency_version(&krate, &published_crate_details.version)?;
+                }
+            }
+
+            crates.update_lockfile_for_crates(vec![&krate])?;
+
+            dealt_with_crates.insert(krate);
         }
     }
 

@@ -67,7 +67,7 @@ where
     Ok(())
 }
 
-pub fn git_revert<P>(root: P) -> anyhow::Result<()>
+pub fn git_checkpoint_revert<P>(root: P) -> anyhow::Result<()>
 where
     P: AsRef<Path>,
 {

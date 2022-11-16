@@ -17,6 +17,7 @@
 use crate::{external, git::*};
 use anyhow::{anyhow, Context};
 use semver::Version;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -28,7 +29,7 @@ pub struct CrateDetails {
     pub deps: HashSet<String>,
     pub build_deps: HashSet<String>,
     pub dev_deps: HashSet<String>,
-    pub published: bool,
+    pub should_be_published: bool,
 
     // Modifying the files on disk can only be done through the interface below.
     toml_path: PathBuf,
@@ -89,7 +90,7 @@ impl CrateDetails {
             dev_deps,
             build_deps,
             toml_path: path,
-            published,
+            should_be_published: published,
         })
     }
 
@@ -121,6 +122,15 @@ impl CrateDetails {
         dependency: &str,
         version: &Version,
     ) -> anyhow::Result<bool> {
+        let mut all_deps = self
+            .deps
+            .iter()
+            .chain(self.dev_deps.iter())
+            .chain(self.build_deps.iter());
+        if !all_deps.any(|dep| dep == dependency) {
+            return Ok(true);
+        }
+
         let toml = Box::into_raw(Box::new(self.read_toml()?));
 
         fn do_set<'a>(
@@ -232,7 +242,7 @@ impl CrateDetails {
             .parent()
             .expect("parent of toml path should exist");
         let result = self.needs_publishing_inner();
-        git_revert(&crate_dir)?;
+        git_checkpoint_revert(&crate_dir)?;
         result
     }
 
@@ -285,16 +295,24 @@ impl CrateDetails {
     }
 
     /// Does this create need a version bump in order to be published?
-    pub fn needs_version_bump_to_publish(&self) -> anyhow::Result<bool> {
+    pub fn needs_version_bump_to_publish(
+        &self,
+        cio: &mut HashMap<String, bool>,
+    ) -> anyhow::Result<bool> {
         if self.version.pre != semver::Prerelease::EMPTY {
             // If prerelease eg `-dev`, we'll want to bump.
             return Ok(true);
         }
 
-        // Does the current version of this crate exist on crates.io?
-        // If so, we need to bump the current version.
-        let known_versions = external::crates_io::get_known_crate_versions(&self.name)?;
-        Ok(known_versions.contains(&self.version))
+        let needs_publishing = if let Some(needs_publishing) = cio.get(&self.name) {
+            *needs_publishing
+        } else {
+            let needs_publishing = self.needs_publishing()?;
+            cio.insert((&self.name).into(), needs_publishing);
+            needs_publishing
+        };
+
+        Ok(needs_publishing)
     }
 
     fn read_toml(&self) -> anyhow::Result<toml_edit::Document> {

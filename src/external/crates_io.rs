@@ -15,8 +15,6 @@
 // along with subpub.  If not, see <http://www.gnu.org/licenses/>.
 
 use anyhow::Context;
-use serde::Deserialize;
-use std::collections::HashSet;
 
 pub fn does_crate_exist(name: &str, version: &semver::Version) -> anyhow::Result<bool> {
     let client = reqwest::blocking::Client::new();
@@ -84,46 +82,4 @@ pub fn try_download_crate(
     }
 
     Ok(Some(res.bytes()?.to_vec()))
-}
-
-/// Which versions of this crate exist on crates.io?
-pub fn get_known_crate_versions(name: &str) -> anyhow::Result<HashSet<semver::Version>> {
-    #[derive(Deserialize)]
-    struct Response {
-        versions: Vec<VersionInfo>,
-    }
-    #[derive(Deserialize)]
-    struct VersionInfo {
-        num: String,
-    }
-
-    let client = reqwest::blocking::Client::new();
-    let crates_api = std::env::var("CRATES_API").unwrap();
-    let res = client
-        .get(format!("{crates_api}/crates/{name}"))
-        .header(
-            "User-Agent",
-            "Called from https://github.com/paritytech/subpub for checking crate versions",
-        )
-        .send()
-        .with_context(|| format!("Cannot get details for {name}"))?;
-
-    let res_status = res.status();
-
-    if res_status == reqwest::StatusCode::NOT_FOUND {
-        return Ok(HashSet::new());
-    }
-
-    if !res_status.is_success() {
-        anyhow::bail!("Non-200 response code getting details for {name}");
-    }
-
-    let response: Response = res.json()?;
-    response
-        .versions
-        .into_iter()
-        .map(|v| {
-            semver::Version::parse(&v.num).with_context(|| "Cannot parse response into Version")
-        })
-        .collect()
 }

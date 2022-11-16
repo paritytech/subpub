@@ -138,7 +138,7 @@ impl Crates {
         if needs_publishing {
             details.strip_dev_deps(&self.root)?;
             details.publish()?;
-            git_revert(&self.root)?;
+            git_checkpoint_revert(&self.root)?;
 
             // Don't return until the crate has finished being published; it won't
             // be immediately visible on crates.io, so wait until it shows up.
@@ -153,13 +153,17 @@ impl Crates {
     }
 
     /// Does a crate need a version bump in order to publish?
-    pub fn does_crate_version_need_bumping_to_publish(&self, name: &str) -> anyhow::Result<bool> {
+    pub fn does_crate_version_need_bumping_to_publish(
+        &self,
+        name: &str,
+        cio: &mut HashMap<String, bool>,
+    ) -> anyhow::Result<bool> {
         let details = match self.details.get(name) {
             Some(details) => details,
             None => anyhow::bail!("Crate '{name}' not found"),
         };
 
-        details.needs_version_bump_to_publish()
+        details.needs_version_bump_to_publish(cio)
     }
 
     /// Bump the version of the crate given, and update it in all dependant crates as needed.
@@ -178,6 +182,7 @@ impl Crates {
 
         // Bump the crate version:
         details.write_own_version(new_version.clone())?;
+        details.version = new_version.clone();
 
         // Find any crate which depends on this crate and bump the version there too.
         for details in self.details.values() {
@@ -266,9 +271,10 @@ impl Crates {
         fn set_needs_publishing(tree: &mut HashMap<String, Details>, name: &str) {
             let entry = tree.get_mut(name).expect("should exist");
 
-            if entry.details.published {
+            if entry.details.should_be_published {
                 entry.needs_publishing = true;
             }
+
             for dep in entry.dependees.clone().iter() {
                 set_needs_publishing(tree, dep);
             }
@@ -297,6 +303,7 @@ impl Crates {
                 cio.insert(name.into(), needs_publishing);
                 needs_publishing
             };
+
             if needs_publishing {
                 set_needs_publishing(&mut tree, name);
             }
