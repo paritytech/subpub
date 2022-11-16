@@ -29,7 +29,6 @@ pub struct Crates {
     pub details: HashMap<String, CrateDetails>,
     // Which crates depend on a given crate.
     dependees: HashMap<String, Dependees>,
-    pub cio: HashMap<String, bool>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -97,7 +96,6 @@ impl Crates {
             root,
             details,
             dependees,
-            cio: HashMap::new(),
         })
     }
 
@@ -118,21 +116,25 @@ impl Crates {
     }
 
     /// Remove any dev-dependency sections in the TOML file and publish.
-    pub fn strip_dev_deps_and_publish(&mut self, name: &str) -> anyhow::Result<()> {
+    pub fn strip_dev_deps_and_publish(
+        &self,
+        name: &str,
+        cio: &mut HashMap<String, bool>,
+    ) -> anyhow::Result<()> {
         let details = match self.details.get(name) {
             Some(details) => details,
             None => anyhow::bail!("Crate '{name}' not found"),
         };
 
-        let needs_publish: bool = if let Some(needs_publish) = self.cio.get(name) {
-            *needs_publish
+        let needs_publishing = if let Some(needs_publishing) = cio.get(name) {
+            *needs_publishing
         } else {
-            let needs_publish = details.needs_publishing()?;
-            self.cio.insert(name.into(), needs_publish);
-            needs_publish
+            let needs_publishing = details.needs_publishing()?;
+            cio.insert(name.into(), needs_publishing);
+            needs_publishing
         };
 
-        if needs_publish {
+        if needs_publishing {
             details.strip_dev_deps(&self.root)?;
             details.publish()?;
 
@@ -141,6 +143,8 @@ impl Crates {
             while !external::crates_io::does_crate_exist(name, &details.version)? {
                 std::thread::sleep(std::time::Duration::from_millis(2500))
             }
+
+            cio.insert(name.into(), false);
         }
 
         Ok(())
@@ -186,7 +190,11 @@ impl Crates {
     ///
     /// **Note:** it may be that one or more of the crate names provided are already
     /// published in their current state, in which case they won't be returned in the result.
-    pub fn what_needs_publishing(&self, crates: Vec<String>) -> anyhow::Result<Vec<String>> {
+    pub fn what_needs_publishing(
+        &mut self,
+        crates: Vec<String>,
+        cio: &mut HashMap<String, bool>,
+    ) -> anyhow::Result<Vec<String>> {
         struct Details<'a> {
             dependees: HashSet<String>,
             details: &'a CrateDetails,
@@ -199,36 +207,38 @@ impl Crates {
         // provided, which are the ones we ultimately want to be published
         // in their current state.
 
-        fn note_crates<'a>(
-            all: &'a Crates,
-            tree: &mut HashMap<String, Details<'a>>,
-            crates: impl IntoIterator<Item = String>,
-            depth: usize,
-        ) {
-            for name in crates {
-                let details = match all.details.get(&name) {
-                    Some(details) => details,
-                    // Crate doesn't exist; ignore it.
-                    None => continue,
-                };
+        {
+            fn note_crates<'a>(
+                all: &'a Crates,
+                tree: &mut HashMap<String, Details<'a>>,
+                crates: impl IntoIterator<Item = String>,
+                depth: usize,
+            ) {
+                for name in crates {
+                    let details = match all.details.get(&name) {
+                        Some(details) => details,
+                        // Crate doesn't exist; ignore it.
+                        None => continue,
+                    };
 
-                let entry = tree.entry(name).or_insert_with(|| Details {
-                    dependees: HashSet::new(),
-                    details,
-                    depth,
-                    needs_publishing: false,
-                });
+                    let entry = tree.entry(name).or_insert_with(|| Details {
+                        dependees: HashSet::new(),
+                        details,
+                        depth,
+                        needs_publishing: false,
+                    });
 
-                // We care about the deepest depth we find, so update as needed.
-                if entry.depth < depth {
-                    entry.depth = depth
+                    // We care about the deepest depth we find, so update as needed.
+                    if entry.depth < depth {
+                        entry.depth = depth
+                    }
+                    // Recurse and add all dependencies to our tree, too. We need to check whether
+                    // any of those need publishing as well.
+                    note_crates(all, tree, details.deps.iter().cloned(), depth + 1);
                 }
-                // Recurse and add all dependencies to our tree, too. We need to check whether
-                // any of those need publishing as well.
-                note_crates(all, tree, details.deps.iter().cloned(), depth + 1);
             }
+            note_crates(self, &mut tree, crates, 0);
         }
-        note_crates(self, &mut tree, crates, 0);
 
         // Step 2: populate the dependees for each crate. We pay attention to deps and
         // build deps but ignore dev deps, since those are irrelevant for publishing.
@@ -278,7 +288,14 @@ impl Crates {
 
             // If the crate itself needs publishing, mark it and anything
             // depending on it as needing publishing.
-            if details.details.needs_publishing()? {
+            let needs_publishing = if let Some(needs_publishing) = cio.get(name) {
+                *needs_publishing
+            } else {
+                let needs_publishing = details.details.needs_publishing()?;
+                cio.insert(name.into(), needs_publishing);
+                needs_publishing
+            };
+            if needs_publishing {
                 set_needs_publishing(&mut tree, name);
             }
         }

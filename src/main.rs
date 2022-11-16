@@ -22,6 +22,7 @@ mod version;
 
 use clap::{Parser, Subcommand};
 use crates::Crates;
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 /// Release crates and their dependencies from a workspace
@@ -91,10 +92,11 @@ fn main() {
 }
 
 fn prepare_for_publish(opts: CommonOpts, publish: bool) -> anyhow::Result<()> {
+    let mut cio = HashMap::new();
     // Run the logic first, and then print the various details, so that
     // our logging is all nicely separated from our output.
     let mut crates = Crates::load_crates_in_workspace(opts.path)?;
-    let publish_these = crates.what_needs_publishing(opts.crates.clone())?;
+    let publish_these = crates.what_needs_publishing(opts.crates.clone(), &mut cio)?;
 
     let mut no_need_to_bump = vec![];
     let mut bump_these = vec![];
@@ -138,7 +140,7 @@ fn prepare_for_publish(opts: CommonOpts, publish: bool) -> anyhow::Result<()> {
 
     if publish {
         for name in publish_these {
-            crates.strip_dev_deps_and_publish(&name)?;
+            crates.strip_dev_deps_and_publish(&name, &mut cio)?;
         }
     } else {
         println!("\nNow, you can create a release PR to have these version bumps merged");
@@ -148,10 +150,11 @@ fn prepare_for_publish(opts: CommonOpts, publish: bool) -> anyhow::Result<()> {
 }
 
 fn do_publish(opts: CommonOpts) -> anyhow::Result<()> {
+    let mut cio = HashMap::new();
     // Run the logic first, and then print the various details, so that
     // our logging is all nicely separated from our output.
     let mut crates = Crates::load_crates_in_workspace(opts.path)?;
-    let publish_these = crates.what_needs_publishing(opts.crates.clone())?;
+    let publish_these = crates.what_needs_publishing(opts.crates.clone(), &mut cio)?;
 
     // Check that no versions need bumping.
     let mut bump_these = vec![];
@@ -181,12 +184,13 @@ fn do_publish(opts: CommonOpts) -> anyhow::Result<()> {
     println!("\nNote: This will strip dev dependencies from crates being published! Remember to revert those changes after publishing.");
 
     for name in publish_these {
-        crates.strip_dev_deps_and_publish(&name)?;
+        crates.strip_dev_deps_and_publish(&name, &mut cio)?;
     }
     Ok(())
 }
 
 fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
+    let mut cio = HashMap::new();
     let mut crates = Crates::load_crates_in_workspace(opts.path.clone())?;
 
     let selected_crates = if opts.crates.len() > 0 {
@@ -273,7 +277,8 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
 
     let mut published_crates: Vec<String> = vec![];
     for selected_crate in selected_crates_order {
-        let crates_needing_publish = crates.what_needs_publishing(vec![selected_crate.into()])?;
+        let crates_needing_publish =
+            crates.what_needs_publishing(vec![selected_crate.into()], &mut cio)?;
 
         let crates_to_publish = crates_needing_publish
             .iter()
@@ -318,7 +323,7 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
         }
 
         for krate in crates_to_publish {
-            crates.strip_dev_deps_and_publish(&krate)?;
+            crates.strip_dev_deps_and_publish(&krate, &mut cio)?;
             published_crates.push(krate);
         }
     }
