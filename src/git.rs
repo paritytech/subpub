@@ -19,7 +19,7 @@ where
     if !git_status_output.stdout.is_empty() {
         let mut cmd = Command::new("git");
         if !cmd
-            .current_dir(root.as_ref())
+            .current_dir(&root)
             .arg("add")
             .arg("--quiet")
             .arg(".")
