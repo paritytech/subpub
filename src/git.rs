@@ -29,12 +29,16 @@ where
 
     let git_status_output = String::from_utf8_lossy(&git_status_output.stdout[..]);
     let git_status_output = git_status_output.trim();
+    println!(
+        "Git status output for {:?}: {}",
+        root.as_ref().as_os_str(),
+        git_status_output
+    );
     if !git_status_output.is_empty() {
         let mut cmd = Command::new("git");
         if !cmd
             .current_dir(&root)
             .arg("add")
-            .arg("--quiet")
             .arg(".")
             .status()?
             .success()
