@@ -207,38 +207,36 @@ impl Crates {
         // provided, which are the ones we ultimately want to be published
         // in their current state.
 
-        {
-            fn note_crates<'a>(
-                all: &'a Crates,
-                tree: &mut HashMap<String, Details<'a>>,
-                crates: impl IntoIterator<Item = String>,
-                depth: usize,
-            ) {
-                for name in crates {
-                    let details = match all.details.get(&name) {
-                        Some(details) => details,
-                        // Crate doesn't exist; ignore it.
-                        None => continue,
-                    };
+        fn note_crates<'a>(
+            all: &'a Crates,
+            tree: &mut HashMap<String, Details<'a>>,
+            crates: impl IntoIterator<Item = String>,
+            depth: usize,
+        ) {
+            for name in crates {
+                let details = match all.details.get(&name) {
+                    Some(details) => details,
+                    // Crate doesn't exist; ignore it.
+                    None => continue,
+                };
 
-                    let entry = tree.entry(name).or_insert_with(|| Details {
-                        dependees: HashSet::new(),
-                        details,
-                        depth,
-                        needs_publishing: false,
-                    });
+                let entry = tree.entry(name).or_insert_with(|| Details {
+                    dependees: HashSet::new(),
+                    details,
+                    depth,
+                    needs_publishing: false,
+                });
 
-                    // We care about the deepest depth we find, so update as needed.
-                    if entry.depth < depth {
-                        entry.depth = depth
-                    }
-                    // Recurse and add all dependencies to our tree, too. We need to check whether
-                    // any of those need publishing as well.
-                    note_crates(all, tree, details.deps.iter().cloned(), depth + 1);
+                // We care about the deepest depth we find, so update as needed.
+                if entry.depth < depth {
+                    entry.depth = depth
                 }
+                // Recurse and add all dependencies to our tree, too. We need to check whether
+                // any of those need publishing as well.
+                note_crates(all, tree, details.deps.iter().cloned(), depth + 1);
             }
-            note_crates(self, &mut tree, crates, 0);
         }
+        note_crates(self, &mut tree, crates, 0);
 
         // Step 2: populate the dependees for each crate. We pay attention to deps and
         // build deps but ignore dev deps, since those are irrelevant for publishing.
@@ -266,7 +264,9 @@ impl Crates {
         fn set_needs_publishing(tree: &mut HashMap<String, Details>, name: &str) {
             let entry = tree.get_mut(name).expect("should exist");
 
-            entry.needs_publishing = true;
+            if entry.details.published {
+                entry.needs_publishing = true;
+            }
             for dep in entry.dependees.clone().iter() {
                 set_needs_publishing(tree, dep);
             }

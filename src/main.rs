@@ -198,7 +198,6 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
     } else {
         crates.details.keys().map(|krate| krate.into()).collect()
     };
-    println!("{:?}", selected_crates);
 
     let mut order: Vec<String> = vec![];
     loop {
@@ -207,11 +206,16 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             if order.iter().any(|ord_crate| ord_crate == krate) {
                 continue;
             }
-            if details.deps.is_empty()
-                || details
-                    .deps
+            let all_deps: Vec<_> = details
+                .deps
+                .iter()
+                .chain(details.dev_deps.iter())
+                .chain(details.build_deps.iter())
+                .collect();
+            if all_deps.is_empty()
+                || all_deps
                     .iter()
-                    .all(|dep_crate| order.iter().any(|ord_crate| ord_crate == dep_crate))
+                    .all(|dep_crate| order.iter().any(|ord_crate| ord_crate == *dep_crate))
             {
                 order.push(krate.into());
                 progressed = true;

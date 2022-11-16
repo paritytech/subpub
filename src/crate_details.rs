@@ -28,6 +28,7 @@ pub struct CrateDetails {
     pub deps: HashSet<String>,
     pub build_deps: HashSet<String>,
     pub dev_deps: HashSet<String>,
+    pub published: bool,
 
     // Modifying the files on disk can only be done through the interface below.
     toml_path: PathBuf,
@@ -73,6 +74,14 @@ impl CrateDetails {
             deps.extend(filter_workspace_dependencies(item)?);
         }
 
+        let published = val
+            .get("package")
+            .ok_or_else(|| anyhow!("Cannot read [package] section from toml file."))?
+            .get("publish")
+            .map(|value| value.as_bool())
+            .flatten()
+            .unwrap_or(true);
+
         Ok(CrateDetails {
             name,
             version,
@@ -80,6 +89,7 @@ impl CrateDetails {
             dev_deps,
             build_deps,
             toml_path: path,
+            published
         })
     }
 
