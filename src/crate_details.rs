@@ -116,7 +116,7 @@ impl CrateDetails {
     }
 
     /// Set any references to the dependency provided to the version given.
-    pub fn write_dependency_version(
+    pub fn write_dependency_version<'a>(
         &self,
         dependency: &str,
         version: &Version,
@@ -128,41 +128,62 @@ impl CrateDetails {
             return Ok(false);
         }
 
-        let mut toml = self.read_toml()?;
+        let toml = Box::into_raw(Box::new(self.read_toml()?));
 
-        fn do_set(item: &mut toml_edit::Item, version: &Version, dependency: &str) {
+        fn do_set<'a>(
+            sself: &'a CrateDetails,
+            toml: *mut toml_edit::Document,
+            item: &mut toml_edit::Item,
+            version: &Version,
+            dependency: &str,
+        ) -> anyhow::Result<()> {
             let table = match item.as_table_like_mut() {
                 Some(table) => table,
-                None => return,
+                None => return Ok(()),
             };
 
             let dep = match table.get_mut(dependency) {
                 Some(dep) => dep,
-                None => return,
+                None => return Ok(()),
             };
 
+            let root = sself
+                .toml_path
+                .parent()
+                .expect("parent of toml path should exist");
+
             if dep.is_str() {
+                *dep = toml_edit::value(version.to_string());
+                sself.write_toml(unsafe { toml.as_ref().unwrap() })?;
+                git_checkpoint(&root, GitCheckpointMode::Save)?;
+
                 let mut table = toml_edit::table();
                 table["version"] = toml_edit::value(version.to_string());
                 table["registry"] = toml_edit::value("local".to_string());
                 *dep = table;
+                sself.write_toml(unsafe { toml.as_ref().unwrap() })?;
+                git_checkpoint(&root, GitCheckpointMode::RevertLater)?;
             } else {
                 dep["version"] = toml_edit::value(version.to_string());
+                sself.write_toml(unsafe { toml.as_ref().unwrap() })?;
+                git_checkpoint(&root, GitCheckpointMode::Save)?;
+
                 dep["registry"] = toml_edit::value("local".to_string());
+                git_checkpoint(&root, GitCheckpointMode::RevertLater)?;
             }
+
+            Ok(())
         }
 
-        edit_all_dependency_sections(&mut toml, "build-dependencies", |item| {
-            do_set(item, version, dependency)
+        edit_all_dependency_sections(toml, "build-dependencies", |toml, item| {
+            do_set(&self, toml, item, version, dependency).unwrap()
         });
-        edit_all_dependency_sections(&mut toml, "dev-dependencies", |item| {
-            do_set(item, version, dependency)
+        edit_all_dependency_sections(toml, "dev-dependencies", |toml, item| {
+            do_set(&self, toml, item, version, dependency).unwrap()
         });
-        edit_all_dependency_sections(&mut toml, "dependencies", |item| {
-            do_set(item, version, dependency)
+        edit_all_dependency_sections(toml, "dependencies", |toml, item| {
+            do_set(&self, toml, item, version, dependency).unwrap()
         });
-
-        self.write_toml(&toml)?;
 
         Ok(true)
     }
@@ -332,16 +353,17 @@ fn get_target_dependency_sections_mut<'a>(
 
 /// Allows a function to be provided that is passed each mutable `Item` we find when searching for
 /// "dependencies"/"dev-dependencies"/"build-dependencies".
-fn edit_all_dependency_sections<F: FnMut(&mut toml_edit::Item)>(
-    document: &mut toml_edit::Document,
+fn edit_all_dependency_sections<F: FnMut(*mut toml_edit::Document, &mut toml_edit::Item)>(
+    document: *mut toml_edit::Document,
     label: &str,
     mut f: F,
 ) {
-    if let Some(item) = document.get_mut(label) {
-        f(item);
+    let doc = unsafe { document.as_mut().unwrap() };
+    if let Some(item) = doc.get_mut(label) {
+        f(document, item);
     }
-    for item in get_target_dependency_sections_mut(document, label) {
-        f(item);
+    for item in get_target_dependency_sections_mut(doc, label) {
+        f(document, item)
     }
 }
 
