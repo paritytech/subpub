@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with subpub.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::git::GitCheckpoint;
 use crate::{external, git};
 use anyhow::{anyhow, Context};
 use semver::Version;
@@ -173,7 +172,7 @@ impl CrateDetails {
     where
         P: AsRef<Path>,
     {
-        git::git_checkpoint(&root, GitCheckpoint::Save)?;
+        git::git_checkpoint(&root)?;
 
         let mut toml = self.read_toml()?;
 
@@ -193,7 +192,7 @@ impl CrateDetails {
         // Only write the toml file back if we did remove something.
         if removed_top_level || removed_target_deps {
             self.write_toml(&toml)?;
-            git::git_checkpoint(&root, GitCheckpoint::Revert)?;
+            git::git_checkpoint(&root)?;
         }
 
         Ok(())
@@ -213,7 +212,14 @@ impl CrateDetails {
     /// only if, as far as we can see, the current version is published to crates.io, and there have been
     /// no changes to it since.
     pub fn needs_publishing(&self) -> anyhow::Result<bool> {
-        self.needs_publishing_inner()
+        let crate_dir = self
+            .toml_path
+            .parent()
+            .expect("parent of toml path should exist");
+        git::git_checkpoint(&crate_dir)?;
+        let result = self.needs_publishing_inner();
+        git::git_revert(&crate_dir)?;
+        result
     }
 
     pub fn needs_publishing_inner(&self) -> anyhow::Result<bool> {
@@ -250,9 +256,6 @@ impl CrateDetails {
         {
             bytes
         } else {
-            // crate at current version doesn't exist; this def needs publishing, then.
-            // Especially useful since when we bump the version we'll end up in this branch
-            // which will be quicker.
             return Ok(true);
         };
 
