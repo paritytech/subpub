@@ -37,8 +37,8 @@ where
 /// Update the lockfile for dependencies given and any of their subdependencies.
 pub fn publish_crate(root: &Path, package: &str) -> anyhow::Result<()> {
     let mut cmd = Command::new("cargo");
-    cmd.current_dir(&root)
-        .env("CARGO_LOG", "cargo")
+    if !cmd
+        .current_dir(&root)
         .env(
             "CARGO_REGISTRIES_LOCAL_INDEX",
             std::env::var("CARGO_INDEX").unwrap(),
@@ -53,6 +53,10 @@ pub fn publish_crate(root: &Path, package: &str) -> anyhow::Result<()> {
         .arg(std::env::var("CARGO_REGISTRY").unwrap())
         .arg("--token")
         .arg(std::env::var("CARGO_TOKEN").unwrap())
-        .status()?;
+        .status()?
+        .success()
+    {
+        anyhow::bail!("Failed to publish crate {package}");
+    };
     Ok(())
 }
