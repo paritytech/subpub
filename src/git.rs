@@ -26,8 +26,6 @@ where
         );
     }
 
-    let mut created_revert_commit = false;
-
     let git_status_output = String::from_utf8_lossy(&git_status_output.stdout[..]);
     let git_status_output = git_status_output.trim();
     if !git_status_output.is_empty() {
@@ -39,8 +37,16 @@ where
             .status()?
             .success()
         {
-            anyhow::bail!("Unable to commit modified files:\n{:?}", git_status_output);
+            anyhow::bail!(
+                "Unable to `git add` files for {:?}",
+                root.as_ref().as_os_str()
+            );
         }
+
+        let commit_msg = match op {
+            GCM::Save => CHECKPOINT_SAVE,
+            GCM::RevertLater => CHECKPOINT_REVERT,
+        };
 
         let mut cmd = Command::new("git");
         if !cmd
@@ -48,50 +54,16 @@ where
             .arg("commit")
             .arg("--quiet")
             .arg("-m")
-            .arg(match op {
-                GCM::Save => CHECKPOINT_SAVE,
-                GCM::RevertLater => {
-                    created_revert_commit = true;
-                    CHECKPOINT_REVERT
-                }
-            })
+            .arg(commit_msg)
             .status()?
             .success()
         {
-            anyhow::bail!("Unable to commit modified files:\n{:?}", git_status_output);
+            anyhow::bail!(
+                "Unable to `git commit` files for {:?}",
+                root.as_ref().as_os_str()
+            );
         }
-    }
-
-    if !created_revert_commit {
-        let mut cmd = Command::new("git");
-        let output = cmd
-            .current_dir(&root)
-            .arg("log")
-            .arg("-1")
-            .arg("--pretty=%B")
-            .output()?;
-        if !output.status.success() {
-            anyhow::bail!("Unable to get commit message of last commit");
-        }
-
-        let last_commit_msg = String::from_utf8_lossy(&output.stdout[..]);
-        let last_commit_msg = last_commit_msg.trim();
-        if last_commit_msg != CHECKPOINT_REVERT {
-            let mut cmd = Command::new("git");
-            if !cmd
-                .current_dir(&root)
-                .arg("commit")
-                .arg("--quiet")
-                .arg("--allow-empty")
-                .arg("-m")
-                .arg(CHECKPOINT_REVERT)
-                .status()?
-                .success()
-            {
-                anyhow::bail!("Unable to create empty commit");
-            }
-        }
-    }
+    };
 
     Ok(())
 }
