@@ -17,8 +17,7 @@ where
     let git_status_output = cmd
         .current_dir(&root)
         .arg("status")
-        .arg("--porcelain")
-        .arg("v1")
+        .arg("--porcelain=v1")
         .output()?;
     if !git_status_output.status.success() {
         anyhow::bail!(
