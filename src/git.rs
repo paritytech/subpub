@@ -1,3 +1,4 @@
+use anyhow::Context;
 use std::path::Path;
 use std::process::Command;
 
@@ -102,5 +103,43 @@ where
             break;
         }
     }
+    Ok(())
+}
+
+pub fn git_checkpoint_revert_all<P>(root: P) -> anyhow::Result<()>
+where
+    P: AsRef<Path>,
+{
+    let mut cmd = Command::new("git");
+    let output = cmd
+        .current_dir(&root)
+        .arg("log")
+        .arg("--pretty=%H\0%B\0")
+        .output()?;
+    if !output.status.success() {
+        anyhow::bail!("Unable to get commit message of last commit");
+    }
+
+    let output = String::from_utf8_lossy(&output.stdout[..]);
+    let mut output = output.split("\0");
+
+    let mut drop = vec![];
+    let mut keep = vec![];
+    while let Some(commit_sha) = output.next() {
+        if commit_sha.is_empty() {
+            break;
+        }
+        let commit_msg = output
+            .next()
+            .with_context(|| format!("Expected commit message for commit {commit_sha}"))?;
+        if commit_msg == CHECKPOINT_REVERT {
+            drop.push(commit_sha);
+        } else if commit_msg == CHECKPOINT_SAVE {
+            keep.push(commit_sha);
+        } else {
+            break;
+        }
+    }
+
     Ok(())
 }
