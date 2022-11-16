@@ -267,7 +267,7 @@ impl CrateDetails {
             .status()?
             .success()
         {
-            anyhow::bail!("Unable to package crate {name}");
+            anyhow::bail!("Failed to package crate {name}");
         };
         let pkg_path = tmp_dir
             .path()

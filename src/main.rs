@@ -20,6 +20,7 @@ mod external;
 mod git;
 mod version;
 
+use crate::git::*;
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use crates::Crates;
@@ -34,10 +35,18 @@ struct Args {
     command: Command,
 }
 
+#[derive(Parser, Debug, Clone)]
+struct CleanOpts {
+    /// Path to the workspace root.
+    #[clap(long)]
+    path: PathBuf,
+}
+
 #[derive(Subcommand, Debug)]
 enum Command {
     #[clap(about = "Publish crates in order from least to most dependees")]
     PublishInOrder(CommonOpts),
+    Clean(CleanOpts),
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -58,6 +67,7 @@ fn main() {
 
     let res = match args.command {
         Command::PublishInOrder(opts) => publish_in_order(opts),
+        Command::Clean(opts) => git_checkpoint_revert_all(opts.path),
     };
 
     if let Err(e) = res {
@@ -108,7 +118,7 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
         .collect::<Vec<_>>();
     if !unordered_crates.is_empty() {
         anyhow::bail!(
-            "Unable to determine publish order for the following crates: {}",
+            "Failed to determine publish order for the following crates: {}",
             unordered_crates
                 .iter()
                 .map(|krate| (*krate).into())
@@ -136,7 +146,7 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
         .collect::<Vec<_>>();
     if !unordered_selected_crates.is_empty() {
         anyhow::bail!(
-            "Unable to determine publish order for the following selected crates: {}",
+            "Failed to determine publish order for the following selected crates: {}",
             unordered_selected_crates
                 .iter()
                 .map(|krate| (*krate).into())
