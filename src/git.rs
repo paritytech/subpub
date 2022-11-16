@@ -47,7 +47,6 @@ where
             GCM::Save => CHECKPOINT_SAVE,
             GCM::RevertLater => CHECKPOINT_REVERT,
         };
-
         let mut cmd = Command::new("git");
         if !cmd
             .current_dir(&root)
