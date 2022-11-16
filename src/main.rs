@@ -209,7 +209,6 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             let all_deps: Vec<_> = details
                 .deps
                 .iter()
-                .chain(details.dev_deps.iter())
                 .chain(details.build_deps.iter())
                 .collect();
             if all_deps.is_empty()

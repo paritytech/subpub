@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with subpub.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::git::GitCheckpoint;
 use crate::{external, git};
 use anyhow::{anyhow, Context};
 use semver::Version;
@@ -89,7 +90,7 @@ impl CrateDetails {
             dev_deps,
             build_deps,
             toml_path: path,
-            published
+            published,
         })
     }
 
@@ -168,8 +169,11 @@ impl CrateDetails {
     }
 
     /// Strip dev dependencies.
-    pub fn strip_dev_deps(&self, root: &PathBuf) -> anyhow::Result<()> {
-        git::git_checkpoint(root, "[subpub] checkpoint")?;
+    pub fn strip_dev_deps<P>(&self, root: P) -> anyhow::Result<()>
+    where
+        P: AsRef<Path>,
+    {
+        git::git_checkpoint(&root, GitCheckpoint::Save)?;
 
         let mut toml = self.read_toml()?;
 
@@ -189,7 +193,7 @@ impl CrateDetails {
         // Only write the toml file back if we did remove something.
         if removed_top_level || removed_target_deps {
             self.write_toml(&toml)?;
-            git::git_checkpoint(root, "[subpub] revert")?;
+            git::git_checkpoint(&root, GitCheckpoint::Revert)?;
         }
 
         Ok(())
@@ -209,17 +213,23 @@ impl CrateDetails {
     /// only if, as far as we can see, the current version is published to crates.io, and there have been
     /// no changes to it since.
     pub fn needs_publishing(&self) -> anyhow::Result<bool> {
+        self.needs_publishing_inner()
+    }
+
+    pub fn needs_publishing_inner(&self) -> anyhow::Result<bool> {
         let name = &self.name;
 
-        let parent = self
+        let crate_dir = self
             .toml_path
             .parent()
             .expect("parent of toml path should exist");
 
+        self.strip_dev_deps(&crate_dir)?;
+
         let tmp_dir = tempfile::tempdir()?;
         let mut cmd = Command::new("cargo");
         if !cmd
-            .current_dir(parent)
+            .current_dir(crate_dir)
             .arg("package")
             .arg("--allow-dirty")
             .arg("--target-dir")
