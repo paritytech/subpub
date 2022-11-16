@@ -277,7 +277,6 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             .collect::<Vec<String>>()
             .join(", ")
     );
-    println!("{:?}", crates.details.get("sp-wasm-interface").unwrap());
 
     let mut published_crates: Vec<String> = vec![];
     for selected_crate in selected_crates_order {
