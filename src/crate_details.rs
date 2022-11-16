@@ -222,7 +222,7 @@ impl CrateDetails {
         let pkg_path = tmp_dir
             .path()
             .join("package")
-            .join("{name}-{version}.crate");
+            .join(format!("{name}-{}.crate", self.version));
         let pkg_bytes = std::fs::read(&pkg_path)?;
 
         let crates_io_bytes = if let Some(bytes) =
