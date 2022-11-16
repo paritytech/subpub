@@ -172,8 +172,6 @@ impl CrateDetails {
     where
         P: AsRef<Path>,
     {
-        git_checkpoint(&root, GitCheckpointMode::Save)?;
-
         let mut toml = self.read_toml()?;
 
         // Remove [dev-dependencies]
@@ -217,7 +215,6 @@ impl CrateDetails {
             .toml_path
             .parent()
             .expect("parent of toml path should exist");
-        git_checkpoint(&crate_dir, GitCheckpointMode::Save)?;
         let result = self.needs_publishing_inner();
         git_revert(&crate_dir)?;
         result

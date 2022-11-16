@@ -307,7 +307,7 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             }
         }
 
-        // crates.update_lockfile_for_crates(vec![selected_crate.to_owned()])?;
+        crates.update_lockfile_for_crates(vec![selected_crate.to_owned()])?;
 
         if crates_to_publish.len() > 1 {
             println!(

@@ -16,6 +16,7 @@
 
 use crate::crate_details::CrateDetails;
 use crate::external;
+use crate::git::*;
 use crate::version::{bump_for_breaking_change, Version};
 use anyhow::anyhow;
 use std::collections::{HashMap, HashSet};
@@ -137,6 +138,7 @@ impl Crates {
         if needs_publishing {
             details.strip_dev_deps(&self.root)?;
             details.publish()?;
+            git_revert(&self.root)?;
 
             // Don't return until the crate has finished being published; it won't
             // be immediately visible on crates.io, so wait until it shows up.
