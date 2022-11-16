@@ -26,13 +26,10 @@ where
         );
     }
 
+    let mut created_revert_commit = false;
+
     let git_status_output = String::from_utf8_lossy(&git_status_output.stdout[..]);
     let git_status_output = git_status_output.trim();
-    println!(
-        "Git status output for {:?}: {}",
-        root.as_ref().as_os_str(),
-        git_status_output
-    );
     if !git_status_output.is_empty() {
         let mut cmd = Command::new("git");
         if !cmd
@@ -53,7 +50,10 @@ where
             .arg("-m")
             .arg(match op {
                 GitCheckpointMode::Save => CHECKPOINT_SAVE,
-                GitCheckpointMode::RevertLater => CHECKPOINT_REVERT,
+                GitCheckpointMode::RevertLater => {
+                    created_revert_commit = true;
+                    CHECKPOINT_REVERT
+                }
             })
             .status()?
             .success()
@@ -62,21 +62,23 @@ where
         }
     }
 
-    let mut cmd = Command::new("git");
-    if cmd
-        .current_dir(&root)
-        .arg("commit")
-        .arg("--quiet")
-        .arg("--allow-empty")
-        .arg("-m")
-        .arg(CHECKPOINT_REVERT)
-        .status()?
-        .success()
-    {
-        return Ok(());
-    } else {
-        anyhow::bail!("Unable to create empty commit");
+    if !created_revert_commit {
+        let mut cmd = Command::new("git");
+        if !cmd
+            .current_dir(&root)
+            .arg("commit")
+            .arg("--quiet")
+            .arg("--allow-empty")
+            .arg("-m")
+            .arg(CHECKPOINT_REVERT)
+            .status()?
+            .success()
+        {
+            anyhow::bail!("Unable to create empty commit");
+        }
     }
+
+    Ok(())
 }
 
 pub fn git_revert<P>(root: P) -> anyhow::Result<()>
