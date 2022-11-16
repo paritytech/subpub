@@ -116,7 +116,7 @@ impl CrateDetails {
     }
 
     /// Set any references to the dependency provided to the version given.
-    pub fn write_dependency_version<'a>(
+    pub fn write_dependency_version(
         &self,
         dependency: &str,
         version: &Version,
