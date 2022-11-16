@@ -38,6 +38,7 @@ where
         if !cmd
             .current_dir(&root)
             .arg("commit")
+            .arg("--quiet")
             .arg("-m")
             .arg(match op {
                 GitCheckpointMode::Save => CHECKPOINT_SAVE,
@@ -54,6 +55,7 @@ where
     if cmd
         .current_dir(&root)
         .arg("commit")
+        .arg("--quiet")
         .arg("--allow-empty")
         .arg("-m")
         .arg(CHECKPOINT_REVERT)
@@ -88,6 +90,7 @@ where
             if !cmd
                 .current_dir(&root)
                 .arg("reset")
+                .arg("--quiet")
                 .arg("--hard")
                 .arg("HEAD~1")
                 .status()?
