@@ -20,8 +20,16 @@ where
         .arg("--porcelain")
         .arg("v1")
         .output()?;
+    if !git_status_output.status.success() {
+        anyhow::bail!(
+            "Unable to get git status for {:?}",
+            root.as_ref().as_os_str()
+        );
+    }
 
-    if !git_status_output.stdout.is_empty() {
+    let git_status_output = String::from_utf8_lossy(&git_status_output.stdout[..]);
+    let git_status_output = git_status_output.trim();
+    if !git_status_output.is_empty() {
         let mut cmd = Command::new("git");
         if !cmd
             .current_dir(&root)
@@ -85,6 +93,7 @@ where
         }
 
         let last_commit_msg = String::from_utf8_lossy(&output.stdout[..]);
+        let last_commit_msg = last_commit_msg.trim();
         if last_commit_msg == CHECKPOINT_REVERT {
             let mut cmd = Command::new("git");
             if !cmd
