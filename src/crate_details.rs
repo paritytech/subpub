@@ -226,8 +226,7 @@ impl CrateDetails {
         let pkg_bytes = std::fs::read(&pkg_path)?;
 
         let crates_io_bytes = if let Some(bytes) =
-            external::crates_io::try_download_crate(&self.name, &self.version)
-                .with_context(|| format!("Could not download crate {name}"))?
+            external::crates_io::try_download_crate(&self.name, &self.version)?
         {
             bytes
         } else {
