@@ -152,20 +152,21 @@ impl CrateDetails {
                 .parent()
                 .expect("parent of toml path should exist");
 
+            let doc = unsafe { toml.as_ref().unwrap() };
             if dep.is_str() {
                 *dep = toml_edit::value(version.to_string());
-                sself.write_toml(unsafe { toml.as_ref().unwrap() })?;
+                sself.write_toml(doc)?;
                 git_checkpoint(&root, GitCheckpointMode::Save)?;
 
                 let mut table = toml_edit::table();
                 table["version"] = toml_edit::value(version.to_string());
                 table["registry"] = toml_edit::value("local".to_string());
                 *dep = table;
-                sself.write_toml(unsafe { toml.as_ref().unwrap() })?;
+                sself.write_toml(doc)?;
                 git_checkpoint(&root, GitCheckpointMode::RevertLater)?;
             } else {
                 dep["version"] = toml_edit::value(version.to_string());
-                sself.write_toml(unsafe { toml.as_ref().unwrap() })?;
+                sself.write_toml(doc)?;
                 git_checkpoint(&root, GitCheckpointMode::Save)?;
 
                 dep["registry"] = toml_edit::value("local".to_string());
