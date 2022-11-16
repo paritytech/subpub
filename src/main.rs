@@ -20,6 +20,7 @@ mod external;
 mod git;
 mod version;
 
+use anyhow::Context;
 use clap::{Parser, Subcommand};
 use crates::Crates;
 use std::collections::HashMap;
@@ -282,14 +283,16 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
     for selected_crate in selected_crates_order {
         let details = crates.details.get(selected_crate).unwrap();
 
-        for krate in &order {
-            if krate == selected_crate {
+        for prev_crate in &order {
+            if prev_crate == selected_crate {
                 break;
             }
-            let crate_det = crates.details.get(krate).unwrap();
-            details.write_dependency_version(krate, &crate_det.version)?;
+            let prev_crate_details = crates
+                .details
+                .get(prev_crate)
+                .with_context(|| format!("Crate not found: {prev_crate}"))?;
+            details.write_dependency_version(prev_crate, &prev_crate_details.version)?;
         }
-        std::process::exit(0);
 
         let crates_needing_publish =
             crates.what_needs_publishing(vec![selected_crate.into()], &mut cio)?;
