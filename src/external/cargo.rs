@@ -44,6 +44,7 @@ pub fn publish_crate(root: &Path, package: &str) -> anyhow::Result<()> {
             std::env::var("CARGO_INDEX").unwrap(),
         )
         .arg("publish")
+        .arg("--locked")
         .arg("--allow-dirty")
         .arg("-vv")
         .arg("-p")

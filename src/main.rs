@@ -251,9 +251,9 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
                 .any(|sel_crate_ordered| sel_crate_ordered == sel_crate)
         })
         .collect::<Vec<_>>();
-    if unordered_selected_crates.len() {
+    if !unordered_selected_crates.is_empty() {
         anyhow::bail!(
-            "Unable to determine publish order for the following crates: {}",
+            "Unable to determine publish order for the following selected crates: {}",
             unordered_selected_crates
                 .iter()
                 .map(|krate| (*krate).into())

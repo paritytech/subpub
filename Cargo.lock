@@ -893,6 +893,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tar",
+ "tempfile",
  "toml_edit",
  "walkdir",
 ]
