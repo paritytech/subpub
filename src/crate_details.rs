@@ -121,13 +121,6 @@ impl CrateDetails {
         dependency: &str,
         version: &Version,
     ) -> anyhow::Result<bool> {
-        if !self.build_deps.contains(dependency)
-            && !self.dev_deps.contains(dependency)
-            && !self.deps.contains(dependency)
-        {
-            return Ok(false);
-        }
-
         let toml = Box::into_raw(Box::new(self.read_toml()?));
 
         fn do_set<'a>(
