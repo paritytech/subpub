@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with subpub.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{external, git};
+use crate::{external, git::*};
 use anyhow::{anyhow, Context};
 use semver::Version;
 use std::collections::HashSet;
@@ -172,7 +172,7 @@ impl CrateDetails {
     where
         P: AsRef<Path>,
     {
-        git::git_checkpoint(&root)?;
+        git_checkpoint(&root, GitCheckpointMode::Save)?;
 
         let mut toml = self.read_toml()?;
 
@@ -191,8 +191,9 @@ impl CrateDetails {
 
         // Only write the toml file back if we did remove something.
         if removed_top_level || removed_target_deps {
+            git_checkpoint(&root, GitCheckpointMode::Save)?;
             self.write_toml(&toml)?;
-            git::git_checkpoint(&root)?;
+            git_checkpoint(&root, GitCheckpointMode::RevertLater)?;
         }
 
         Ok(())
@@ -216,9 +217,9 @@ impl CrateDetails {
             .toml_path
             .parent()
             .expect("parent of toml path should exist");
-        git::git_checkpoint(&crate_dir)?;
+        git_checkpoint(&crate_dir, GitCheckpointMode::Save)?;
         let result = self.needs_publishing_inner();
-        git::git_revert(&crate_dir)?;
+        git_revert(&crate_dir)?;
         result
     }
 

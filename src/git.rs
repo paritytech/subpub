@@ -4,7 +4,12 @@ use std::process::Command;
 const CHECKPOINT_SAVE: &'static str = "[subpub] CHECKPOINT_SAVE";
 const CHECKPOINT_REVERT: &'static str = "[subpub] CHECKPOINT_REVERT";
 
-pub fn git_checkpoint<P>(root: P) -> anyhow::Result<()>
+pub enum GitCheckpointMode {
+    Save,
+    RevertLater,
+}
+
+pub fn git_checkpoint<P>(root: P, op: GitCheckpointMode) -> anyhow::Result<()>
 where
     P: AsRef<Path>,
 {
@@ -34,7 +39,10 @@ where
             .current_dir(&root)
             .arg("commit")
             .arg("-m")
-            .arg(CHECKPOINT_SAVE)
+            .arg(match op {
+                GitCheckpointMode::Save => CHECKPOINT_SAVE,
+                GitCheckpointMode::RevertLater => CHECKPOINT_REVERT,
+            })
             .status()?
             .success()
         {
