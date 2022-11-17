@@ -206,7 +206,6 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             .collect::<Vec<String>>()
             .join(", ")
     );
-    std::process::exit(0);
 
     let mut processed_crates: HashSet<String> = HashSet::new();
     for sel_crate in selected_crates_order {
@@ -282,8 +281,6 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
                 next_crate_details
                     .write_dependency_version(&krate, &published_crate_details.version)?;
             }
-
-            crates.update_lockfile_for_crates(vec![&krate])?;
 
             processed_crates.insert(krate);
         }
