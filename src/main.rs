@@ -230,7 +230,7 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
         }
 
         let crates_set_to_publish =
-            crates.what_needs_publishing(vec![sel_crate.into()], &mut cio)?;
+            crates.what_needs_publishing(vec![sel_crate.into()], &opts.path, &mut cio)?;
         let crates_to_publish = order
             .iter()
             .filter(|ordered_crate| {
@@ -261,13 +261,13 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
         }
 
         for krate in crates_to_publish {
-            if crates.does_crate_version_need_bumping_to_publish(&krate, &mut cio)? {
+            if crates.does_crate_version_need_bumping_to_publish(&krate, &opts.path, &mut cio)? {
                 let (old_version, new_version) =
                     crates.bump_crate_version_for_breaking_change(&krate)?;
                 println!("[{sel_crate}] Bumping crate {krate} from {new_version} to {old_version}");
             }
 
-            crates.strip_dev_deps_and_publish(&krate, &mut cio)?;
+            crates.strip_dev_deps_and_publish(&krate, &opts.path, &mut cio)?;
 
             let published_crate_details = crates
                 .details

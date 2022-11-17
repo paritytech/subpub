@@ -20,6 +20,7 @@ use crate::git::*;
 use crate::version::{bump_for_breaking_change, Version};
 use anyhow::anyhow;
 use std::collections::{HashMap, HashSet};
+use std::path::Path;
 use std::path::PathBuf;
 use walkdir::WalkDir;
 
@@ -117,9 +118,10 @@ impl Crates {
     }
 
     /// Remove any dev-dependency sections in the TOML file and publish.
-    pub fn strip_dev_deps_and_publish(
+    pub fn strip_dev_deps_and_publish<P: AsRef<Path>>(
         &self,
         name: &str,
+        root: P,
         cio: &mut HashMap<String, bool>,
     ) -> anyhow::Result<()> {
         let details = match self.details.get(name) {
@@ -130,7 +132,7 @@ impl Crates {
         let needs_publishing = if let Some(needs_publishing) = cio.get(name) {
             *needs_publishing
         } else {
-            let needs_publishing = details.needs_publishing()?;
+            let needs_publishing = details.needs_publishing(root)?;
             cio.insert(name.into(), needs_publishing);
             needs_publishing
         };
@@ -153,9 +155,10 @@ impl Crates {
     }
 
     /// Does a crate need a version bump in order to publish?
-    pub fn does_crate_version_need_bumping_to_publish(
+    pub fn does_crate_version_need_bumping_to_publish<P: AsRef<Path>>(
         &self,
         name: &str,
+        root: P,
         cio: &mut HashMap<String, bool>,
     ) -> anyhow::Result<bool> {
         let details = match self.details.get(name) {
@@ -163,7 +166,7 @@ impl Crates {
             None => anyhow::bail!("Crate '{name}' not found"),
         };
 
-        details.needs_version_bump_to_publish(cio)
+        details.needs_version_bump_to_publish(root, cio)
     }
 
     /// Bump the version of the crate given, and update it in all dependant crates as needed.
@@ -196,9 +199,10 @@ impl Crates {
     ///
     /// **Note:** it may be that one or more of the crate names provided are already
     /// published in their current state, in which case they won't be returned in the result.
-    pub fn what_needs_publishing(
+    pub fn what_needs_publishing<P: AsRef<Path>>(
         &mut self,
         crates: Vec<String>,
+        root: P,
         cio: &mut HashMap<String, bool>,
     ) -> anyhow::Result<Vec<String>> {
         struct Details<'a> {
@@ -298,7 +302,7 @@ impl Crates {
             let needs_publishing = if let Some(needs_publishing) = cio.get(name) {
                 *needs_publishing
             } else {
-                let needs_publishing = details.details.needs_publishing()?;
+                let needs_publishing = details.details.needs_publishing(&root)?;
                 cio.insert(name.into(), needs_publishing);
                 needs_publishing
             };

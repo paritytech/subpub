@@ -220,13 +220,12 @@ impl CrateDetails {
     /// This checks whether we actually need to publish a new version of the crate. It'll return `false`
     /// only if, as far as we can see, the current version is published to crates.io, and there have been
     /// no changes to it since.
-    pub fn needs_publishing(&self) -> anyhow::Result<bool> {
-        let crate_dir = self
-            .toml_path
-            .parent()
-            .expect("parent of toml path should exist");
+    pub fn needs_publishing<P>(&self, root: P) -> anyhow::Result<bool>
+    where
+        P: AsRef<Path>,
+    {
         let result = self.needs_publishing_inner();
-        git_checkpoint_revert(&crate_dir)?;
+        git_checkpoint_revert(root)?;
         result
     }
 
@@ -279,8 +278,9 @@ impl CrateDetails {
     }
 
     /// Does this create need a version bump in order to be published?
-    pub fn needs_version_bump_to_publish(
+    pub fn needs_version_bump_to_publish<P: AsRef<Path>>(
         &self,
+        root: P,
         cio: &mut HashMap<String, bool>,
     ) -> anyhow::Result<bool> {
         if self.version.pre != semver::Prerelease::EMPTY {
@@ -291,7 +291,7 @@ impl CrateDetails {
         let needs_publishing = if let Some(needs_publishing) = cio.get(&self.name) {
             *needs_publishing
         } else {
-            let needs_publishing = self.needs_publishing()?;
+            let needs_publishing = self.needs_publishing(root)?;
             cio.insert((&self.name).into(), needs_publishing);
             needs_publishing
         };
