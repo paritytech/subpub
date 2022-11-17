@@ -205,7 +205,6 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             .collect::<Vec<String>>()
             .join(", ")
     );
-    std::process::exit(0);
 
     let mut dealt_with_crates: HashSet<String> = HashSet::new();
     for selected_crate in selected_crates_order {
