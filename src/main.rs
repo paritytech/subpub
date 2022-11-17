@@ -90,15 +90,15 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             if order.iter().any(|(_, ord_crate)| ord_crate == krate) {
                 continue;
             }
-            let all_deps = details.deps.iter().chain(details.build_deps.iter());
+            let mut deps: HashSet<&String> = HashSet::from_iter(details.deps.iter());
+            for dep in details.build_deps.iter() {
+                deps.insert(dep);
+            }
             let ordered_deps = order
                 .iter()
-                .filter(|(_, ord_crate)| all_deps.clone().any(|dep| dep == ord_crate))
+                .filter(|(_, ord_crate)| deps.iter().any(|dep| *dep == ord_crate))
                 .collect::<Vec<_>>();
-            if krate == "node-cli" {
-                println!("{} {}", ordered_deps.len(), all_deps.clone().count());
-            }
-            if ordered_deps.len() == all_deps.count() {
+            if ordered_deps.len() == deps.len() {
                 order.push((
                     ordered_deps
                         .iter()
@@ -113,16 +113,12 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
         }
     }
     order.sort_by(|a, b| {
-        use std::cmp::Ordering;
-        if a.0 < b.0 {
-            Ordering::Less
-        } else if b.0 < a.0 {
-            Ordering::Greater
-        } else {
+        if a.0 == b.0 {
             a.1.cmp(&b.1)
+        } else {
+            a.0.cmp(&b.0)
         }
     });
-    println!("s {:?}", order);
     let order: Vec<String> = order.into_iter().map(|(_, ord_crate)| ord_crate).collect();
 
     let unordered_crates = crates
