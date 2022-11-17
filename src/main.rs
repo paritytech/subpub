@@ -206,24 +206,26 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             .join(", ")
     );
 
-    let mut dealt_with_crates: HashSet<String> = HashSet::new();
+    let mut processed_crates: HashSet<String> = HashSet::new();
     for selected_crate in selected_crates_order {
-        if dealt_with_crates.get(selected_crate).is_some() {
-            println!("[{selected_crate}] Crate has already been dealt with");
+        if processed_crates.get(selected_crate).is_some() {
+            println!("[{selected_crate}] Crate has already been processed");
             continue;
         }
-        dealt_with_crates.insert(selected_crate.into());
+        processed_crates.insert(selected_crate.into());
+        println!("[{selected_crate}] Processing crate");
 
         let details = crates.details.get(selected_crate).unwrap();
 
-        for prev_crate in &order {
-            if prev_crate != selected_crate {
-                let prev_crate_details = crates
-                    .details
-                    .get(prev_crate)
-                    .with_context(|| format!("Crate not found: {prev_crate}"))?;
-                details.write_dependency_version(prev_crate, &prev_crate_details.version)?;
+        for krate in &order {
+            if krate == selected_crate {
+                break;
             }
+            let crate_details = crates
+                .details
+                .get(krate)
+                .with_context(|| format!("Crate details not found for crate: {krate}"))?;
+            details.write_dependency_version(krate, &crate_details.version)?;
         }
 
         let crates_set_to_publish =
@@ -234,9 +236,9 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
                 crates_set_to_publish
                     .iter()
                     .any(|crate_set_to_publish| crate_set_to_publish == *ordered_crate)
-                    && !dealt_with_crates
+                    && !processed_crates
                         .iter()
-                        .any(|dealt_with_crate| dealt_with_crate == *ordered_crate)
+                        .any(|processed_crate| processed_crate == *ordered_crate)
             })
             .map(|krate| krate.into())
             .collect::<Vec<String>>();
@@ -261,7 +263,7 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
         }
 
         for krate in crates_to_publish {
-            while crates.does_crate_version_need_bumping_to_publish(&krate, &mut cio)? {
+            if crates.does_crate_version_need_bumping_to_publish(&krate, &mut cio)? {
                 let (old_version, new_version) =
                     crates.bump_crate_version_for_breaking_change(&krate)?;
                 println!(
@@ -286,7 +288,7 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
 
             crates.update_lockfile_for_crates(vec![&krate])?;
 
-            dealt_with_crates.insert(krate);
+            processed_crates.insert(krate);
         }
     }
 
