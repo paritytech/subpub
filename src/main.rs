@@ -267,7 +267,7 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
                 println!("[{sel_crate}] Bumping crate {krate} from {new_version} to {old_version}");
             }
 
-            crates.strip_dev_deps_and_publish(&krate, &opts.path, &mut cio)?;
+            crates.strip_dev_deps_and_publish(&krate, &mut cio)?;
 
             let published_crate_details = crates
                 .details

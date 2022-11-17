@@ -118,10 +118,9 @@ impl Crates {
     }
 
     /// Remove any dev-dependency sections in the TOML file and publish.
-    pub fn strip_dev_deps_and_publish<P: AsRef<Path>>(
+    pub fn strip_dev_deps_and_publish(
         &self,
         name: &str,
-        root: P,
         cio: &mut HashMap<String, bool>,
     ) -> anyhow::Result<()> {
         let details = match self.details.get(name) {
@@ -132,7 +131,7 @@ impl Crates {
         let needs_publishing = if let Some(needs_publishing) = cio.get(name) {
             *needs_publishing
         } else {
-            let needs_publishing = details.needs_publishing(root)?;
+            let needs_publishing = details.needs_publishing(&self.root)?;
             cio.insert(name.into(), needs_publishing);
             needs_publishing
         };
