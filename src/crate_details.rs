@@ -237,20 +237,25 @@ impl CrateDetails {
             .expect("parent of toml path should exist");
 
         let tmp_dir = tempfile::tempdir()?;
+        let target_dir = if let Ok(tmp_dir) = std::env::var("SUBPUB_TMP") {
+            PathBuf::from(tmp_dir)
+        } else {
+            tmp_dir.path().to_path_buf()
+        };
+
         let mut cmd = Command::new("cargo");
         if !cmd
             .current_dir(crate_dir)
             .arg("package")
             .arg("--allow-dirty")
             .arg("--target-dir")
-            .arg(tmp_dir.path())
+            .arg(&target_dir)
             .status()?
             .success()
         {
             anyhow::bail!("Failed to package crate {name}");
         };
-        let pkg_path = tmp_dir
-            .path()
+        let pkg_path = target_dir
             .join("package")
             .join(format!("{name}-{}.crate", self.version));
         let pkg_bytes = std::fs::read(&pkg_path)?;
