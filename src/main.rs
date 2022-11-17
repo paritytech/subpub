@@ -89,12 +89,11 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
         crates.details.keys().map(|krate| krate.into()).collect()
     };
 
-    let mut all_orders: Vec<Vec<String>> = vec![];
+    let mut order: Vec<(usize, String)> = vec![];
     loop {
-        let mut order = vec![];
         let mut progressed = false;
         for (krate, details) in &crates.details {
-            if order.iter().any(|ord_crate| ord_crate == krate) {
+            if order.iter().any(|(_, ord_crate)| ord_crate == krate) {
                 continue;
             }
             let all_deps: Vec<_> = details
@@ -103,31 +102,29 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
                 .chain(details.build_deps.iter())
                 .collect();
             if all_deps.is_empty()
-                || all_deps.iter().all(|dep_crate| {
-                    order.iter().any(|ord_crate| ord_crate == *dep_crate)
-                        || all_orders
-                            .iter()
-                            .any(|order| order.iter().any(|ord_crate| ord_crate == *dep_crate))
-                })
+                || all_deps
+                    .iter()
+                    .all(|dep_crate| order.iter().any(|(_, ord_crate)| ord_crate == *dep_crate))
             {
-                order.push(krate.into());
+                order.push((all_deps.len(), krate.into()));
                 progressed = true;
             }
         }
-        if progressed {
-            all_orders.push(order);
-        } else {
+        if !progressed {
             break;
         }
     }
-    let order: Vec<String> = all_orders
-        .into_iter()
-        .map(|mut order| {
-            order.sort();
-            order
-        })
-        .flatten()
-        .collect();
+    order.sort_by(|a, b| {
+        use std::cmp::Ordering;
+        if a.0 < b.0 {
+            Ordering::Less
+        } else if b.0 < a.0 {
+            Ordering::Greater
+        } else {
+            a.1.cmp(&b.1)
+        }
+    });
+    let order: Vec<String> = order.into_iter().map(|(_, ord_crate)| ord_crate).collect();
 
     let unordered_crates = crates
         .details
@@ -181,6 +178,7 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             .collect::<Vec<String>>()
             .join(", ")
     );
+    std::process::exit(0);
 
     let mut dealt_with_crates: HashSet<String> = HashSet::new();
     for selected_crate in selected_crates_order {
