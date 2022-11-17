@@ -90,17 +90,13 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             if order.iter().any(|(_, ord_crate)| ord_crate == krate) {
                 continue;
             }
-            let all_deps = details
-                .deps
-                .iter()
-                .chain(details.build_deps.iter())
+            let all_deps = details.deps.iter().chain(details.build_deps.iter());
+            let ordered_deps = all_deps
+                .clone()
+                .filter(|dep_crate| order.iter().any(|(_, ord_crate)| *ord_crate == **dep_crate))
                 .collect::<Vec<_>>();
-            if all_deps.is_empty()
-                || all_deps
-                    .iter()
-                    .all(|dep_crate| order.iter().any(|(_, ord_crate)| ord_crate == *dep_crate))
-            {
-                order.push((all_deps.len(), krate.into()));
+            if ordered_deps.len() == all_deps.count() {
+                order.push((ordered_deps.len(), krate.into()));
                 progressed = true;
             }
         }
@@ -199,12 +195,21 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
 
     println!(
         "Processing crates in this order: {}",
+        order
+            .iter()
+            .map(|krate| krate.into())
+            .collect::<Vec<String>>()
+            .join(", ")
+    );
+    println!(
+        "Processing crates in this order: {}",
         selected_crates_order
             .iter()
             .map(|krate| (*krate).into())
             .collect::<Vec<String>>()
             .join(", ")
     );
+    std::process::exit(0);
 
     let mut processed_crates: HashSet<String> = HashSet::new();
     for sel_crate in selected_crates_order {
