@@ -13,10 +13,7 @@ pub enum GCM {
     RevertLater,
 }
 
-pub fn git_checkpoint<P>(root: P, op: GCM) -> anyhow::Result<()>
-where
-    P: AsRef<Path>,
-{
+pub fn git_checkpoint<P: AsRef<Path>>(root: P, op: GCM) -> anyhow::Result<()> {
     let mut cmd = Command::new("git");
     let git_status_output = cmd
         .current_dir(&root)
@@ -71,10 +68,7 @@ where
     Ok(())
 }
 
-pub fn git_checkpoint_revert<P>(root: P) -> anyhow::Result<()>
-where
-    P: AsRef<Path>,
-{
+pub fn git_checkpoint_revert<P: AsRef<Path>>(root: P) -> anyhow::Result<()> {
     loop {
         let mut cmd = Command::new("git");
         let output = cmd
@@ -109,10 +103,7 @@ where
     Ok(())
 }
 
-pub fn git_checkpoint_revert_all<P>(root: P) -> anyhow::Result<()>
-where
-    P: AsRef<Path>,
-{
+pub fn git_checkpoint_revert_all<P: AsRef<Path>>(root: P) -> anyhow::Result<()> {
     let mut cmd = Command::new("git");
     let output = cmd
         .current_dir(&root)
