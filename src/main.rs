@@ -90,11 +90,11 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             if order.iter().any(|(_, ord_crate)| ord_crate == krate) {
                 continue;
             }
-            let all_deps: Vec<_> = details
+            let all_deps = details
                 .deps
                 .iter()
                 .chain(details.build_deps.iter())
-                .collect();
+                .collect::<Vec<_>>();
             if all_deps.is_empty()
                 || all_deps
                     .iter()
@@ -143,12 +143,15 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
     };
     let (selected_crates, selected_crates_order) = if let Some(start_from) = opts.start_from {
         let mut keep = false;
-        let selected_crates = selected_crates.into_iter().filter(|krate| {
-            if krate == start_from {
-                keep = true;
-            }
-            keep
-        });
+        let selected_crates = selected_crates
+            .into_iter()
+            .filter(|krate| {
+                if *krate == start_from {
+                    keep = true;
+                }
+                keep
+            })
+            .collect::<Vec<_>>();
 
         let mut keep = false;
         let selected_crates_order = order
@@ -165,14 +168,16 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
 
         (selected_crates, selected_crates_order)
     } else {
-        order
+        let selected_crates_order = order
             .iter()
             .filter(|krate| {
                 selected_crates
                     .iter()
                     .any(|sel_crate| *sel_crate == **krate)
             })
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>();
+
+        (selected_crates, selected_crates_order)
     };
 
     let unordered_selected_crates = selected_crates
