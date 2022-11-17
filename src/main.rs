@@ -58,6 +58,10 @@ struct CommonOpts {
     /// Crates you'd like to publish.
     #[clap(short = 'c', long = "crate")]
     crates: Vec<String>,
+
+    /// Crates you'd like to publish.
+    #[clap(short = 's', long = "start-from")]
+    start_from: Option<String>,
 }
 
 fn main() {
@@ -80,7 +84,17 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
     let mut crates = Crates::load_crates_in_workspace(opts.path.clone())?;
 
     let selected_crates = if opts.crates.len() > 0 {
-        opts.crates.clone()
+        let mut input_crates = opts.crates.clone();
+        if let Some(start_from) = opts.start_from {
+            let mut keep = false;
+            input_crates.retain_mut(|krate| {
+                if *krate == start_from {
+                    keep = true;
+                }
+                keep
+            });
+        }
+        input_crates
     } else {
         crates.details.keys().map(|krate| krate.into()).collect()
     };
@@ -175,14 +189,13 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
         let details = crates.details.get(selected_crate).unwrap();
 
         for prev_crate in &order {
-            if prev_crate == selected_crate {
-                break;
+            if prev_crate != selected_crate {
+                let prev_crate_details = crates
+                    .details
+                    .get(prev_crate)
+                    .with_context(|| format!("Crate not found: {prev_crate}"))?;
+                details.write_dependency_version(prev_crate, &prev_crate_details.version)?;
             }
-            let prev_crate_details = crates
-                .details
-                .get(prev_crate)
-                .with_context(|| format!("Crate not found: {prev_crate}"))?;
-            details.write_dependency_version(prev_crate, &prev_crate_details.version)?;
         }
 
         let crates_set_to_publish =
@@ -219,7 +232,7 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             )
         }
 
-        for krate in &crates_to_publish {
+        for krate in crates_to_publish {
             while crates.does_crate_version_need_bumping_to_publish(&krate, &mut cio)? {
                 let (old_version, new_version) =
                     crates.bump_crate_version_for_breaking_change(&krate)?;
@@ -227,28 +240,20 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
                     "[{selected_crate}] Bumping crate {krate} from {new_version} to {old_version}"
                 );
             }
-        }
 
-        for krate in crates_to_publish {
             crates.strip_dev_deps_and_publish(&krate, &mut cio)?;
 
             let published_crate_details = crates
                 .details
                 .get(&krate)
                 .with_context(|| format!("Crate not found: {krate}"))?;
-
-            let mut update = false;
             for next_crate in &order {
-                if *next_crate == krate {
-                    update = true;
-                } else if update {
-                    let next_crate_details = crates
-                        .details
-                        .get(next_crate)
-                        .with_context(|| format!("Crate not found: {next_crate}"))?;
-                    next_crate_details
-                        .write_dependency_version(&krate, &published_crate_details.version)?;
-                }
+                let next_crate_details = crates
+                    .details
+                    .get(next_crate)
+                    .with_context(|| format!("Crate not found: {next_crate}"))?;
+                next_crate_details
+                    .write_dependency_version(&krate, &published_crate_details.version)?;
             }
 
             crates.update_lockfile_for_crates(vec![&krate])?;
