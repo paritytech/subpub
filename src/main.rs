@@ -83,12 +83,6 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
     let mut cio = HashMap::new();
     let mut crates = Crates::load_crates_in_workspace(opts.path.clone())?;
 
-    let selected_crates = if opts.crates.len() > 0 {
-        opts.crates.clone()
-    } else {
-        crates.details.keys().map(|krate| krate.into()).collect()
-    };
-
     let mut order: Vec<(usize, String)> = vec![];
     loop {
         let mut progressed = false;
@@ -142,9 +136,22 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
         );
     }
 
-    let selected_crates_order = if let Some(start_from) = opts.start_from {
+    let selected_crates = if opts.crates.len() > 0 {
+        opts.crates.clone()
+    } else {
+        crates.details.keys().map(|krate| krate.into()).collect()
+    };
+    let (selected_crates, selected_crates_order) = if let Some(start_from) = opts.start_from {
         let mut keep = false;
-        order
+        let selected_crates = selected_crates.into_iter().filter(|krate| {
+            if krate == start_from {
+                keep = true;
+            }
+            keep
+        });
+
+        let mut keep = false;
+        let selected_crates_order = order
             .iter()
             .filter(|krate| {
                 if **krate == start_from {
@@ -154,7 +161,9 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
                     .iter()
                     .any(|sel_crate| *sel_crate == **krate)
             })
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>();
+
+        (selected_crates, selected_crates_order)
     } else {
         order
             .iter()
