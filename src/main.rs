@@ -91,12 +91,20 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
                 continue;
             }
             let all_deps = details.deps.iter().chain(details.build_deps.iter());
-            let ordered_deps = all_deps
-                .clone()
-                .filter(|dep_crate| order.iter().any(|(_, ord_crate)| *ord_crate == **dep_crate))
+            let ordered_deps = order
+                .iter()
+                .filter(|(_, ord_crate)| all_deps.clone().any(|dep| dep == ord_crate))
                 .collect::<Vec<_>>();
+            if krate == "node-cli" {
+                println!("{} {}", ordered_deps.len(), all_deps.clone().count());
+            }
             if ordered_deps.len() == all_deps.count() {
-                order.push((ordered_deps.len(), krate.into()));
+                order.push((
+                    ordered_deps
+                        .iter()
+                        .fold(1, |acc, (rank, _)| acc.checked_add(*rank).unwrap()),
+                    krate.into(),
+                ));
                 progressed = true;
             }
         }
@@ -114,6 +122,7 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             a.1.cmp(&b.1)
         }
     });
+    println!("s {:?}", order);
     let order: Vec<String> = order.into_iter().map(|(_, ord_crate)| ord_crate).collect();
 
     let unordered_crates = crates
@@ -193,14 +202,6 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
         );
     }
 
-    println!(
-        "Processing crates in this order: {}",
-        order
-            .iter()
-            .map(|krate| krate.into())
-            .collect::<Vec<String>>()
-            .join(", ")
-    );
     println!(
         "Processing crates in this order: {}",
         selected_crates_order
