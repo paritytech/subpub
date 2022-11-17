@@ -131,11 +131,9 @@ impl CrateDetails {
             return Ok(true);
         }
 
-        let toml = Box::into_raw(Box::new(self.read_toml()?));
+        let mut toml = self.read_toml()?;
 
         fn do_set<'a>(
-            details: &'a CrateDetails,
-            toml: *mut toml_edit::Document,
             item: &mut toml_edit::Item,
             version: &Version,
             dependency: &str,
@@ -150,45 +148,31 @@ impl CrateDetails {
                 None => return Ok(()),
             };
 
-            let root = details
-                .toml_path
-                .parent()
-                .expect("parent of toml path should exist");
-
-            let doc = unsafe { toml.as_ref().unwrap() };
             if dep.is_str() {
                 *dep = toml_edit::value(version.to_string());
-                details.write_toml(doc)?;
-                git_checkpoint(&root, GCM::Save)?;
-
                 let mut table = toml_edit::table();
                 table["version"] = toml_edit::value(version.to_string());
                 table["registry"] = toml_edit::value("local".to_string());
                 *dep = table;
-                details.write_toml(doc)?;
-                git_checkpoint(&root, GCM::RevertLater)?;
             } else {
                 dep["version"] = toml_edit::value(version.to_string());
-                details.write_toml(doc)?;
-                git_checkpoint(&root, GCM::Save)?;
-
                 dep["registry"] = toml_edit::value("local".to_string());
-                details.write_toml(doc)?;
-                git_checkpoint(&root, GCM::RevertLater)?;
             }
 
             Ok(())
         }
 
-        edit_all_dependency_sections(toml, "build-dependencies", |toml, item| {
-            do_set(&self, toml, item, version, dependency).unwrap()
+        edit_all_dependency_sections(&mut toml, "build-dependencies", |item| {
+            do_set(item, version, dependency).unwrap()
         });
-        edit_all_dependency_sections(toml, "dev-dependencies", |toml, item| {
-            do_set(&self, toml, item, version, dependency).unwrap()
+        edit_all_dependency_sections(&mut toml, "dev-dependencies", |item| {
+            do_set(item, version, dependency).unwrap()
         });
-        edit_all_dependency_sections(toml, "dependencies", |toml, item| {
-            do_set(&self, toml, item, version, dependency).unwrap()
+        edit_all_dependency_sections(&mut toml, "dependencies", |item| {
+            do_set(item, version, dependency).unwrap()
         });
+
+        self.write_toml(&toml)?;
 
         Ok(true)
     }
@@ -366,17 +350,16 @@ fn get_target_dependency_sections_mut<'a>(
 
 /// Allows a function to be provided that is passed each mutable `Item` we find when searching for
 /// "dependencies"/"dev-dependencies"/"build-dependencies".
-fn edit_all_dependency_sections<F: FnMut(*mut toml_edit::Document, &mut toml_edit::Item)>(
-    document: *mut toml_edit::Document,
+fn edit_all_dependency_sections<F: FnMut(&mut toml_edit::Item)>(
+    document: &mut toml_edit::Document,
     label: &str,
     mut f: F,
 ) {
-    let doc = unsafe { document.as_mut().unwrap() };
-    if let Some(item) = doc.get_mut(label) {
-        f(document, item);
+    if let Some(item) = document.get_mut(label) {
+        f(item);
     }
-    for item in get_target_dependency_sections_mut(doc, label) {
-        f(document, item)
+    for item in get_target_dependency_sections_mut(document, label) {
+        f(item)
     }
 }
 
