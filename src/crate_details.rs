@@ -220,24 +220,21 @@ impl CrateDetails {
     /// This checks whether we actually need to publish a new version of the crate. It'll return `false`
     /// only if, as far as we can see, the current version is published to crates.io, and there have been
     /// no changes to it since.
-    pub fn needs_publishing<P>(&self, root: P) -> anyhow::Result<bool>
-    where
-        P: AsRef<Path>,
-    {
-        let result = self.needs_publishing_inner();
-        git_checkpoint_revert(root)?;
+    pub fn needs_publishing<P: AsRef<Path>>(&self, root: P) -> anyhow::Result<bool> {
+        let result = self.needs_publishing_inner(&root);
+        git_checkpoint_revert(&root)?;
         result
     }
 
-    pub fn needs_publishing_inner(&self) -> anyhow::Result<bool> {
+    pub fn needs_publishing_inner<P: AsRef<Path>>(&self, root: P) -> anyhow::Result<bool> {
         let name = &self.name;
+
+        self.strip_dev_deps(&root)?;
 
         let crate_dir = self
             .toml_path
             .parent()
             .expect("parent of toml path should exist");
-
-        self.strip_dev_deps(&crate_dir)?;
 
         let tmp_dir = tempfile::tempdir()?;
         let mut cmd = Command::new("cargo");
