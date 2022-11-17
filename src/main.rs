@@ -84,23 +84,14 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
     let mut crates = Crates::load_crates_in_workspace(opts.path.clone())?;
 
     let selected_crates = if opts.crates.len() > 0 {
-        let mut input_crates = opts.crates.clone();
-        if let Some(start_from) = opts.start_from {
-            let mut keep = false;
-            input_crates.retain_mut(|krate| {
-                if *krate == start_from {
-                    keep = true;
-                }
-                keep
-            });
-        }
-        input_crates
+        opts.crates.clone()
     } else {
         crates.details.keys().map(|krate| krate.into()).collect()
     };
 
-    let mut order: Vec<String> = vec![];
+    let mut all_orders: Vec<Vec<String>> = vec![];
     loop {
+        let mut order = vec![];
         let mut progressed = false;
         for (krate, details) in &crates.details {
             if order.iter().any(|ord_crate| ord_crate == krate) {
@@ -112,18 +103,31 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
                 .chain(details.build_deps.iter())
                 .collect();
             if all_deps.is_empty()
-                || all_deps
-                    .iter()
-                    .all(|dep_crate| order.iter().any(|ord_crate| ord_crate == *dep_crate))
+                || all_deps.iter().all(|dep_crate| {
+                    order.iter().any(|ord_crate| ord_crate == *dep_crate)
+                        || all_orders
+                            .iter()
+                            .any(|order| order.iter().any(|ord_crate| ord_crate == *dep_crate))
+                })
             {
                 order.push(krate.into());
                 progressed = true;
             }
         }
-        if !progressed {
+        if progressed {
+            all_orders.push(order);
+        } else {
             break;
         }
     }
+    let order: Vec<String> = all_orders
+        .into_iter()
+        .map(|mut order| {
+            order.sort();
+            order
+        })
+        .flatten()
+        .collect();
 
     let unordered_crates = crates
         .details
