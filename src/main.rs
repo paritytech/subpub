@@ -142,14 +142,29 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
         );
     }
 
-    let selected_crates_order = order
-        .iter()
-        .filter(|krate| {
-            selected_crates
-                .iter()
-                .any(|sel_crate| *sel_crate == **krate)
-        })
-        .collect::<Vec<_>>();
+    let selected_crates_order = if let Some(start_from) = opts.start_from {
+        let mut keep = false;
+        order
+            .iter()
+            .filter(|krate| {
+                if **krate == start_from {
+                    keep = true;
+                }
+                keep && selected_crates
+                    .iter()
+                    .any(|sel_crate| *sel_crate == **krate)
+            })
+            .collect::<Vec<_>>()
+    } else {
+        order
+            .iter()
+            .filter(|krate| {
+                selected_crates
+                    .iter()
+                    .any(|sel_crate| *sel_crate == **krate)
+            })
+            .collect::<Vec<_>>()
+    };
 
     let unordered_selected_crates = selected_crates
         .iter()
