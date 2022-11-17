@@ -207,18 +207,18 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
     );
 
     let mut processed_crates: HashSet<String> = HashSet::new();
-    for selected_crate in selected_crates_order {
-        if processed_crates.get(selected_crate).is_some() {
-            println!("[{selected_crate}] Crate has already been processed");
+    for sel_crate in selected_crates_order {
+        if processed_crates.get(sel_crate).is_some() {
+            println!("[{sel_crate}] Crate has already been processed");
             continue;
         }
-        processed_crates.insert(selected_crate.into());
-        println!("[{selected_crate}] Processing crate");
+        processed_crates.insert(sel_crate.into());
+        println!("[{sel_crate}] Processing crate");
 
-        let details = crates.details.get(selected_crate).unwrap();
+        let details = crates.details.get(sel_crate).unwrap();
 
         for krate in &order {
-            if krate == selected_crate {
+            if krate == sel_crate {
                 break;
             }
             let crate_details = crates
@@ -229,7 +229,7 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
         }
 
         let crates_set_to_publish =
-            crates.what_needs_publishing(vec![selected_crate.into()], &mut cio)?;
+            crates.what_needs_publishing(vec![sel_crate.into()], &mut cio)?;
         let crates_to_publish = order
             .iter()
             .filter(|ordered_crate| {
@@ -244,11 +244,11 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             .collect::<Vec<String>>();
 
         if crates_to_publish.is_empty() {
-            println!("[{selected_crate}] Crate and its dependencies do not need to be published");
+            println!("[{sel_crate}] Crate and its dependencies do not need to be published");
             continue;
         } else if crates_to_publish.len() > 1 {
             println!(
-              "[{selected_crate}] Crates will be published in the following order for publishing {selected_crate}: {}",
+              "[{sel_crate}] Crates will be published in the following order for publishing {sel_crate}: {}",
               crates_to_publish
                   .iter()
                   .map(|krate| krate.into())
@@ -256,19 +256,14 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
                   .join(", ")
           );
         } else {
-            println!(
-                "[{selected_crate}] Publishing crate {}",
-                crates_to_publish[0]
-            )
+            println!("[{sel_crate}] Publishing crate {}", crates_to_publish[0])
         }
 
         for krate in crates_to_publish {
             if crates.does_crate_version_need_bumping_to_publish(&krate, &mut cio)? {
                 let (old_version, new_version) =
                     crates.bump_crate_version_for_breaking_change(&krate)?;
-                println!(
-                    "[{selected_crate}] Bumping crate {krate} from {new_version} to {old_version}"
-                );
+                println!("[{sel_crate}] Bumping crate {krate} from {new_version} to {old_version}");
             }
 
             crates.strip_dev_deps_and_publish(&krate, &mut cio)?;
