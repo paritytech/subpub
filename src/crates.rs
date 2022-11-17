@@ -182,7 +182,6 @@ impl Crates {
 
         // Bump the crate version:
         details.write_own_version(new_version.clone())?;
-        details.version = new_version.clone();
 
         // Find any crate which depends on this crate and bump the version there too.
         for details in self.details.values() {

@@ -187,12 +187,15 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
 
         let crates_set_to_publish =
             crates.what_needs_publishing(vec![selected_crate.into()], &mut cio)?;
-        let crates_to_publish = crates_set_to_publish
+        let crates_to_publish = order
             .iter()
-            .filter(|crate_set_to_publish| {
-                !dealt_with_crates
+            .filter(|ordered_crate| {
+                crates_set_to_publish
                     .iter()
-                    .any(|dealt_with_crate| dealt_with_crate == *crate_set_to_publish)
+                    .any(|crate_set_to_publish| crate_set_to_publish == *ordered_crate)
+                    && !dealt_with_crates
+                        .iter()
+                        .any(|dealt_with_crate| dealt_with_crate == *ordered_crate)
             })
             .map(|krate| krate.into())
             .collect::<Vec<String>>();
@@ -217,7 +220,7 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
         }
 
         for krate in &crates_to_publish {
-            if crates.does_crate_version_need_bumping_to_publish(&krate, &mut cio)? {
+            while crates.does_crate_version_need_bumping_to_publish(&krate, &mut cio)? {
                 let (old_version, new_version) =
                     crates.bump_crate_version_for_breaking_change(&krate)?;
                 println!(
