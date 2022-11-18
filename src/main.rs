@@ -93,6 +93,7 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             {
                 continue;
             }
+            // Does not include dev_dependencies because they are not relevant for publishing purposes
             let mut deps: HashSet<&String> = HashSet::from_iter(details.deps.iter());
             for dep in details.build_deps.iter() {
                 deps.insert(dep);
