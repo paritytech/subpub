@@ -207,13 +207,13 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             .join(", ")
     );
 
-    let mut processed_crates: HashSet<String> = HashSet::new();
+    let mut published_crates: HashSet<String> = HashSet::new();
     for sel_crate in selected_crates_order {
-        if processed_crates.get(sel_crate).is_some() {
-            println!("[{sel_crate}] Crate has already been processed");
+        if published_crates.get(sel_crate).is_some() {
+            println!("[{sel_crate}] Crate has already been published");
             continue;
         }
-        processed_crates.insert(sel_crate.into());
+        published_crates.insert(sel_crate.into());
         println!("[{sel_crate}] Processing crate");
 
         let details = crates.details.get(sel_crate).unwrap();
@@ -271,7 +271,7 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
                     .write_dependency_version(&krate, &published_crate_details.version)?;
             }
 
-            processed_crates.insert(krate);
+            published_crates.insert(krate);
         }
     }
 
