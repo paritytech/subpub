@@ -248,6 +248,7 @@ impl CrateDetails {
         if !cmd
             .current_dir(crate_dir)
             .arg("package")
+            .arg("--no-verify")
             .arg("--allow-dirty")
             .arg("--target-dir")
             .arg(&target_dir)

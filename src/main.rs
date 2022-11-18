@@ -259,7 +259,7 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             if crates.does_crate_version_need_bumping_to_publish(&krate, &opts.path, &mut cio)? {
                 let (old_version, new_version) =
                     crates.bump_crate_version_for_breaking_change(&krate)?;
-                println!("[{sel_crate}] Bumping crate {krate} from {new_version} to {old_version}");
+                println!("[{sel_crate}] Bumped crate {krate} from {new_version} to {old_version}");
             }
 
             crates.strip_dev_deps_and_publish(&krate)?;
