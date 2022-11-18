@@ -182,10 +182,10 @@ impl Crates {
     ///
     /// **Note:** it may be that one or more of the crate names provided are already
     /// published in their current state, in which case they won't be returned in the result.
-    pub fn what_needs_publishing<P: AsRef<Path>>(
+    pub fn what_needs_publishing(
         &mut self,
         crates: Vec<String>,
-        root: P,
+        root: &PathBuf,
         cio: &mut HashMap<String, bool>,
     ) -> anyhow::Result<Vec<String>> {
         struct Details<'a> {
@@ -254,10 +254,10 @@ impl Crates {
         // from the deepest dependencies up, and for each dependency we find that needs
         // publishing, we mark all crates that depend on it as also needing publishing.
 
-        fn set_needs_publishing<P: AsRef<Path>>(
+        fn set_needs_publishing(
             tree: &mut HashMap<String, Details>,
             name: &str,
-            root: P,
+            root: &PathBuf,
             cio: &mut HashMap<String, bool>,
         ) -> anyhow::Result<()> {
             let entry = tree.get_mut(name).expect("should exist");
