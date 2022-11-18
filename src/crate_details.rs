@@ -243,6 +243,7 @@ impl CrateDetails {
             tmp_dir.path().to_path_buf()
         };
 
+        println!("[{}] Generating .crate file", self.name);
         let mut cmd = Command::new("cargo");
         if !cmd
             .current_dir(crate_dir)
@@ -260,6 +261,7 @@ impl CrateDetails {
             .join(format!("{name}-{}.crate", self.version));
         let pkg_bytes = std::fs::read(&pkg_path)?;
 
+        println!("[{}] Checking generated .crate file against crates.io", self.name);
         let crates_io_bytes = if let Some(bytes) =
             external::crates_io::try_download_crate(&self.name, &self.version)?
         {

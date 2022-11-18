@@ -83,23 +83,26 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
     let mut cio = HashMap::new();
     let mut crates = Crates::load_crates_in_workspace(opts.path.clone())?;
 
-    let mut order: Vec<(usize, String)> = vec![];
+    let mut publish_order: Vec<(usize, String)> = vec![];
     loop {
         let mut progressed = false;
         for (krate, details) in &crates.details {
-            if order.iter().any(|(_, ord_crate)| ord_crate == krate) {
+            if publish_order
+                .iter()
+                .any(|(_, ord_crate)| ord_crate == krate)
+            {
                 continue;
             }
             let mut deps: HashSet<&String> = HashSet::from_iter(details.deps.iter());
             for dep in details.build_deps.iter() {
                 deps.insert(dep);
             }
-            let ordered_deps = order
+            let ordered_deps = publish_order
                 .iter()
                 .filter(|(_, ord_crate)| deps.iter().any(|dep| *dep == ord_crate))
                 .collect::<Vec<_>>();
             if ordered_deps.len() == deps.len() {
-                order.push((
+                publish_order.push((
                     ordered_deps
                         .iter()
                         .fold(1, |acc, (rank, _)| acc.checked_add(*rank).unwrap()),
@@ -112,19 +115,22 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             break;
         }
     }
-    order.sort_by(|a, b| {
+    publish_order.sort_by(|a, b| {
         if a.0 == b.0 {
             a.1.cmp(&b.1)
         } else {
             a.0.cmp(&b.0)
         }
     });
-    let order: Vec<String> = order.into_iter().map(|(_, ord_crate)| ord_crate).collect();
+    let publish_order: Vec<String> = publish_order
+        .into_iter()
+        .map(|(_, ord_crate)| ord_crate)
+        .collect();
 
     let unordered_crates = crates
         .details
         .keys()
-        .filter(|krate| !order.iter().any(|ord_crate| ord_crate == *krate))
+        .filter(|krate| !publish_order.iter().any(|ord_crate| ord_crate == *krate))
         .collect::<Vec<_>>();
     if !unordered_crates.is_empty() {
         anyhow::bail!(
@@ -140,7 +146,7 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
     let input_crates = if opts.crates.len() > 0 {
         opts.crates.clone()
     } else {
-        order.clone()
+        publish_order.clone()
     };
     let (selected_crates, selected_crates_order) = if let Some(start_from) = opts.start_from {
         let mut keep = false;
@@ -155,7 +161,7 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             .collect::<Vec<_>>();
 
         let mut keep = false;
-        let selected_crates_order = order
+        let selected_crates_order = publish_order
             .iter()
             .filter(|krate| {
                 if **krate == start_from {
@@ -167,7 +173,7 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
 
         (selected_crates, selected_crates_order)
     } else {
-        let selected_crates_order = order
+        let selected_crates_order = publish_order
             .iter()
             .filter(|ord_crate| {
                 input_crates
@@ -218,7 +224,7 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
 
         let details = crates.details.get(sel_crate).unwrap();
 
-        for krate in &order {
+        for krate in &publish_order {
             if krate == sel_crate {
                 break;
             }
@@ -233,7 +239,7 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             crates.what_needs_publishing(vec![sel_crate.into()], &opts.path, &mut cio)?;
 
         if crates_to_publish.is_empty() {
-            println!("[{sel_crate}] Crate and its dependencies do not need to be published");
+            println!("[{sel_crate}] Crate does not need to be published");
             continue;
         } else if crates_to_publish.len() == 1 {
             println!("[{sel_crate}] Publishing crate {}", crates_to_publish[0])
@@ -262,7 +268,7 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
                 .details
                 .get(&krate)
                 .with_context(|| format!("Crate not found: {krate}"))?;
-            for next_crate in &order {
+            for next_crate in &publish_order {
                 let next_crate_details = crates
                     .details
                     .get(next_crate)
@@ -274,6 +280,15 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             published_crates.insert(krate);
         }
     }
+
+    let mut cmd = std::process::Command::new("cargo");
+    let mut cmd = cmd.current_dir(&opts.path).arg("update");
+    for krate in published_crates {
+        cmd = cmd.arg("-p").arg(krate);
+    }
+    if !cmd.status()?.success() {
+        anyhow::bail!("Command failed: {cmd:?}");
+    };
 
     Ok(())
 }
