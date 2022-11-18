@@ -229,15 +229,8 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             details.write_dependency_version(krate, &crate_details.version)?;
         }
 
-        let crates_to_publish = crates
-            .what_needs_publishing(vec![sel_crate.into()], &opts.path, &mut cio)?
-            .into_iter()
-            .filter(|krate| {
-                !processed_crates
-                    .iter()
-                    .any(|processed_crate| *processed_crate == *processed_crate)
-            })
-            .collect::<Vec<_>>();
+        let crates_to_publish =
+            crates.what_needs_publishing(vec![sel_crate.into()], &opts.path, &mut cio)?;
 
         if crates_to_publish.is_empty() {
             println!("[{sel_crate}] Crate and its dependencies do not need to be published");

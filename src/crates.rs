@@ -185,6 +185,7 @@ impl Crates {
     pub fn what_needs_publishing(
         &mut self,
         crates: Vec<String>,
+        // Have to use &PathBuf instead of AsRef<Path> due to compiler recursion bug
         root: &PathBuf,
         cio: &mut HashMap<String, bool>,
     ) -> anyhow::Result<Vec<String>> {
@@ -272,12 +273,11 @@ impl Crates {
                 needs_publishing
             };
 
-            if entry.details.should_be_published {
-                entry.needs_publishing = needs_publishing;
-            }
-
-            for dep in entry.dependees.clone().iter() {
-                set_needs_publishing(tree, dep, &root, cio)?;
+            if needs_publishing && entry.details.should_be_published {
+                entry.needs_publishing = true;
+                for dep in entry.dependees.clone().iter() {
+                    set_needs_publishing(tree, dep, &root, cio)?;
+                }
             }
 
             Ok(())
