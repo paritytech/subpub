@@ -262,13 +262,19 @@ impl CrateDetails {
             .join(format!("{name}-{}.crate", self.version));
         let pkg_bytes = std::fs::read(&pkg_path)?;
 
-        println!("[{}] Checking generated .crate file against crates.io", self.name);
+        println!(
+            "[{}] Checking generated .crate file against crates.io",
+            self.name
+        );
         let crates_io_bytes = if let Some(bytes) =
             external::crates_io::try_download_crate(&self.name, &self.version)?
         {
             bytes
         } else {
-            return Ok(true);
+            log::debug!(
+                "[{name}] Crate doesn't yet exist on crates.io, no need to bump its version"
+            );
+            return Ok(false);
         };
 
         if crates_io_bytes != pkg_bytes {
