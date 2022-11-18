@@ -118,36 +118,20 @@ impl Crates {
     }
 
     /// Remove any dev-dependency sections in the TOML file and publish.
-    pub fn strip_dev_deps_and_publish(
-        &self,
-        name: &str,
-        cio: &mut HashMap<String, bool>,
-    ) -> anyhow::Result<()> {
+    pub fn strip_dev_deps_and_publish(&self, name: &str) -> anyhow::Result<()> {
         let details = match self.details.get(name) {
             Some(details) => details,
             None => anyhow::bail!("Crate '{name}' not found"),
         };
 
-        let needs_publishing = if let Some(needs_publishing) = cio.get(name) {
-            *needs_publishing
-        } else {
-            let needs_publishing = details.needs_publishing(&self.root)?;
-            cio.insert(name.into(), needs_publishing);
-            needs_publishing
-        };
+        details.strip_dev_deps(&self.root)?;
+        details.publish()?;
+        git_checkpoint_revert(&self.root)?;
 
-        if needs_publishing {
-            details.strip_dev_deps(&self.root)?;
-            details.publish()?;
-            git_checkpoint_revert(&self.root)?;
-
-            // Don't return until the crate has finished being published; it won't
-            // be immediately visible on crates.io, so wait until it shows up.
-            while !external::crates_io::does_crate_exist(name, &details.version)? {
-                std::thread::sleep(std::time::Duration::from_millis(2500))
-            }
-
-            cio.insert(name.into(), false);
+        // Don't return until the crate has finished being published; it won't
+        // be immediately visible on crates.io, so wait until it shows up.
+        while !external::crates_io::does_crate_exist(name, &details.version)? {
+            std::thread::sleep(std::time::Duration::from_millis(2500))
         }
 
         Ok(())
@@ -270,16 +254,33 @@ impl Crates {
         // from the deepest dependencies up, and for each dependency we find that needs
         // publishing, we mark all crates that depend on it as also needing publishing.
 
-        fn set_needs_publishing(tree: &mut HashMap<String, Details>, name: &str) {
+        fn set_needs_publishing<P: AsRef<Path>>(
+            tree: &mut HashMap<String, Details>,
+            name: &str,
+            root: P,
+            cio: &mut HashMap<String, bool>,
+        ) -> anyhow::Result<()> {
             let entry = tree.get_mut(name).expect("should exist");
 
+            // If the crate itself needs publishing, mark it and anything
+            // depending on it as needing publishing.
+            let needs_publishing = if let Some(needs_publishing) = cio.get(name) {
+                *needs_publishing
+            } else {
+                let needs_publishing = entry.details.needs_publishing(&root)?;
+                cio.insert(name.into(), needs_publishing);
+                needs_publishing
+            };
+
             if entry.details.should_be_published {
-                entry.needs_publishing = true;
+                entry.needs_publishing = needs_publishing;
             }
 
             for dep in entry.dependees.clone().iter() {
-                set_needs_publishing(tree, dep);
+                set_needs_publishing(tree, dep, &root, cio)?;
             }
+
+            Ok(())
         }
 
         let mut deepest_first: Vec<(String, usize)> = tree
@@ -296,19 +297,7 @@ impl Crates {
                 continue;
             }
 
-            // If the crate itself needs publishing, mark it and anything
-            // depending on it as needing publishing.
-            let needs_publishing = if let Some(needs_publishing) = cio.get(name) {
-                *needs_publishing
-            } else {
-                let needs_publishing = details.details.needs_publishing(&root)?;
-                cio.insert(name.into(), needs_publishing);
-                needs_publishing
-            };
-
-            if needs_publishing {
-                set_needs_publishing(&mut tree, name);
-            }
+            set_needs_publishing(&mut tree, name, &root, cio)?;
         }
 
         // Step 4: Return a filtered list of crates we need to bump versions/publish

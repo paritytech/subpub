@@ -229,25 +229,22 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
             details.write_dependency_version(krate, &crate_details.version)?;
         }
 
-        let crates_set_to_publish =
-            crates.what_needs_publishing(vec![sel_crate.into()], &opts.path, &mut cio)?;
-        let crates_to_publish = order
-            .iter()
-            .filter(|ordered_crate| {
-                crates_set_to_publish
+        let crates_to_publish = crates
+            .what_needs_publishing(vec![sel_crate.into()], &opts.path, &mut cio)?
+            .into_iter()
+            .filter(|krate| {
+                !processed_crates
                     .iter()
-                    .any(|crate_set_to_publish| crate_set_to_publish == *ordered_crate)
-                    && !processed_crates
-                        .iter()
-                        .any(|processed_crate| processed_crate == *ordered_crate)
+                    .any(|processed_crate| *processed_crate == *processed_crate)
             })
-            .map(|krate| krate.into())
-            .collect::<Vec<String>>();
+            .collect::<Vec<_>>();
 
         if crates_to_publish.is_empty() {
             println!("[{sel_crate}] Crate and its dependencies do not need to be published");
             continue;
-        } else if crates_to_publish.len() > 1 {
+        } else if crates_to_publish.len() == 1 {
+            println!("[{sel_crate}] Publishing crate {}", crates_to_publish[0])
+        } else {
             println!(
               "[{sel_crate}] Crates will be published in the following order for publishing {sel_crate}: {}",
               crates_to_publish
@@ -256,8 +253,6 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
                   .collect::<Vec<String>>()
                   .join(", ")
           );
-        } else {
-            println!("[{sel_crate}] Publishing crate {}", crates_to_publish[0])
         }
 
         for krate in crates_to_publish {
@@ -267,7 +262,8 @@ fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
                 println!("[{sel_crate}] Bumping crate {krate} from {new_version} to {old_version}");
             }
 
-            crates.strip_dev_deps_and_publish(&krate, &mut cio)?;
+            crates.strip_dev_deps_and_publish(&krate)?;
+            cio.insert((&krate).into(), false);
 
             let published_crate_details = crates
                 .details
