@@ -101,22 +101,6 @@ impl Crates {
         })
     }
 
-    /// Update the lockfile for the crates given and any of their dependencies if they've changed.
-    pub fn update_lockfile_for_crates<'a, I, S>(&self, crates: I) -> anyhow::Result<()>
-    where
-        S: AsRef<str>,
-        I: IntoIterator<Item = S> + Clone,
-    {
-        for name in crates.clone().into_iter() {
-            let name = name.as_ref();
-            if !self.details.contains_key(name) {
-                anyhow::bail!("Crate `{name}` not found");
-            }
-        }
-
-        external::cargo::update_lockfile_for_crates(&self.root, crates)
-    }
-
     /// Remove any dev-dependency sections in the TOML file and publish.
     pub fn strip_dev_deps_and_publish(&self, name: &str) -> anyhow::Result<()> {
         let details = match self.details.get(name) {
