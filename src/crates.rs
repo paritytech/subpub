@@ -129,6 +129,7 @@ impl Crates {
         name: &str,
         root: P,
         needs_publishing: &mut HashMap<String, bool>,
+        needs_version_bump: &mut HashMap<String, bool>,
     ) -> anyhow::Result<bool> {
         let details = match self.details.get(name) {
             Some(details) => details.clone(),
@@ -139,7 +140,7 @@ impl Crates {
             self.bump_crate_version_for_breaking_change(name)?;
         }
 
-        details.needs_version_bump_to_publish(root, needs_publishing)
+        details.needs_version_bump_to_publish(root, needs_publishing, needs_version_bump)
     }
 
     /// Bump the version of the crate given, and update it in all dependant crates as needed.
@@ -147,7 +148,7 @@ impl Crates {
     pub fn bump_crate_version_for_breaking_change(
         &mut self,
         name: &str,
-    ) -> anyhow::Result<(Version, Version)> {
+    ) -> anyhow::Result<Option<(Version, Version)>> {
         let details = match self.details.get_mut(name) {
             Some(details) => details,
             None => anyhow::bail!("Crate '{name}' not found"),
@@ -178,6 +179,7 @@ impl Crates {
         // Have to use &PathBuf instead of AsRef<Path> due to compiler recursion bug
         root: &PathBuf,
         needs_publishing: &mut HashMap<String, bool>,
+        needs_version_bump: &mut HashMap<String, bool>,
     ) -> anyhow::Result<Vec<String>> {
         struct Details<'a> {
             dependees: HashSet<String>,
@@ -253,20 +255,20 @@ impl Crates {
         ) -> anyhow::Result<()> {
             let entry = tree.get_mut(name).expect("should exist");
 
-            // If the crate itself needs publishing, mark it and anything
-            // depending on it as needing publishing.
-            let needs_publish = if let Some(needs_publish) = needs_publishing.get(name) {
-                *needs_publish
-            } else {
-                let needs_publish = entry.details.needs_publishing(&root)?;
-                needs_publishing.insert(name.into(), needs_publish);
-                needs_publish
-            };
+            if entry.details.should_be_published {
+                let needs_publish = if let Some(needs_publish) = needs_publishing.get(name) {
+                    *needs_publish
+                } else {
+                    let needs_publish = entry.details.needs_publishing(&root)?;
+                    needs_publishing.insert(name.into(), needs_publish);
+                    needs_publish
+                };
 
-            if needs_publish && entry.details.should_be_published {
-                entry.needs_publishing = true;
-                for dep in entry.dependees.clone().iter() {
-                    set_needs_publishing(tree, dep, &root, needs_publishing)?;
+                if needs_publish && entry.details.should_be_published {
+                    entry.needs_publishing = true;
+                    for dep in entry.dependees.clone().iter() {
+                        set_needs_publishing(tree, dep, &root, needs_publishing)?;
+                    }
                 }
             }
 

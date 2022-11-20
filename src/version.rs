@@ -15,6 +15,7 @@
 // along with subpub.  If not, see <http://www.gnu.org/licenses/>.
 
 pub use semver::Version;
+use std::cmp::Ordering;
 
 /// Bump the version for a breaking change and to release. Examples of bumps carried out:
 ///
@@ -26,24 +27,28 @@ pub use semver::Version;
 /// ```
 ///
 /// Return the new version.
-pub fn bump_for_breaking_change(version: Version) -> Version {
-    let mut new_version = version.clone();
+pub fn bump_for_breaking_change(prev_versions: Vec<Version>, mut version: Version) -> Version {
+    version.pre = semver::Prerelease::EMPTY;
 
-    if new_version.pre != semver::Prerelease::EMPTY {
-        // Remove pre-release tag like `-dev` if present
-        new_version.pre = semver::Prerelease::EMPTY;
-        new_version.minor = 0;
-        new_version.patch = 0;
-    } else if new_version.major == 0 {
-        // Else, bump minor if 0.x.0 crate
-        new_version.minor += 1;
-        new_version.patch = 0;
-    } else {
-        // Else bump major version
-        new_version.major += 1;
-        new_version.minor = 0;
-        new_version.patch = 0;
+    match prev_versions.into_iter().max() {
+        Some(mut max_version) => {
+            max_version.pre = semver::Prerelease::EMPTY;
+            match version.cmp(max_version) {
+                Ordering::Greater => version,
+                _ => {
+                    if max_version.major == 0 {
+                        new_version.minor += 1;
+                        new_version.patch = 0;
+                    } else {
+                        new_version.major += 1;
+                        new_version.minor = 0;
+                        new_version.patch = 0;
+                    }
+                    max_version
+                }
+            }
+            if version.cmp(max_version) {}
+        }
+        None => version,
     }
-
-    new_version
 }

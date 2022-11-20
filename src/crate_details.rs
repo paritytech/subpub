@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with subpub.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::version::bump_for_breaking_change;
 use crate::{external, git::*};
 use anyhow::{anyhow, Context};
 use semver::Version;
@@ -325,6 +326,7 @@ impl CrateDetails {
         &self,
         root: P,
         needs_publishing: &mut HashMap<String, bool>,
+        needs_version_bump: &mut HashMap<String, bool>,
     ) -> anyhow::Result<bool> {
         let needs_publishing = if let Some(needs_publishing) = needs_publishing.get(&self.name) {
             *needs_publishing
@@ -333,8 +335,18 @@ impl CrateDetails {
             needs_publishing.insert((&self.name).into(), needs_publish);
             needs_publish
         };
-
-        Ok(needs_publishing)
+        if needs_bump {
+            if let Some(needs_bump) = needs_version_bump.get(&self.name) {
+                needs_bump
+            } else {
+                let versions = external::crates_io::crate_versions(root)?;
+                needs_publishing.insert((&self.name).into(), needs_publish);
+                needs_publish
+            }
+        } else {
+            Ok(false)
+        }
+        Ok(needs_bump)
     }
 
     fn read_toml(&self) -> anyhow::Result<toml_edit::Document> {

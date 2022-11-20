@@ -101,6 +101,7 @@ fn check(_opts: CheckOpts) -> anyhow::Result<()> {
 
 fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     let mut needs_publishing = HashMap::new();
+    let mut needs_version_bump = HashMap::new();
     let mut crates = Crates::load_crates_in_workspace(opts.path.clone())?;
 
     let mut publish_order: Vec<(usize, String)> = vec![];
@@ -358,6 +359,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             vec![sel_crate.into()],
             &opts.path,
             &mut needs_publishing,
+            &mut needs_version_bump
         )?;
 
         if crates_to_publish.is_empty() {
@@ -381,6 +383,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 &krate,
                 &opts.path,
                 &mut needs_publishing,
+                &mut needs_version_bump
             )? {
                 let (old_version, new_version) =
                     crates.bump_crate_version_for_breaking_change(&krate)?;

@@ -57,7 +57,7 @@ pub fn does_crate_exist(name: &str, version: &semver::Version) -> anyhow::Result
     }
 }
 
-pub fn get_crate_versions(name: &str) -> anyhow::Result<Vec<semver::Version>> {
+pub fn crate_versions(name: &str) -> anyhow::Result<Vec<semver::Version>> {
     let client = reqwest::blocking::Client::new();
     let crates_api = std::env::var("SPUB_CRATES_API").unwrap();
     let url = format!("{crates_api}/crates/{name}/versions");
@@ -81,14 +81,14 @@ pub fn get_crate_versions(name: &str) -> anyhow::Result<Vec<semver::Version>> {
     }
 
     #[derive(serde::Deserialize)]
-    struct SuccessfulResponseVersion {
+    struct ResponseVersion {
         pub num: String,
     }
     #[derive(serde::Deserialize)]
-    struct SuccessfulResponse {
-        pub versions: Vec<SuccessfulResponseVersion>,
+    struct Response {
+        pub versions: Vec<ResponseVersion>,
     }
-    res.json::<SuccessfulResponse>()?
+    res.json::<Response>()?
         .versions
         .into_iter()
         .map(|version| -> anyhow::Result<semver::Version> {
