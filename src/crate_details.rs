@@ -136,43 +136,48 @@ impl CrateDetails {
         fn do_set<'a>(
             item: &mut toml_edit::Item,
             version: &Version,
-            dependency: &str,
+            dep: &str,
+            dep_type: &str,
+            toml_path: &PathBuf,
         ) -> anyhow::Result<()> {
             let table = match item.as_table_like_mut() {
                 Some(table) => table,
                 None => return Ok(()),
             };
 
-            for (key, dep) in table.iter_mut() {
-                if key == dependency {
-                    if dep.is_str() {
+            for (key, item) in table.iter_mut() {
+                if key == dep {
+                    if item.is_str() {
                         if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
-                            *dep = toml_edit::value(version.to_string());
+                            *item = toml_edit::value(version.to_string());
                             let mut table = toml_edit::table();
                             table["version"] = toml_edit::value(version.to_string());
                             table["registry"] = toml_edit::value(registry.to_string());
-                            *dep = table;
+                            *item = table;
                         } else {
-                            *dep = toml_edit::value(version.to_string());
+                            *item = toml_edit::value(version.to_string());
                         }
                     } else {
-                        dep["version"] = toml_edit::value(version.to_string());
+                        item["version"] = toml_edit::value(version.to_string());
                         if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
-                            dep["registry"] = toml_edit::value(registry.to_string());
+                            item["registry"] = toml_edit::value(registry.to_string());
                         }
                     }
                 } else {
-                    let dep = dep
-                        .as_table_mut()
-                        .with_context(|| "Dependency {key} should be a string or table")?;
-                    if dep
+                    let item = item.as_table_mut().with_context(|| {
+                        format!(
+                            "{dep_type} dependency {key} should be a string or table in {:?}",
+                            toml_path
+                        )
+                    })?;
+                    if item
                         .get("package")
-                        .map(|item| item.as_str() == Some(dependency))
+                        .map(|pkg| pkg.as_str() == Some(dep))
                         .unwrap_or(false)
                     {
-                        dep["version"] = toml_edit::value(version.to_string());
+                        item["version"] = toml_edit::value(version.to_string());
                         if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
-                            dep["registry"] = toml_edit::value(registry.to_string());
+                            item["registry"] = toml_edit::value(registry.to_string());
                         }
                     }
                 }
@@ -182,13 +187,20 @@ impl CrateDetails {
         }
 
         edit_all_dependency_sections(&mut toml, "build-dependencies", |item| {
-            do_set(item, version, dependency).unwrap()
+            do_set(
+                item,
+                version,
+                dependency,
+                "build-dependency",
+                &self.toml_path,
+            )
+            .unwrap()
         });
         edit_all_dependency_sections(&mut toml, "dev-dependencies", |item| {
-            do_set(item, version, dependency).unwrap()
+            do_set(item, version, dependency, "dev-dependency", &self.toml_path).unwrap()
         });
         edit_all_dependency_sections(&mut toml, "dependencies", |item| {
-            do_set(item, version, dependency).unwrap()
+            do_set(item, version, dependency, "dependency", &self.toml_path).unwrap()
         });
 
         self.write_toml(&toml)?;
