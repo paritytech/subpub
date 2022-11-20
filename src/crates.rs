@@ -249,8 +249,8 @@ impl Crates {
 
             // If the crate itself needs publishing, mark it and anything
             // depending on it as needing publishing.
-            let needs_publish = if let Some(needs_publishing) = needs_publishing.get(name) {
-                *needs_publishing
+            let needs_publish = if let Some(needs_publish) = needs_publishing.get(name) {
+                *needs_publish
             } else {
                 let needs_publish = entry.details.needs_publishing(&root)?;
                 needs_publishing.insert(name.into(), needs_publish);

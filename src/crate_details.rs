@@ -143,25 +143,38 @@ impl CrateDetails {
                 None => return Ok(()),
             };
 
-            let dep = match table.get_mut(dependency) {
-                Some(dep) => dep,
-                None => return Ok(()),
-            };
-
-            if dep.is_str() {
-                if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
-                    *dep = toml_edit::value(version.to_string());
-                    let mut table = toml_edit::table();
-                    table["version"] = toml_edit::value(version.to_string());
-                    table["registry"] = toml_edit::value(registry.to_string());
-                    *dep = table;
+            for (key, dep) in table.iter_mut() {
+                if key == dependency {
+                    if dep.is_str() {
+                        if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
+                            *dep = toml_edit::value(version.to_string());
+                            let mut table = toml_edit::table();
+                            table["version"] = toml_edit::value(version.to_string());
+                            table["registry"] = toml_edit::value(registry.to_string());
+                            *dep = table;
+                        } else {
+                            *dep = toml_edit::value(version.to_string());
+                        }
+                    } else {
+                        dep["version"] = toml_edit::value(version.to_string());
+                        if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
+                            dep["registry"] = toml_edit::value(registry.to_string());
+                        }
+                    }
                 } else {
-                    *dep = toml_edit::value(version.to_string());
-                }
-            } else {
-                dep["version"] = toml_edit::value(version.to_string());
-                if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
-                    dep["registry"] = toml_edit::value(registry.to_string());
+                    let dep = dep
+                        .as_table_mut()
+                        .with_context(|| "Dependency {key} should be a string or table")?;
+                    if dep
+                        .get("package")
+                        .map(|item| item.as_str() == Some(dependency))
+                        .unwrap_or(false)
+                    {
+                        dep["version"] = toml_edit::value(version.to_string());
+                        if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
+                            dep["registry"] = toml_edit::value(registry.to_string());
+                        }
+                    }
                 }
             }
 

@@ -179,6 +179,14 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             .clone()
             .into_iter()
             .filter(|krate| {
+                if opts
+                    .exclude
+                    .iter()
+                    .any(|excluded_crate| excluded_crate == krate)
+                {
+                    return false;
+                }
+
                 let details = crates
                     .details
                     .get(krate)
@@ -259,15 +267,22 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             return Ok(());
         }
 
-        if excluded_crates
+        if parent_crate.is_some() {
+            if excluded_crates
+                .iter()
+                .any(|excluded_crate| excluded_crate == krate)
+            {
+                if let Some(parent_crate) = parent_crate {
+                    anyhow::bail!("Crate {krate} was excluded from CLI options, but it is a dependency of {parent_crate}, and that is a dependency of {initial_crate}, which would be published.");
+                } else {
+                    anyhow::bail!("Crate {krate} was excluded from CLI options, but it is a dependency of {initial_crate}, which would be published.");
+                }
+            }
+        } else if excluded_crates
             .iter()
             .any(|excluded_crate| excluded_crate == krate)
         {
-            if let Some(parent_crate) = parent_crate {
-                anyhow::bail!("Crate {krate} was excluded from CLI options, but it is a dependency of {parent_crate}, and that is a dependency of {initial_crate}, which would be published.");
-            } else {
-                anyhow::bail!("Crate {krate} was excluded from CLI options, but it is a dependency of {initial_crate}, which would be published.");
-            }
+            return Ok(());
         }
 
         let details = crates
@@ -291,7 +306,11 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             check_excluded_crates(
                 &crates,
                 initial_crate,
-                Some(krate),
+                if krate == initial_crate {
+                    None
+                } else {
+                    Some(krate)
+                },
                 dep,
                 excluded_crates,
                 &visited_crates,
@@ -327,6 +346,9 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         for krate in &publish_order {
             if krate == sel_crate {
                 break;
+            }
+            if krate == "substrate-prometheus-endpoint" {
+                println!("HIT! {sel_crate}")
             }
             let crate_details = crates
                 .details
