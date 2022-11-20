@@ -125,15 +125,19 @@ impl Crates {
 
     /// Does a crate need a version bump in order to publish?
     pub fn does_crate_version_need_bumping_to_publish<P: AsRef<Path>>(
-        &self,
+        &mut self,
         name: &str,
         root: P,
         needs_publishing: &mut HashMap<String, bool>,
     ) -> anyhow::Result<bool> {
         let details = match self.details.get(name) {
-            Some(details) => details,
+            Some(details) => details.clone(),
             None => anyhow::bail!("Crate '{name}' not found"),
         };
+
+        if details.version.pre != semver::Prerelease::EMPTY {
+            self.bump_crate_version_for_breaking_change(name);
+        }
 
         details.needs_version_bump_to_publish(root, needs_publishing)
     }

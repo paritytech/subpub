@@ -326,11 +326,6 @@ impl CrateDetails {
         root: P,
         needs_publishing: &mut HashMap<String, bool>,
     ) -> anyhow::Result<bool> {
-        if self.version.pre != semver::Prerelease::EMPTY {
-            // If prerelease eg `-dev`, we'll want to bump.
-            return Ok(true);
-        }
-
         let needs_publishing = if let Some(needs_publishing) = needs_publishing.get(&self.name) {
             *needs_publishing
         } else {
