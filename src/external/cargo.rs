@@ -20,16 +20,12 @@ use std::process::Command;
 pub fn publish_crate(root: &Path, package: &str) -> anyhow::Result<()> {
     let mut cmd = Command::new("cargo");
 
-    if let Ok(registry) = std::env::var("SUBPUB_REGISTRY") {
-        cmd.env(
-            "CARGO_REGISTRIES_{}_INDEX",
-            std::env::var("SUBPUB_REGISTRY_INDEX").unwrap(),
-        )
-        .env("CARGO_REGISTRY_DEFAULT", &registry)
-        .arg("--registry")
-        .arg(registry)
-        .arg("--token")
-        .arg(std::env::var("SUBPUB_REGISTRY_TOKEN").unwrap());
+    if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
+        cmd.env("CARGO_REGISTRY_DEFAULT", &registry)
+            .arg("--registry")
+            .arg(registry)
+            .arg("--token")
+            .arg(std::env::var("SPUB_REGISTRY_TOKEN").unwrap());
     }
 
     if !cmd

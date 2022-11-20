@@ -149,7 +149,7 @@ impl CrateDetails {
             };
 
             if dep.is_str() {
-                if let Ok(registry) = std::env::var("SUBPUB_REGISTRY") {
+                if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
                     *dep = toml_edit::value(version.to_string());
                     let mut table = toml_edit::table();
                     table["version"] = toml_edit::value(version.to_string());
@@ -160,7 +160,7 @@ impl CrateDetails {
                 }
             } else {
                 dep["version"] = toml_edit::value(version.to_string());
-                if let Ok(registry) = std::env::var("SUBPUB_REGISTRY") {
+                if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
                     dep["registry"] = toml_edit::value(registry.to_string());
                 }
             }
@@ -243,7 +243,7 @@ impl CrateDetails {
             .expect("parent of toml path should exist");
 
         let tmp_dir = tempfile::tempdir()?;
-        let target_dir = if let Ok(tmp_dir) = std::env::var("SUBPUB_TMP") {
+        let target_dir = if let Ok(tmp_dir) = std::env::var("SPUB_TMP") {
             PathBuf::from(tmp_dir)
         } else {
             tmp_dir.path().to_path_buf()

@@ -18,7 +18,7 @@ use anyhow::Context;
 
 pub fn does_crate_exist(name: &str, version: &semver::Version) -> anyhow::Result<bool> {
     let client = reqwest::blocking::Client::new();
-    let crates_api = std::env::var("CRATES_API").unwrap();
+    let crates_api = std::env::var("SPUB_CRATES_API").unwrap();
     let url = format!("{crates_api}/crates/{name}/{version}");
     let res = client.get(&url)
         .header("User-Agent", "Called from https://github.com/paritytech/subpub for comparing published source against repo source")
@@ -66,7 +66,7 @@ pub fn try_download_crate(
 ) -> anyhow::Result<Option<Vec<u8>>> {
     let client = reqwest::blocking::Client::new();
     let version = version.to_string();
-    let crates_api = std::env::var("CRATES_API").unwrap();
+    let crates_api = std::env::var("SPUB_CRATES_API").unwrap();
 
     let req_url = format!("{crates_api}/crates/{name}/{version}/download");
     let res = client.get(&req_url)
