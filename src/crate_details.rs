@@ -333,6 +333,7 @@ impl CrateDetails {
             let versions = external::crates_io::crate_versions(&self.name)?;
             let new_version = bump_for_breaking_change(versions, self.version.clone());
             if let Some(new_version) = new_version {
+                println!("Bumping crate from {} to {}", self.version, new_version);
                 self.write_own_version(new_version)?;
                 for dep in self.all_deps() {
                     self.write_dependency_version(&self.name, &self.version)?;
