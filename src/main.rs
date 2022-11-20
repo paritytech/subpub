@@ -42,15 +42,15 @@ struct CleanOpts {
     path: PathBuf,
 }
 
-#[derive(Subcommand, Debug)]
-enum Command {
-    #[clap(about = "Publish crates in order from least to most dependees")]
-    PublishInOrder(CommonOpts),
-    Clean(CleanOpts),
+#[derive(Parser, Debug, Clone)]
+struct CheckOpts {
+    /// Path to the workspace root.
+    #[clap(long)]
+    path: PathBuf,
 }
 
 #[derive(Parser, Debug, Clone)]
-struct CommonOpts {
+struct PublishOpts {
     /// Path to the workspace root.
     #[clap(long, default_value = ".")]
     path: PathBuf,
@@ -64,14 +64,25 @@ struct CommonOpts {
     start_from: Option<String>,
 }
 
+#[derive(Subcommand, Debug)]
+enum Command {
+    #[clap(about = "Publish crates in order from least to most dependees")]
+    Publish(PublishOpts),
+    #[clap(about = "Revert all the commits made by subpub")]
+    Clean(CleanOpts),
+    #[clap(about = "Check that all crates are compliant to crates.io")]
+    Check(CheckOpts),
+}
+
 fn main() {
     env_logger::init();
 
     let args = Args::parse();
 
     let res = match args.command {
-        Command::PublishInOrder(opts) => publish_in_order(opts),
+        Command::Publish(opts) => publish(opts),
         Command::Clean(opts) => git_checkpoint_revert_all(opts.path),
+        Command::Check(opts) => check(opts),
     };
 
     if let Err(e) = res {
@@ -79,7 +90,11 @@ fn main() {
     }
 }
 
-fn publish_in_order(opts: CommonOpts) -> anyhow::Result<()> {
+fn check(opts: CheckOpts) -> anyhow::Result<()> {
+    todo!("Implement check");
+}
+
+fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     let mut cio = HashMap::new();
     let mut crates = Crates::load_crates_in_workspace(opts.path.clone())?;
 

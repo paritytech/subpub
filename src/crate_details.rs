@@ -271,10 +271,7 @@ impl CrateDetails {
         {
             bytes
         } else {
-            log::debug!(
-                "[{name}] Crate doesn't yet exist on crates.io, no need to bump its version"
-            );
-            return Ok(false);
+            return Ok(true);
         };
 
         if crates_io_bytes != pkg_bytes {
