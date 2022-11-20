@@ -20,7 +20,7 @@ use std::process::Command;
 pub fn publish_crate(root: &Path, package: &str) -> anyhow::Result<()> {
     let mut cmd = Command::new("cargo");
 
-    cmd.current_dir(&root).arg("publish");
+    cmd.current_dir(root).arg("publish");
 
     if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
         cmd.env("CARGO_REGISTRY_DEFAULT", &registry)

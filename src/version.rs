@@ -51,7 +51,7 @@ pub fn bump_for_breaking_change(
             if version.pre == semver::Prerelease::EMPTY {
                 None
             } else {
-                version.pre == semver::Prerelease::EMPTY;
+                version.pre = semver::Prerelease::EMPTY;
                 Some(version)
             }
         }

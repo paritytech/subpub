@@ -3,10 +3,10 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-const CHECKPOINT_SAVE: &'static str = "[subpub] CHECKPOINT_SAVE";
-const CHECKPOINT_REVERT: &'static str = "[subpub] CHECKPOINT_REVERT";
+const CHECKPOINT_SAVE: &str = "[subpub] CHECKPOINT_SAVE";
+const CHECKPOINT_REVERT: &str = "[subpub] CHECKPOINT_REVERT";
 
-const THIS_FILE: &'static str = file!();
+const THIS_FILE: &str = file!();
 
 pub enum GCM {
     Save,
@@ -115,7 +115,7 @@ pub fn git_checkpoint_revert_all<P: AsRef<Path>>(root: P) -> anyhow::Result<()> 
     }
 
     let output = String::from_utf8_lossy(&output.stdout[..]);
-    let mut output = output.split("\n");
+    let mut output = output.split('\n');
 
     let (rebase_cmds, last_commit) = {
         let mut rebase_cmds = String::new();
@@ -149,14 +149,14 @@ pub fn git_checkpoint_revert_all<P: AsRef<Path>>(root: P) -> anyhow::Result<()> 
         return Ok(());
     };
 
-    let filter_script_path = Path::new(THIS_FILE.into())
+    let filter_script_path = Path::new(THIS_FILE)
         .parent()
         .with_context(|| format!("Failed to parse the parent of {THIS_FILE}"))?
         .parent()
         .with_context(|| format!("Failed to parse the parent's parent of {THIS_FILE}"))?
         .join("commit-filter.sh");
     let filter_script_path = if filter_script_path.is_absolute() {
-        filter_script_path.to_path_buf()
+        filter_script_path
     } else {
         std::env::current_dir()?.join(filter_script_path)
     };

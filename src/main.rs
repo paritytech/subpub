@@ -20,7 +20,7 @@ mod external;
 mod git;
 mod version;
 
-use crate::git::*;
+
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use crates::Crates;
@@ -164,7 +164,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         );
     }
 
-    let input_crates = if opts.crates.len() > 0 {
+    let input_crates = if !opts.crates.is_empty() {
         opts.crates.clone()
     } else {
         publish_order
@@ -291,12 +291,11 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
         for dep in &details.deps {
             let visited_crates = visited_crates
-                .iter()
-                .map(|visited_crate| *visited_crate)
+                .iter().copied()
                 .chain(vec![].into_iter())
                 .collect();
             check_excluded_crates(
-                &crates,
+                crates,
                 initial_crate,
                 if krate == initial_crate {
                     None

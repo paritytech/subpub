@@ -17,7 +17,7 @@
 use crate::crate_details::CrateDetails;
 use crate::external;
 use crate::git::*;
-use crate::version::{bump_for_breaking_change, Version};
+
 use anyhow::anyhow;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -227,7 +227,7 @@ impl Crates {
                 let needs_publish = if let Some(needs_publish) = needs_publishing.get(name) {
                     *needs_publish
                 } else {
-                    let needs_publish = entry.details.needs_publishing(&root)?;
+                    let needs_publish = entry.details.needs_publishing(root)?;
                     needs_publishing.insert(name.into(), needs_publish);
                     needs_publish
                 };
@@ -235,7 +235,7 @@ impl Crates {
                 if needs_publish && entry.details.should_be_published {
                     entry.needs_publishing = true;
                     for dep in entry.dependees.clone().iter() {
-                        set_needs_publishing(tree, dep, &root, needs_publishing)?;
+                        set_needs_publishing(tree, dep, root, needs_publishing)?;
                     }
                 }
             }
@@ -257,7 +257,7 @@ impl Crates {
                 continue;
             }
 
-            set_needs_publishing(&mut tree, name, &root, needs_publishing)?;
+            set_needs_publishing(&mut tree, name, root, needs_publishing)?;
         }
 
         // Step 4: Return a filtered list of crates we need to bump versions/publish
@@ -289,7 +289,7 @@ fn crate_cargo_tomls(root: PathBuf) -> Vec<PathBuf> {
             entry
                 .file_name()
                 .to_str()
-                .map(|s| !s.starts_with(".") && s != "target")
+                .map(|s| !s.starts_with('.') && s != "target")
                 .unwrap_or(false)
         })
         // Ignore errors

@@ -80,8 +80,7 @@ impl CrateDetails {
             .get("package")
             .ok_or_else(|| anyhow!("Cannot read [package] section from toml file."))?
             .get("publish")
-            .map(|value| value.as_bool())
-            .flatten()
+            .and_then(|value| value.as_bool())
             .unwrap_or(true);
 
         Ok(CrateDetails {
@@ -326,7 +325,7 @@ impl CrateDetails {
     /// Does this create need a version bump in order to be published?
     pub fn maybe_bump_version<P: AsRef<Path>>(
         &mut self,
-        root: P,
+        _root: P,
         bumped_versions: &mut HashMap<String, bool>,
     ) -> anyhow::Result<()> {
         if bumped_versions.get(&self.name).is_none() {
@@ -335,7 +334,7 @@ impl CrateDetails {
             if let Some(new_version) = new_version {
                 println!("Bumping crate from {} to {}", self.version, new_version);
                 self.write_own_version(new_version)?;
-                for dep in self.all_deps() {
+                for _dep in self.all_deps() {
                     self.write_dependency_version(&self.name, &self.version)?;
                 }
             }
