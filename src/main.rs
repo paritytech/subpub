@@ -235,6 +235,8 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
     fn check_excluded_crates(
         crates: &Crates,
+        initial_crate: &String,
+        parent_crate: Option<&String>,
         krate: &String,
         excluded_crates: &Vec<String>,
         visited_crates: &Vec<&String>,
@@ -258,7 +260,11 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             .get(krate)
             .with_context(|| format!("Crate not found: {krate}"))?;
         if !details.should_be_published {
-            anyhow::bail!("Crate should not be published: {krate}. Check if the crate has \"publish = false\" in {:?}.", details.toml_path);
+            if let Some(parent_crate) = parent_crate {
+                anyhow::bail!("Crate {krate} should not be published, but it is a dependency of {parent_crate}, and that is a dependency of {initial_crate}, which would be published. Check if {krate} has \"publish = false\" in {:?}.", details.toml_path);
+            } else {
+                anyhow::bail!("Crate {krate} should not be published, but it is a dependency of {initial_crate}, which would be published. Check if {krate} has \"publish = false\" in {:?}.", details.toml_path);
+            }
         }
 
         for dep in &details.deps {
@@ -267,13 +273,20 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 .map(|visited_crate| *visited_crate)
                 .chain(vec![dep].into_iter())
                 .collect();
-            check_excluded_crates(&crates, dep, excluded_crates, &visited_crates)?;
+            check_excluded_crates(
+                &crates,
+                initial_crate,
+                Some(krate),
+                dep,
+                excluded_crates,
+                &visited_crates,
+            )?;
         }
 
         Ok(())
     }
     for krate in &selected_crates {
-        check_excluded_crates(&crates, krate, &opts.exclude, &vec![])?;
+        check_excluded_crates(&crates, krate, None, krate, &opts.exclude, &vec![])?;
     }
 
     println!(
