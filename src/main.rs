@@ -20,10 +20,10 @@ mod external;
 mod git;
 mod version;
 
-
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use crates::Crates;
+use git::git_checkpoint_revert_all;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
@@ -32,6 +32,12 @@ use std::path::PathBuf;
 struct Args {
     #[clap(subcommand)]
     command: Command,
+}
+
+#[derive(Parser, Debug, Clone)]
+struct CleanOpts {
+    #[clap(long, help = "Path to the workspace root")]
+    path: PathBuf,
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -44,6 +50,8 @@ struct CheckOpts {
 enum Command {
     #[clap(about = "Publish crates in order from least to most dependees")]
     Publish(PublishOpts),
+    #[clap(about = "Revert all the commits made by subpub")]
+    Clean(CleanOpts),
     #[clap(about = "Check that all crates are compliant to crates.io")]
     Check(CheckOpts),
 }
@@ -71,18 +79,15 @@ struct PublishOpts {
     exclude: Vec<String>,
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     let args = Args::parse();
 
-    let res = match args.command {
+    match args.command {
         Command::Publish(opts) => publish(opts),
+        Command::Clean(opts) => git_checkpoint_revert_all(opts.path),
         Command::Check(opts) => check(opts),
-    };
-
-    if let Err(e) = res {
-        log::error!("{e:?}");
     }
 }
 
@@ -291,7 +296,8 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
         for dep in &details.deps {
             let visited_crates = visited_crates
-                .iter().copied()
+                .iter()
+                .copied()
                 .chain(vec![].into_iter())
                 .collect();
             check_excluded_crates(
