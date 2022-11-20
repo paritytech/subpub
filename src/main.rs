@@ -35,12 +35,6 @@ struct Args {
 }
 
 #[derive(Parser, Debug, Clone)]
-struct CleanOpts {
-    #[clap(long, help = "Path to the workspace root")]
-    path: PathBuf,
-}
-
-#[derive(Parser, Debug, Clone)]
 struct CheckOpts {
     #[clap(long, help = "Path to the workspace root")]
     path: PathBuf,
@@ -50,8 +44,6 @@ struct CheckOpts {
 enum Command {
     #[clap(about = "Publish crates in order from least to most dependees")]
     Publish(PublishOpts),
-    #[clap(about = "Revert all the commits made by subpub")]
-    Clean(CleanOpts),
     #[clap(about = "Check that all crates are compliant to crates.io")]
     Check(CheckOpts),
 }
@@ -86,7 +78,6 @@ fn main() {
 
     let res = match args.command {
         Command::Publish(opts) => publish(opts),
-        Command::Clean(opts) => git_checkpoint_revert_all(opts.path),
         Command::Check(opts) => check(opts),
     };
 
