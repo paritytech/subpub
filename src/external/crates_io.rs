@@ -39,22 +39,7 @@ pub fn does_crate_exist(name: &str, version: &semver::Version) -> anyhow::Result
         );
     }
 
-    #[derive(serde::Deserialize)]
-    struct SuccessfulResponse {
-        version: SuccessfulResponseVersion,
-    }
-    #[derive(serde::Deserialize)]
-    struct SuccessfulResponseVersion {
-        num: String,
-    }
-
-    // If the JSON response body looks like a successful one, we found
-    // that crate, else we did not.
-    if let Err(_e) = res.json::<SuccessfulResponse>() {
-        Ok(false)
-    } else {
-        Ok(true)
-    }
+    Ok(true)
 }
 
 pub fn crate_versions<Name: AsRef<str>>(name: Name) -> anyhow::Result<Vec<semver::Version>> {
