@@ -128,9 +128,8 @@ impl Crates {
         &mut self,
         name: &str,
         root: P,
-        needs_publishing: &mut HashMap<String, bool>,
         needs_version_bump: &mut HashMap<String, bool>,
-    ) -> anyhow::Result<bool> {
+    ) -> anyhow::Result<Option<(Version, Version)>> {
         let details = match self.details.get(name) {
             Some(details) => details.clone(),
             None => anyhow::bail!("Crate '{name}' not found"),
@@ -179,7 +178,6 @@ impl Crates {
         // Have to use &PathBuf instead of AsRef<Path> due to compiler recursion bug
         root: &PathBuf,
         needs_publishing: &mut HashMap<String, bool>,
-        needs_version_bump: &mut HashMap<String, bool>,
     ) -> anyhow::Result<Vec<String>> {
         struct Details<'a> {
             dependees: HashSet<String>,

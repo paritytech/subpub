@@ -359,7 +359,6 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             vec![sel_crate.into()],
             &opts.path,
             &mut needs_publishing,
-            &mut needs_version_bump
         )?;
 
         if crates_to_publish.is_empty() {
@@ -382,8 +381,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             if crates.does_crate_version_need_bumping_to_publish(
                 &krate,
                 &opts.path,
-                &mut needs_publishing,
-                &mut needs_version_bump
+                &mut needs_version_bump,
             )? {
                 let (old_version, new_version) =
                     crates.bump_crate_version_for_breaking_change(&krate)?;
