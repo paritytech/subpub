@@ -17,16 +17,16 @@
 use std::path::Path;
 use std::process::Command;
 
-/// Update the lockfile for dependencies given and any of their subdependencies.
 pub fn publish_crate(root: &Path, package: &str) -> anyhow::Result<()> {
     let mut cmd = Command::new("cargo");
 
     if let Ok(registry) = std::env::var("SUBPUB_REGISTRY") {
         cmd.env("CARGO_REGISTRIES_{}_INDEX", registry.to_uppercase())
+            .env("CARGO_REGISTRY_DEFAULT", &registry)
             .arg("--registry")
             .arg(registry)
             .arg("--token")
-            .arg(std::env::var("SUBPUB_CARGO_TOKEN").unwrap());
+            .arg(std::env::var("SUBPUB_REGISTRY_TOKEN").unwrap());
     }
 
     if !cmd
