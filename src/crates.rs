@@ -118,6 +118,8 @@ impl Crates {
             std::thread::sleep(std::time::Duration::from_millis(2500))
         }
 
+        std::thread::sleep(std::time::Duration::from_millis(2500));
+
         Ok(())
     }
 
