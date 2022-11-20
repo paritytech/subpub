@@ -225,7 +225,18 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         );
     }
 
-    for krate in &selected_crates {
+    fn check_excluded_crates(
+        crates: &Crates,
+        krate: &String,
+        excluded_crates: &Vec<String>,
+    ) -> anyhow::Result<()> {
+        if excluded_crates
+            .iter()
+            .any(|excluded_crate| excluded_crate == krate)
+        {
+            anyhow::bail!("Crate was excluded from CLI options: {krate}");
+        }
+
         let details = crates
             .details
             .get(krate)
@@ -233,17 +244,15 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         if !details.should_be_published {
             anyhow::bail!("Crate should not be published: {krate}. Check if the crate has \"publish = false\" in Cargo.toml");
         }
-        if opts
-            .exclude
-            .iter()
-            .any(|excluded_crate| excluded_crate == krate)
-        {
-            anyhow::bail!("Crate was excluded from CLI options: {krate}");
+
+        for dep in &details.deps {
+            check_excluded_crates(&crates, dep, excluded_crates)?;
         }
-        let mut deps: HashSet<&String> = HashSet::from_iter(details.deps.iter());
-        for dep in details.build_deps.iter() {
-            deps.insert(dep);
-        }
+
+        Ok(())
+    }
+    for krate in &selected_crates {
+        check_excluded_crates(&crates, krate, &opts.exclude);
     }
 
     println!(
