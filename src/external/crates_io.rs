@@ -57,14 +57,14 @@ pub fn does_crate_exist(name: &str, version: &semver::Version) -> anyhow::Result
     }
 }
 
-pub fn crate_versions(name: &str) -> anyhow::Result<Vec<semver::Version>> {
+pub fn crate_versions<Name: AsRef<str>>(name: Name) -> anyhow::Result<Vec<semver::Version>> {
     let client = reqwest::blocking::Client::new();
     let crates_api = std::env::var("SPUB_CRATES_API").unwrap();
-    let url = format!("{crates_api}/crates/{name}/versions");
+    let url = format!("{crates_api}/crates/{}/versions", name.as_ref());
     let res = client.get(&url)
         .header("User-Agent", "Called from https://github.com/paritytech/subpub for comparing local crate against published crate")
         .send()
-        .with_context(|| format!("Cannot download {name}"))?;
+        .with_context(|| format!("Cannot download {}", name.as_ref()))?;
 
     let res_status = res.status();
     if res_status == reqwest::StatusCode::NOT_FOUND {

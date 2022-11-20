@@ -27,28 +27,33 @@ use std::cmp::Ordering;
 /// ```
 ///
 /// Return the new version.
-pub fn bump_for_breaking_change(prev_versions: Vec<Version>, mut version: Version) -> Version {
-    version.pre = semver::Prerelease::EMPTY;
-
+pub fn bump_for_breaking_change(
+    prev_versions: Vec<Version>,
+    mut version: Version,
+) -> Option<Version> {
     match prev_versions.into_iter().max() {
-        Some(mut max_version) => {
-            max_version.pre = semver::Prerelease::EMPTY;
-            match version.cmp(max_version) {
-                Ordering::Greater => version,
-                _ => {
-                    if max_version.major == 0 {
-                        new_version.minor += 1;
-                        new_version.patch = 0;
-                    } else {
-                        new_version.major += 1;
-                        new_version.minor = 0;
-                        new_version.patch = 0;
-                    }
-                    max_version
+        Some(mut max_version) => match version.cmp(&max_version) {
+            Ordering::Greater => None,
+            _ => {
+                max_version.pre = semver::Prerelease::EMPTY;
+                if max_version.major == 0 {
+                    max_version.minor += 1;
+                    max_version.patch = 0;
+                } else {
+                    max_version.major += 1;
+                    max_version.minor = 0;
+                    max_version.patch = 0;
                 }
+                Some(max_version)
             }
-            if version.cmp(max_version) {}
+        },
+        None => {
+            if version.pre == semver::Prerelease::EMPTY {
+                None
+            } else {
+                version.pre == semver::Prerelease::EMPTY;
+                Some(version)
+            }
         }
-        None => version,
     }
 }

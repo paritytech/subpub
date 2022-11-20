@@ -124,47 +124,17 @@ impl Crates {
     }
 
     /// Does a crate need a version bump in order to publish?
-    pub fn does_crate_version_need_bumping_to_publish<P: AsRef<Path>>(
+    pub fn maybe_bump_crate_version<P: AsRef<Path>>(
         &mut self,
         name: &str,
         root: P,
-        needs_version_bump: &mut HashMap<String, bool>,
-    ) -> anyhow::Result<Option<(Version, Version)>> {
+        bumped_versions: &mut HashMap<String, Option<Version>>,
+    ) -> anyhow::Result<()> {
         let details = match self.details.get(name) {
             Some(details) => details.clone(),
             None => anyhow::bail!("Crate '{name}' not found"),
         };
-
-        if details.version.pre != semver::Prerelease::EMPTY {
-            self.bump_crate_version_for_breaking_change(name)?;
-        }
-
-        details.needs_version_bump_to_publish(root, needs_publishing, needs_version_bump)
-    }
-
-    /// Bump the version of the crate given, and update it in all dependant crates as needed.
-    /// Return the old version and the new version.
-    pub fn bump_crate_version_for_breaking_change(
-        &mut self,
-        name: &str,
-    ) -> anyhow::Result<Option<(Version, Version)>> {
-        let details = match self.details.get_mut(name) {
-            Some(details) => details,
-            None => anyhow::bail!("Crate '{name}' not found"),
-        };
-
-        let old_version = details.version.clone();
-        let new_version = bump_for_breaking_change(old_version.clone());
-
-        // Bump the crate version:
-        details.write_own_version(new_version.clone())?;
-
-        // Find any crate which depends on this crate and bump the version there too.
-        for details in self.details.values() {
-            details.write_dependency_version(name, &new_version)?;
-        }
-
-        Ok((old_version, new_version))
+        details.maybe_bump_version(root, bumped_versions)
     }
 
     /// return a list of the crates that will need publishing in order to ensure that the

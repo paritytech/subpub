@@ -105,30 +105,28 @@ impl CrateDetails {
     /// ```
     ///
     /// Return the old and new version.
-    pub fn write_own_version(&mut self, version: Version) -> anyhow::Result<()> {
+    pub fn write_own_version(&mut self, new_version: Version) -> anyhow::Result<()> {
         // Load TOML file and update the version in that.
         let mut toml = self.read_toml()?;
-        toml["package"]["version"] = toml_edit::value(version.to_string());
+        toml["package"]["version"] = toml_edit::value(new_version.to_string());
         self.write_toml(&toml)?;
 
         // If that worked, save the in-memory version too
-        self.version = version;
+        self.version = new_version;
 
         Ok(())
     }
 
-    /// Set any references to the dependency provided to the version given.
-    pub fn write_dependency_version(
-        &self,
-        dependency: &str,
-        version: &Version,
-    ) -> anyhow::Result<bool> {
-        let mut all_deps = self
-            .deps
+    fn all_deps(&self) -> impl Iterator<Item = &String> {
+        self.deps
             .iter()
             .chain(self.dev_deps.iter())
-            .chain(self.build_deps.iter());
-        if !all_deps.any(|dep| dep == dependency) {
+            .chain(self.build_deps.iter())
+    }
+
+    /// Set any references to the dependency provided to the version given.
+    pub fn write_dependency_version(&self, dependency: &str) -> anyhow::Result<bool> {
+        if !self.all_deps().any(|dep| dep == dependency) {
             return Ok(true);
         }
 
@@ -194,7 +192,7 @@ impl CrateDetails {
         edit_all_dependency_sections(&mut toml, "build-dependencies", |item| {
             do_set(
                 item,
-                version,
+                &self.version,
                 dependency,
                 "build-dependency",
                 &self.toml_path,
@@ -202,10 +200,24 @@ impl CrateDetails {
             .unwrap()
         });
         edit_all_dependency_sections(&mut toml, "dev-dependencies", |item| {
-            do_set(item, version, dependency, "dev-dependency", &self.toml_path).unwrap()
+            do_set(
+                item,
+                &self.version,
+                dependency,
+                "dev-dependency",
+                &self.toml_path,
+            )
+            .unwrap()
         });
         edit_all_dependency_sections(&mut toml, "dependencies", |item| {
-            do_set(item, version, dependency, "dependency", &self.toml_path).unwrap()
+            do_set(
+                item,
+                &self.version,
+                dependency,
+                "dependency",
+                &self.toml_path,
+            )
+            .unwrap()
         });
 
         self.write_toml(&toml)?;
@@ -322,31 +334,26 @@ impl CrateDetails {
     }
 
     /// Does this create need a version bump in order to be published?
-    pub fn needs_version_bump_to_publish<P: AsRef<Path>>(
-        &self,
+    pub fn maybe_bump_version<P: AsRef<Path>>(
+        &mut self,
         root: P,
-        needs_publishing: &mut HashMap<String, bool>,
-        needs_version_bump: &mut HashMap<String, bool>,
-    ) -> anyhow::Result<bool> {
-        let needs_publishing = if let Some(needs_publishing) = needs_publishing.get(&self.name) {
-            *needs_publishing
+        bumped_versions: &mut HashMap<String, Option<Version>>,
+    ) -> anyhow::Result<()> {
+        let new_version = if let Some(bumped_version) = bumped_versions.get(&self.name) {
+            bumped_version.clone()
         } else {
-            let needs_publish = self.needs_publishing(root)?;
-            needs_publishing.insert((&self.name).into(), needs_publish);
-            needs_publish
-        };
-        if needs_bump {
-            if let Some(needs_bump) = needs_version_bump.get(&self.name) {
-                needs_bump
-            } else {
-                let versions = external::crates_io::crate_versions(root)?;
-                needs_publishing.insert((&self.name).into(), needs_publish);
-                needs_publish
+            let versions = external::crates_io::crate_versions(&self.name)?;
+            let new_version = bump_for_breaking_change(versions, self.version.clone());
+            if let Some(new_version) = new_version {
+                self.write_own_version(new_version)?;
+                for dep in self.all_deps() {
+                    self.write_dependency_version(dep)?;
+                }
             }
-        } else {
-            Ok(false)
-        }
-        Ok(needs_bump)
+            bumped_versions.insert((&self.name).into(), new_version.clone());
+            new_version
+        };
+        Ok(())
     }
 
     fn read_toml(&self) -> anyhow::Result<toml_edit::Document> {
