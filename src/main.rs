@@ -229,11 +229,11 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         crates: &Crates,
         krate: &String,
         excluded_crates: &Vec<String>,
-        visited_crates: Vec<String>,
+        visited_crates: &Vec<&String>,
     ) -> anyhow::Result<()> {
         if visited_crates
             .iter()
-            .any(|visited_crate| visited_crate == krate)
+            .any(|visited_crate| *visited_crate == krate)
         {
             return Ok(());
         }
@@ -254,18 +254,18 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         }
 
         for dep in &details.deps {
-            let visited_crates = visited_crates
-                .clone()
-                .into_iter()
-                .chain(vec![dep.into()].into_iter())
+            let mut visited_crates = visited_crates
+                .iter()
+                .map(|visited_crate| *visited_crate)
+                .chain(vec![dep].into_iter())
                 .collect();
-            check_excluded_crates(&crates, dep, excluded_crates, visited_crates)?;
+            check_excluded_crates(&crates, dep, excluded_crates, &visited_crates)?;
         }
 
         Ok(())
     }
     for krate in &selected_crates {
-        check_excluded_crates(&crates, krate, &opts.exclude, vec![]);
+        check_excluded_crates(&crates, krate, &opts.exclude, &vec![]);
     }
 
     println!(
