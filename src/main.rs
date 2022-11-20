@@ -384,7 +384,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             )? {
                 let (old_version, new_version) =
                     crates.bump_crate_version_for_breaking_change(&krate)?;
-                println!("[{sel_crate}] Bumped crate {krate} from {new_version} to {old_version}");
+                println!("[{sel_crate}] Bumped crate {krate} from {old_version} to {new_version}");
             }
 
             crates.strip_dev_deps_and_publish(&krate)?;
