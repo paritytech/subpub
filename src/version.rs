@@ -32,6 +32,8 @@ pub fn bump_for_breaking_change(version: Version) -> Version {
     if new_version.pre != semver::Prerelease::EMPTY {
         // Remove pre-release tag like `-dev` if present
         new_version.pre = semver::Prerelease::EMPTY;
+        new_version.minor = 0;
+        new_version.patch = 0;
     } else if new_version.major == 0 {
         // Else, bump minor if 0.x.0 crate
         new_version.minor += 1;
