@@ -37,30 +37,29 @@ struct Args {
 
 #[derive(Parser, Debug, Clone)]
 struct CleanOpts {
-    /// Path to the workspace root.
-    #[clap(long)]
+    #[clap(long, help = "Path to the workspace root")]
     path: PathBuf,
 }
 
 #[derive(Parser, Debug, Clone)]
 struct CheckOpts {
-    /// Path to the workspace root.
-    #[clap(long)]
+    #[clap(long, help = "Path to the workspace root")]
     path: PathBuf,
 }
 
 #[derive(Parser, Debug, Clone)]
 struct PublishOpts {
-    /// Path to the workspace root.
-    #[clap(long, default_value = ".")]
+    #[clap(long, help = "Path to the workspace root")]
     path: PathBuf,
 
-    /// Crates you'd like to publish.
-    #[clap(short = 'c', long = "crate")]
+    #[clap(short = 'c', long = "crate", help = "Crates to be published")]
     crates: Vec<String>,
 
-    /// Crates you'd like to publish.
-    #[clap(short = 's', long = "start-from")]
+    #[clap(
+        short = 's',
+        long = "start-from",
+        help = "Start publishing from this crate"
+    )]
     start_from: Option<String>,
 }
 
