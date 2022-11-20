@@ -173,7 +173,18 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     }
 
     let input_crates = if opts.crates.len() > 0 {
-        opts.crates.clone()
+        opts.crates
+            .clone()
+            .into_iter()
+            .filter(|krate| {
+                let details = crates
+                    .details
+                    .get(krate)
+                    .with_context(|| format!("Crate not found: {krate}"))
+                    .unwrap();
+                details.should_be_published
+            })
+            .collect()
     } else {
         publish_order.clone()
     };
@@ -271,7 +282,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             let visited_crates = visited_crates
                 .iter()
                 .map(|visited_crate| *visited_crate)
-                .chain(vec![dep].into_iter())
+                .chain(vec![].into_iter())
                 .collect();
             check_excluded_crates(
                 &crates,
