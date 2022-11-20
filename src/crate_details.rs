@@ -149,14 +149,20 @@ impl CrateDetails {
             };
 
             if dep.is_str() {
-                *dep = toml_edit::value(version.to_string());
-                let mut table = toml_edit::table();
-                table["version"] = toml_edit::value(version.to_string());
-                table["registry"] = toml_edit::value("local".to_string());
-                *dep = table;
+                if let Ok(registry) = std::env::var("SUBPUB_REGISTRY") {
+                    *dep = toml_edit::value(version.to_string());
+                    let mut table = toml_edit::table();
+                    table["version"] = toml_edit::value(version.to_string());
+                    table["registry"] = toml_edit::value(registry.to_string());
+                    *dep = table;
+                } else {
+                    *dep = toml_edit::value(version.to_string());
+                }
             } else {
                 dep["version"] = toml_edit::value(version.to_string());
-                dep["registry"] = toml_edit::value("local".to_string());
+                if let Ok(registry) = std::env::var("SUBPUB_REGISTRY") {
+                    dep["registry"] = toml_edit::value(registry.to_string());
+                }
             }
 
             Ok(())

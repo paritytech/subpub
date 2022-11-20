@@ -27,7 +27,6 @@ use crates::Crates;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
-/// Release crates and their dependencies from a workspace
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
@@ -71,6 +70,13 @@ struct PublishOpts {
         help = "Start publishing from this crate"
     )]
     start_from: Option<String>,
+
+    #[clap(
+        short = 'e',
+        long = "exclude",
+        help = "Crates to be excluded from the publishing process"
+    )]
+    exclude: Vec<String>,
 }
 
 fn main() {
@@ -217,6 +223,27 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 .collect::<Vec<String>>()
                 .join(", ")
         );
+    }
+
+    for krate in &selected_crates {
+        let details = crates
+            .details
+            .get(krate)
+            .with_context(|| format!("Crate not found: {krate}"))?;
+        if !details.should_be_published {
+            anyhow::bail!("Crate should not be published: {krate}. Check if the crate has \"publish = false\" in Cargo.toml");
+        }
+        if opts
+            .exclude
+            .iter()
+            .any(|excluded_crate| excluded_crate == krate)
+        {
+            anyhow::bail!("Crate was excluded from CLI options: {krate}");
+        }
+        let mut deps: HashSet<&String> = HashSet::from_iter(details.deps.iter());
+        for dep in details.build_deps.iter() {
+            deps.insert(dep);
+        }
     }
 
     println!(
