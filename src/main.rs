@@ -148,7 +148,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         .map(|(_, ord_crate)| ord_crate)
         .collect();
     println!(
-        "Defined the overall publish order: {}",
+        "Defined the overall publish order: {}\n",
         publish_order
             .iter()
             .map(|krate| krate.to_owned())
@@ -173,7 +173,9 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     }
 
     let input_crates = if opts.crates.len() > 0 {
-        opts.crates
+        opts.crates.clone()
+    } else {
+        publish_order
             .clone()
             .into_iter()
             .filter(|krate| {
@@ -185,8 +187,6 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 details.should_be_published
             })
             .collect()
-    } else {
-        publish_order.clone()
     };
     let (selected_crates, selected_crates_order) = if let Some(start_from) = opts.start_from {
         let mut keep = false;
@@ -263,7 +263,11 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             .iter()
             .any(|excluded_crate| excluded_crate == krate)
         {
-            anyhow::bail!("Crate was excluded from CLI options: {krate}");
+            if let Some(parent_crate) = parent_crate {
+                anyhow::bail!("Crate {krate} was excluded from CLI options, but it is a dependency of {parent_crate}, and that is a dependency of {initial_crate}, which would be published.");
+            } else {
+                anyhow::bail!("Crate {krate} was excluded from CLI options, but it is a dependency of {initial_crate}, which would be published.");
+            }
         }
 
         let details = crates
@@ -301,7 +305,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     }
 
     println!(
-        "Processing crates in this order: {}",
+        "Processing crates in this order: {}\n",
         selected_crates_order
             .iter()
             .map(|krate| (*krate).into())
