@@ -47,6 +47,16 @@ struct CheckOpts {
     path: PathBuf,
 }
 
+#[derive(Subcommand, Debug)]
+enum Command {
+    #[clap(about = "Publish crates in order from least to most dependees")]
+    Publish(PublishOpts),
+    #[clap(about = "Revert all the commits made by subpub")]
+    Clean(CleanOpts),
+    #[clap(about = "Check that all crates are compliant to crates.io")]
+    Check(CheckOpts),
+}
+
 #[derive(Parser, Debug, Clone)]
 struct PublishOpts {
     #[clap(long, help = "Path to the workspace root")]
@@ -61,16 +71,6 @@ struct PublishOpts {
         help = "Start publishing from this crate"
     )]
     start_from: Option<String>,
-}
-
-#[derive(Subcommand, Debug)]
-enum Command {
-    #[clap(about = "Publish crates in order from least to most dependees")]
-    Publish(PublishOpts),
-    #[clap(about = "Revert all the commits made by subpub")]
-    Clean(CleanOpts),
-    #[clap(about = "Check that all crates are compliant to crates.io")]
-    Check(CheckOpts),
 }
 
 fn main() {
@@ -94,7 +94,7 @@ fn check(opts: CheckOpts) -> anyhow::Result<()> {
 }
 
 fn publish(opts: PublishOpts) -> anyhow::Result<()> {
-    let mut cio = HashMap::new();
+    let mut needs_publishing = HashMap::new();
     let mut crates = Crates::load_crates_in_workspace(opts.path.clone())?;
 
     let mut publish_order: Vec<(usize, String)> = vec![];
@@ -250,8 +250,11 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             details.write_dependency_version(krate, &crate_details.version)?;
         }
 
-        let crates_to_publish =
-            crates.what_needs_publishing(vec![sel_crate.into()], &opts.path, &mut cio)?;
+        let crates_to_publish = crates.what_needs_publishing(
+            vec![sel_crate.into()],
+            &opts.path,
+            &mut needs_publishing,
+        )?;
 
         if crates_to_publish.is_empty() {
             println!("[{sel_crate}] Crate does not need to be published");
@@ -270,14 +273,18 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         }
 
         for krate in crates_to_publish {
-            if crates.does_crate_version_need_bumping_to_publish(&krate, &opts.path, &mut cio)? {
+            if crates.does_crate_version_need_bumping_to_publish(
+                &krate,
+                &opts.path,
+                &mut needs_publishing,
+            )? {
                 let (old_version, new_version) =
                     crates.bump_crate_version_for_breaking_change(&krate)?;
                 println!("[{sel_crate}] Bumped crate {krate} from {new_version} to {old_version}");
             }
 
             crates.strip_dev_deps_and_publish(&krate)?;
-            cio.insert((&krate).into(), false);
+            needs_publishing.insert((&krate).into(), false);
 
             let published_crate_details = crates
                 .details
