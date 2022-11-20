@@ -254,7 +254,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         }
 
         for dep in &details.deps {
-            let mut visited_crates = visited_crates
+            let visited_crates = visited_crates
                 .iter()
                 .map(|visited_crate| *visited_crate)
                 .chain(vec![dep].into_iter())
