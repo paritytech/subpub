@@ -161,7 +161,6 @@ impl CrateDetails {
                             dep["registry"] = toml_edit::value(registry.to_string());
                         }
                     }
-                    break;
                 } else {
                     let dep = dep
                         .as_table_mut()
@@ -175,7 +174,6 @@ impl CrateDetails {
                         if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
                             dep["registry"] = toml_edit::value(registry.to_string());
                         }
-                        break;
                     }
                 }
             }
