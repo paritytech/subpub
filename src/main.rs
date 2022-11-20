@@ -147,6 +147,14 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         .into_iter()
         .map(|(_, ord_crate)| ord_crate)
         .collect();
+    println!(
+        "Defined the overall publish order: {}",
+        publish_order
+            .iter()
+            .map(|krate| krate.to_owned())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
 
     let unordered_crates = crates
         .details
@@ -276,7 +284,6 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             .collect::<Vec<String>>()
             .join(", ")
     );
-    std::process::exit(0);
 
     let mut published_crates: HashSet<String> = HashSet::new();
     for sel_crate in selected_crates_order {
