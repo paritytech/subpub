@@ -347,9 +347,6 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             if krate == sel_crate {
                 break;
             }
-            if krate == "substrate-prometheus-endpoint" {
-                println!("HIT! {sel_crate}")
-            }
             let crate_details = crates
                 .details
                 .get(krate)

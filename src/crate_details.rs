@@ -164,20 +164,24 @@ impl CrateDetails {
                         }
                     }
                 } else {
-                    let item = item.as_table_mut().with_context(|| {
-                        format!(
-                            "{dep_type} dependency {key} should be a string or table in {:?}",
-                            toml_path
-                        )
-                    })?;
+                    let item = if item.as_str().is_some() {
+                        continue;
+                    } else {
+                        item.as_table_like_mut().with_context(|| {
+                            format!(
+                                "{dep_type} {key} should be a string or table-like in {:?}",
+                                toml_path
+                            )
+                        })?
+                    };
                     if item
                         .get("package")
                         .map(|pkg| pkg.as_str() == Some(dep))
                         .unwrap_or(false)
                     {
-                        item["version"] = toml_edit::value(version.to_string());
+                        item.insert("version", toml_edit::value(version.to_string()));
                         if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
-                            item["registry"] = toml_edit::value(registry.to_string());
+                            item.insert("registry", toml_edit::value(registry.to_string()));
                         }
                     }
                 }
