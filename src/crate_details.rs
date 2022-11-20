@@ -32,7 +32,7 @@ pub struct CrateDetails {
     pub should_be_published: bool,
 
     // Modifying the files on disk can only be done through the interface below.
-    toml_path: PathBuf,
+    pub toml_path: PathBuf,
 }
 
 impl CrateDetails {

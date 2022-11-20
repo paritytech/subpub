@@ -95,7 +95,7 @@ fn main() {
     }
 }
 
-fn check(opts: CheckOpts) -> anyhow::Result<()> {
+fn check(_opts: CheckOpts) -> anyhow::Result<()> {
     todo!("Implement check");
 }
 
@@ -258,7 +258,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             .get(krate)
             .with_context(|| format!("Crate not found: {krate}"))?;
         if !details.should_be_published {
-            anyhow::bail!("Crate should not be published: {krate}. Check if the crate has \"publish = false\" in Cargo.toml");
+            anyhow::bail!("Crate should not be published: {krate}. Check if the crate has \"publish = false\" in {:?}.", details.toml_path);
         }
 
         for dep in &details.deps {
@@ -273,7 +273,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         Ok(())
     }
     for krate in &selected_crates {
-        check_excluded_crates(&crates, krate, &opts.exclude, &vec![]);
+        check_excluded_crates(&crates, krate, &opts.exclude, &vec![])?;
     }
 
     println!(
