@@ -21,7 +21,7 @@ pub fn does_crate_exist(name: &str, version: &semver::Version) -> anyhow::Result
     let crates_api = std::env::var("SPUB_CRATES_API").unwrap();
     let url = format!("{crates_api}/crates/{name}/{version}");
     let res = client.get(&url)
-        .header("User-Agent", "Called from https://github.com/paritytech/subpub for comparing published source against repo source")
+        .header("User-Agent", "Called from https://github.com/paritytech/subpub for comparing local crate against published crate")
         .send()
         .with_context(|| format!("Cannot download {name}"))?;
 
@@ -70,7 +70,7 @@ pub fn try_download_crate(
 
     let req_url = format!("{crates_api}/crates/{name}/{version}/download");
     let res = client.get(&req_url)
-        .header("User-Agent", "Called from https://github.com/paritytech/subpub for comparing published source against repo source")
+        .header("User-Agent", "Called from https://github.com/paritytech/subpub for comparing local crate against published crate")
         .send()
         .with_context(|| format!("Cannot download {name}"))?;
 
