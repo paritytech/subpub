@@ -255,7 +255,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         parent_crate: Option<&String>,
         krate: &String,
         excluded_crates: &Vec<String>,
-        visited_crates: &Vec<&String>,
+        visited_crates: &[&String],
     ) -> anyhow::Result<()> {
         if visited_crates
             .iter()
@@ -295,10 +295,10 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         }
 
         for dep in &details.deps {
-            let visited_crates = visited_crates
+            let visited_crates: Vec<&String> = visited_crates
                 .iter()
                 .copied()
-                .chain(vec![].into_iter())
+                .chain(vec![krate].into_iter())
                 .collect();
             check_excluded_crates(
                 crates,
@@ -317,7 +317,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         Ok(())
     }
     for krate in &selected_crates {
-        check_excluded_crates(&crates, krate, None, krate, &opts.exclude, &vec![])?;
+        check_excluded_crates(&crates, krate, None, krate, &opts.exclude, &[])?;
     }
 
     println!(

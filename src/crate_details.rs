@@ -135,7 +135,7 @@ impl CrateDetails {
 
         let mut toml = self.read_toml()?;
 
-        fn do_set<'a>(
+        fn do_set(
             item: &mut toml_edit::Item,
             version: &Version,
             dep: &str,
@@ -455,7 +455,7 @@ fn filter_workspace_dependencies(val: &toml_edit::Item) -> anyhow::Result<HashSe
                     .map(|s| s.to_string())
                     .ok_or_else(|| anyhow!("{}.package is not a string.", name))
             })
-            .unwrap_or(Ok(name.to_string()))?;
+            .unwrap_or_else(|| Ok(name.to_string()))?;
 
         deps.insert(package_name);
     }
