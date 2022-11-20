@@ -126,14 +126,14 @@ impl Crates {
         &self,
         name: &str,
         root: P,
-        cio: &mut HashMap<String, bool>,
+        needs_publishing: &mut HashMap<String, bool>,
     ) -> anyhow::Result<bool> {
         let details = match self.details.get(name) {
             Some(details) => details,
             None => anyhow::bail!("Crate '{name}' not found"),
         };
 
-        details.needs_version_bump_to_publish(root, cio)
+        details.needs_version_bump_to_publish(root, needs_publishing)
     }
 
     /// Bump the version of the crate given, and update it in all dependant crates as needed.
@@ -171,7 +171,7 @@ impl Crates {
         crates: Vec<String>,
         // Have to use &PathBuf instead of AsRef<Path> due to compiler recursion bug
         root: &PathBuf,
-        cio: &mut HashMap<String, bool>,
+        needs_publishing: &mut HashMap<String, bool>,
     ) -> anyhow::Result<Vec<String>> {
         struct Details<'a> {
             dependees: HashSet<String>,
@@ -243,24 +243,24 @@ impl Crates {
             tree: &mut HashMap<String, Details>,
             name: &str,
             root: &PathBuf,
-            cio: &mut HashMap<String, bool>,
+            needs_publishing: &mut HashMap<String, bool>,
         ) -> anyhow::Result<()> {
             let entry = tree.get_mut(name).expect("should exist");
 
             // If the crate itself needs publishing, mark it and anything
             // depending on it as needing publishing.
-            let needs_publishing = if let Some(needs_publishing) = cio.get(name) {
+            let needs_publish = if let Some(needs_publishing) = needs_publishing.get(name) {
                 *needs_publishing
             } else {
-                let needs_publishing = entry.details.needs_publishing(&root)?;
-                cio.insert(name.into(), needs_publishing);
-                needs_publishing
+                let needs_publish = entry.details.needs_publishing(&root)?;
+                needs_publishing.insert(name.into(), needs_publish);
+                needs_publish
             };
 
-            if needs_publishing && entry.details.should_be_published {
+            if needs_publish && entry.details.should_be_published {
                 entry.needs_publishing = true;
                 for dep in entry.dependees.clone().iter() {
-                    set_needs_publishing(tree, dep, &root, cio)?;
+                    set_needs_publishing(tree, dep, &root, needs_publishing)?;
                 }
             }
 
@@ -281,7 +281,7 @@ impl Crates {
                 continue;
             }
 
-            set_needs_publishing(&mut tree, name, &root, cio)?;
+            set_needs_publishing(&mut tree, name, &root, needs_publishing)?;
         }
 
         // Step 4: Return a filtered list of crates we need to bump versions/publish

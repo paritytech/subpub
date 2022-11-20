@@ -295,19 +295,19 @@ impl CrateDetails {
     pub fn needs_version_bump_to_publish<P: AsRef<Path>>(
         &self,
         root: P,
-        cio: &mut HashMap<String, bool>,
+        needs_publishing: &mut HashMap<String, bool>,
     ) -> anyhow::Result<bool> {
         if self.version.pre != semver::Prerelease::EMPTY {
             // If prerelease eg `-dev`, we'll want to bump.
             return Ok(true);
         }
 
-        let needs_publishing = if let Some(needs_publishing) = cio.get(&self.name) {
+        let needs_publishing = if let Some(needs_publishing) = needs_publishing.get(&self.name) {
             *needs_publishing
         } else {
-            let needs_publishing = self.needs_publishing(root)?;
-            cio.insert((&self.name).into(), needs_publishing);
-            needs_publishing
+            let needs_publish = self.needs_publishing(root)?;
+            needs_publishing.insert((&self.name).into(), needs_publish);
+            needs_publish
         };
 
         Ok(needs_publishing)
