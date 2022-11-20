@@ -39,12 +39,10 @@ pub fn does_crate_exist(name: &str, version: &semver::Version) -> anyhow::Result
         );
     }
 
-    #[allow(unused)]
     #[derive(serde::Deserialize)]
     struct SuccessfulResponse {
         version: SuccessfulResponseVersion,
     }
-    #[allow(unused)]
     #[derive(serde::Deserialize)]
     struct SuccessfulResponseVersion {
         num: String,
@@ -57,6 +55,47 @@ pub fn does_crate_exist(name: &str, version: &semver::Version) -> anyhow::Result
     } else {
         Ok(true)
     }
+}
+
+pub fn get_crate_versions(name: &str) -> anyhow::Result<Vec<semver::Version>> {
+    let client = reqwest::blocking::Client::new();
+    let crates_api = std::env::var("SPUB_CRATES_API").unwrap();
+    let url = format!("{crates_api}/crates/{name}/versions");
+    let res = client.get(&url)
+        .header("User-Agent", "Called from https://github.com/paritytech/subpub for comparing local crate against published crate")
+        .send()
+        .with_context(|| format!("Cannot download {name}"))?;
+
+    let res_status = res.status();
+    if res_status == reqwest::StatusCode::NOT_FOUND {
+        return Ok(vec![]);
+    }
+
+    if !res_status.is_success() {
+        // We get a 200 back even if we ask for crates/versions that don't exist,
+        // so a non-200 means something worse went wrong.
+        anyhow::bail!(
+            "Non-200 status trying to connect to {url} ({})",
+            res.status()
+        );
+    }
+
+    #[derive(serde::Deserialize)]
+    struct SuccessfulResponseVersion {
+        pub num: String,
+    }
+    #[derive(serde::Deserialize)]
+    struct SuccessfulResponse {
+        pub versions: Vec<SuccessfulResponseVersion>,
+    }
+    res.json::<SuccessfulResponse>()?
+        .versions
+        .into_iter()
+        .map(|version| -> anyhow::Result<semver::Version> {
+            semver::Version::parse(&version.num)
+                .with_context(|| format!("Failed to parse {} as semver::Version", version.num,))
+        })
+        .collect()
 }
 
 /// Download a crate from crates.io.

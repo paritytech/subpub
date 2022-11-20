@@ -136,7 +136,7 @@ impl Crates {
         };
 
         if details.version.pre != semver::Prerelease::EMPTY {
-            self.bump_crate_version_for_breaking_change(name);
+            self.bump_crate_version_for_breaking_change(name)?;
         }
 
         details.needs_version_bump_to_publish(root, needs_publishing)
