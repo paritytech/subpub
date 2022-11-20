@@ -128,7 +128,7 @@ impl Crates {
         &mut self,
         name: &str,
         root: P,
-        bumped_versions: &mut HashMap<String, Option<Version>>,
+        bumped_versions: &mut HashMap<String, bool>,
     ) -> anyhow::Result<()> {
         let details = match self.details.get(name) {
             Some(details) => details.clone(),

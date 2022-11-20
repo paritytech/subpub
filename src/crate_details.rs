@@ -125,7 +125,11 @@ impl CrateDetails {
     }
 
     /// Set any references to the dependency provided to the version given.
-    pub fn write_dependency_version(&self, dependency: &str) -> anyhow::Result<bool> {
+    pub fn write_dependency_version(
+        &self,
+        dependency: &str,
+        version: &Version,
+    ) -> anyhow::Result<bool> {
         if !self.all_deps().any(|dep| dep == dependency) {
             return Ok(true);
         }
@@ -192,7 +196,7 @@ impl CrateDetails {
         edit_all_dependency_sections(&mut toml, "build-dependencies", |item| {
             do_set(
                 item,
-                &self.version,
+                version,
                 dependency,
                 "build-dependency",
                 &self.toml_path,
@@ -200,24 +204,10 @@ impl CrateDetails {
             .unwrap()
         });
         edit_all_dependency_sections(&mut toml, "dev-dependencies", |item| {
-            do_set(
-                item,
-                &self.version,
-                dependency,
-                "dev-dependency",
-                &self.toml_path,
-            )
-            .unwrap()
+            do_set(item, version, dependency, "dev-dependency", &self.toml_path).unwrap()
         });
         edit_all_dependency_sections(&mut toml, "dependencies", |item| {
-            do_set(
-                item,
-                &self.version,
-                dependency,
-                "dependency",
-                &self.toml_path,
-            )
-            .unwrap()
+            do_set(item, version, dependency, "dependency", &self.toml_path).unwrap()
         });
 
         self.write_toml(&toml)?;
@@ -337,21 +327,18 @@ impl CrateDetails {
     pub fn maybe_bump_version<P: AsRef<Path>>(
         &mut self,
         root: P,
-        bumped_versions: &mut HashMap<String, Option<Version>>,
+        bumped_versions: &mut HashMap<String, bool>,
     ) -> anyhow::Result<()> {
-        let new_version = if let Some(bumped_version) = bumped_versions.get(&self.name) {
-            bumped_version.clone()
-        } else {
+        if bumped_versions.get(&self.name).is_none() {
             let versions = external::crates_io::crate_versions(&self.name)?;
             let new_version = bump_for_breaking_change(versions, self.version.clone());
             if let Some(new_version) = new_version {
                 self.write_own_version(new_version)?;
                 for dep in self.all_deps() {
-                    self.write_dependency_version(dep)?;
+                    self.write_dependency_version(&self.name, &self.version)?;
                 }
             }
-            bumped_versions.insert((&self.name).into(), new_version.clone());
-            new_version
+            bumped_versions.insert((&self.name).into(), true);
         };
         Ok(())
     }
