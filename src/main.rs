@@ -407,26 +407,26 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         }
     }
 
-    git_checkpoint_revert_all(&opts.path)?;
-    for krate in &published_crates {
-        let details = crates.details.get(krate).unwrap();
-        for other_crate in &publish_order {
-            let other_crate_details = crates
-                .details
-                .get(other_crate)
-                .with_context(|| format!("Crate not found: {}", other_crate))?;
-            other_crate_details.write_dependency_version(krate, &details.version)?;
-        }
-    }
-
-    let mut cmd = std::process::Command::new("cargo");
-    let mut cmd = cmd.current_dir(&opts.path).arg("update");
-    for krate in &published_crates {
-        cmd = cmd.arg("-p").arg(krate);
-    }
-    if !cmd.status()?.success() {
-        anyhow::bail!("Command failed: {cmd:?}");
-    };
+    // git_checkpoint_revert_all(&opts.path)?;
+    // for krate in &published_crates {
+    //     let details = crates.details.get(krate).unwrap();
+    //     for other_crate in &publish_order {
+    //         let other_crate_details = crates
+    //             .details
+    //             .get(other_crate)
+    //             .with_context(|| format!("Crate not found: {}", other_crate))?;
+    //         other_crate_details.write_dependency_version(krate, &details.version)?;
+    //     }
+    // }
+    //
+    // let mut cmd = std::process::Command::new("cargo");
+    // let mut cmd = cmd.current_dir(&opts.path).arg("update");
+    // for krate in &published_crates {
+    //     cmd = cmd.arg("-p").arg(krate);
+    // }
+    // if !cmd.status()?.success() {
+    //     anyhow::bail!("Command failed: {cmd:?}");
+    // };
 
     Ok(())
 }
