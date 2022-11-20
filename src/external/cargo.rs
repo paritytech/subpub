@@ -20,26 +20,28 @@ use std::process::Command;
 /// Update the lockfile for dependencies given and any of their subdependencies.
 pub fn publish_crate(root: &Path, package: &str) -> anyhow::Result<()> {
     let mut cmd = Command::new("cargo");
+
+    if let Ok(registry) = std::env::var("SUBPUB_REGISTRY") {
+        cmd.env("CARGO_REGISTRIES_{}_INDEX", registry.to_uppercase())
+            .arg("--registry")
+            .arg(registry)
+            .arg("--token")
+            .arg(std::env::var("SUBPUB_CARGO_TOKEN").unwrap());
+    }
+
     if !cmd
         .current_dir(&root)
-        .env(
-            "CARGO_REGISTRIES_LOCAL_INDEX",
-            std::env::var("CARGO_INDEX").unwrap(),
-        )
         .arg("publish")
         .arg("--locked")
         .arg("--allow-dirty")
         .arg("-vv")
         .arg("-p")
         .arg(package)
-        .arg("--registry")
-        .arg(std::env::var("CARGO_REGISTRY").unwrap())
-        .arg("--token")
-        .arg(std::env::var("CARGO_TOKEN").unwrap())
         .status()?
         .success()
     {
         anyhow::bail!("Failed to publish crate {package}");
     };
+
     Ok(())
 }
