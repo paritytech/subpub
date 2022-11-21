@@ -32,13 +32,6 @@ pub struct Crates {
     pub details: HashMap<String, CrateDetails>,
 }
 
-#[derive(Debug, Clone, Default)]
-struct Dependees {
-    deps: HashSet<String>,
-    build_deps: HashSet<String>,
-    dev_deps: HashSet<String>,
-}
-
 impl Crates {
     /// Return a map of all substrate crates, in the form `crate_name => ( path, details )`.
     pub fn load_crates_in_workspace(root: PathBuf) -> anyhow::Result<Crates> {
@@ -60,36 +53,6 @@ impl Crates {
                         "{crate_name} contains workspace dependency {dep} which cannot be found"
                     ));
                 }
-            }
-        }
-
-        // Build a reverse dependency map, since it's useful to know which crates
-        // depend on a given crate in our workspace.
-        let mut dependees: HashMap<String, Dependees> = details
-            .keys()
-            .map(|s| (s.clone(), Dependees::default()))
-            .collect();
-        for crate_details in details.values() {
-            for dep in &crate_details.deps {
-                dependees
-                    .entry(dep.clone())
-                    .or_default()
-                    .deps
-                    .insert(crate_details.name.clone());
-            }
-            for dep in &crate_details.build_deps {
-                dependees
-                    .entry(dep.clone())
-                    .or_default()
-                    .build_deps
-                    .insert(crate_details.name.clone());
-            }
-            for dep in &crate_details.dev_deps {
-                dependees
-                    .entry(dep.clone())
-                    .or_default()
-                    .dev_deps
-                    .insert(crate_details.name.clone());
             }
         }
 
