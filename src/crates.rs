@@ -83,20 +83,6 @@ impl Crates {
         Ok(())
     }
 
-    /// Does a crate need a version bump in order to publish?
-    pub fn maybe_bump_crate_version<P: AsRef<Path>>(
-        &mut self,
-        krate: &str,
-        root: P,
-        bumped_versions: &mut HashMap<String, bool>,
-    ) -> anyhow::Result<()> {
-        if let Some(details) = self.details.get_mut(krate) {
-            details.maybe_bump_version(root, bumped_versions)
-        } else {
-            anyhow::bail!("Crate not found: {krate}")
-        }
-    }
-
     /// return a list of the crates that will need publishing in order to ensure that the
     /// crates provided to this can be published in their current state.
     ///

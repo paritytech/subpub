@@ -132,6 +132,51 @@ impl CrateDetails {
         self.deps.iter()
     }
 
+    pub fn set_registry<S: AsRef<str>>(&self, registry: S) -> anyhow::Result<()> {
+        let registry = registry.as_ref();
+
+        let mut toml = self.read_toml()?;
+
+        fn do_set(
+            item: &mut toml_edit::Item,
+            dep_type: &str,
+            toml_path: &PathBuf,
+            registry: &str,
+        ) -> anyhow::Result<()> {
+            let table = match item.as_table_like_mut() {
+                Some(table) => table,
+                None => return Ok(()),
+            };
+
+            for (_, item) in table.iter_mut() {
+                if let Some(version) = item.as_str() {
+                    let mut table = toml_edit::table();
+                    table["version"] = toml_edit::value(version.to_string());
+                    table["registry"] = toml_edit::value(registry.to_string());
+                    *item = table;
+                } else {
+                    item["registry"] = toml_edit::value(registry.to_string());
+                }
+            }
+
+            Ok(())
+        }
+
+        edit_all_dependency_sections(&mut toml, "build-dependencies", |item| {
+            do_set(item, "build-dependency", &self.toml_path, &registry).unwrap()
+        });
+        edit_all_dependency_sections(&mut toml, "dev-dependencies", |item| {
+            do_set(item, "dev-dependency", &self.toml_path, &registry).unwrap()
+        });
+        edit_all_dependency_sections(&mut toml, "dependencies", |item| {
+            do_set(item, "dependency", &self.toml_path, &registry).unwrap()
+        });
+
+        self.write_toml(&toml)?;
+
+        Ok(())
+    }
+
     /// Set any references to the dependency provided to the version given.
     pub fn write_dependency_version(
         &self,
@@ -334,24 +379,19 @@ impl CrateDetails {
         Ok(false)
     }
 
-    /// Does this create need a version bump in order to be published?
-    pub fn maybe_bump_version<P: AsRef<Path>>(
-        &mut self,
-        _root: P,
-        bumped_versions: &mut HashMap<String, bool>,
-    ) -> anyhow::Result<()> {
-        if bumped_versions.get(&self.name).is_none() {
-            let versions = external::crates_io::crate_versions(&self.name)?;
-            let new_version = bump_for_breaking_change(versions, self.version.clone());
-            if let Some(new_version) = new_version {
-                info!("Bumping crate from {} to {}", self.version, new_version);
-                self.write_own_version(new_version)?;
-                for _dep in self.all_deps() {
-                    self.write_dependency_version(&self.name, &self.version)?;
-                }
+    pub fn maybe_bump_version(&mut self) -> anyhow::Result<()> {
+        let versions = external::crates_io::crate_versions(&self.name)?;
+        let new_version = bump_for_breaking_change(versions, self.version.clone());
+        if let Some(new_version) = new_version {
+            info!(
+                "Bumping crate {} from {} to {}",
+                self.name, self.version, new_version
+            );
+            self.write_own_version(new_version)?;
+            for _dep in self.all_deps() {
+                self.write_dependency_version(&self.name, &self.version)?;
             }
-            bumped_versions.insert((&self.name).into(), true);
-        };
+        }
         Ok(())
     }
 

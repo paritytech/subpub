@@ -57,12 +57,7 @@ pub fn crate_versions<Name: AsRef<str>>(name: Name) -> anyhow::Result<Vec<semver
     }
 
     if !res_status.is_success() {
-        // We get a 200 back even if we ask for crates/versions that don't exist,
-        // so a non-200 means something worse went wrong.
-        anyhow::bail!(
-            "Non-200 status trying to connect to {url} ({})",
-            res.status()
-        );
+        anyhow::bail!("Non-200 status from response of {url} ({})", res.status());
     }
 
     #[derive(serde::Deserialize)]

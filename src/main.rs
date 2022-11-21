@@ -117,7 +117,6 @@ fn check(_opts: CheckOpts) -> anyhow::Result<()> {
 }
 
 fn publish(opts: PublishOpts) -> anyhow::Result<()> {
-    let mut version_bumps = HashMap::new();
     let mut crates = Crates::load_crates_in_workspace(opts.path.clone())?;
 
     struct OrderedCrate {
@@ -398,10 +397,13 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 continue;
             }
 
-            let details = crates.details.get(&krate).unwrap();
+            let details = crates.details.get_mut(&krate).unwrap();
 
             if details.needs_publishing(&opts.path)? {
-                crates.maybe_bump_crate_version(&krate, &opts.path, &mut version_bumps)?;
+                details.maybe_bump_version()?;
+                if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
+                    details.set_registry(&registry);
+                }
                 crates.strip_dev_deps_and_publish(&krate)?;
             } else {
                 info!("Crate {krate} does not need to be published");
