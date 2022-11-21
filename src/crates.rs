@@ -148,7 +148,7 @@ impl Crates {
         &mut self,
         crates: Vec<String>,
         // Have to use &PathBuf instead of AsRef<Path> due to compiler recursion bug
-        root: &PathBuf,
+        _root: &PathBuf,
     ) -> anyhow::Result<Vec<String>> {
         struct Details {
             dependees: HashSet<String>,

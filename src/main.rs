@@ -96,7 +96,6 @@ fn check(_opts: CheckOpts) -> anyhow::Result<()> {
 }
 
 fn publish(opts: PublishOpts) -> anyhow::Result<()> {
-    let mut needs_publishing: HashMap<String, bool> = HashMap::new();
     let mut version_bumps = HashMap::new();
     let mut crates = Crates::load_crates_in_workspace(opts.path.clone())?;
 
@@ -295,11 +294,11 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         }
 
         for dep in &details.deps {
-            let visited_crates: Vec<&String> = visited_crates
+            let visited_crates = visited_crates
                 .iter()
                 .copied()
                 .chain(vec![krate].into_iter())
-                .collect();
+                .collect::<Vec<_>>();
             check_excluded_crates(
                 crates,
                 initial_crate,
@@ -370,38 +369,14 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         }
 
         for krate in crates_to_publish {
+            processed_crates.insert((&krate).into());
+
             let details = crates.details.get(&krate).unwrap();
 
-            let needs_publish = if let Some(needs_publish) = needs_publishing.get(&krate) {
-                *needs_publish
-            } else {
-                let needs_publish = details.needs_publishing(&opts.path)?;
-                needs_publishing.insert((&krate).into(), needs_publish);
-                needs_publish
-            };
-            if !needs_publish {
-                continue;
+            if details.needs_publishing(&opts.path)? {
+                crates.maybe_bump_crate_version(&krate, &opts.path, &mut version_bumps)?;
+                crates.strip_dev_deps_and_publish(&krate)?;
             }
-
-            crates.maybe_bump_crate_version(&krate, &opts.path, &mut version_bumps)?;
-
-            crates.strip_dev_deps_and_publish(&krate)?;
-            needs_publishing.insert((&krate).into(), false);
-
-            let published_crate_details = crates
-                .details
-                .get(&krate)
-                .with_context(|| format!("Crate not found: {krate}"))?;
-            for other_crate in &publish_order {
-                let other_crate_details = crates
-                    .details
-                    .get(other_crate)
-                    .with_context(|| format!("Crate not found: {}", other_crate))?;
-                other_crate_details
-                    .write_dependency_version(&krate, &published_crate_details.version)?;
-            }
-
-            processed_crates.insert(krate);
         }
     }
 
