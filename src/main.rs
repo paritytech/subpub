@@ -96,36 +96,36 @@ fn check(_opts: CheckOpts) -> anyhow::Result<()> {
 }
 
 fn publish(opts: PublishOpts) -> anyhow::Result<()> {
-    let mut needs_publishing = HashMap::new();
+    let mut needs_publishing: HashMap<String, bool> = HashMap::new();
     let mut version_bumps = HashMap::new();
     let mut crates = Crates::load_crates_in_workspace(opts.path.clone())?;
 
-    let mut publish_order: Vec<(usize, String)> = vec![];
+    struct OrderedCrate {
+        name: String,
+        rank: usize,
+    }
+    let mut publish_order: Vec<OrderedCrate> = vec![];
     loop {
         let mut progressed = false;
         for (krate, details) in &crates.details {
             if publish_order
                 .iter()
-                .any(|(_, ord_crate)| ord_crate == krate)
+                .any(|ord_crate| ord_crate.name == *krate)
             {
                 continue;
             }
-            // Does not include dev_dependencies because they are not relevant for publishing purposes
-            let mut deps: HashSet<&String> = HashSet::from_iter(details.deps.iter());
-            for dep in details.build_deps.iter() {
-                deps.insert(dep);
-            }
+            let deps: HashSet<&String> = HashSet::from_iter(details.deps_relevant_for_publishing());
             let ordered_deps = publish_order
                 .iter()
-                .filter(|(_, ord_crate)| deps.iter().any(|dep| *dep == ord_crate))
+                .filter(|ord_crate| deps.iter().any(|dep| **dep == ord_crate.name))
                 .collect::<Vec<_>>();
             if ordered_deps.len() == deps.len() {
-                publish_order.push((
-                    ordered_deps
-                        .iter()
-                        .fold(1, |acc, (rank, _)| acc.checked_add(*rank).unwrap()),
-                    krate.into(),
-                ));
+                publish_order.push(OrderedCrate {
+                    rank: ordered_deps.iter().fold(1usize, |acc, ord_crate| {
+                        acc.checked_add(ord_crate.rank).unwrap()
+                    }),
+                    name: krate.into(),
+                });
                 progressed = true;
             }
         }
@@ -134,15 +134,15 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         }
     }
     publish_order.sort_by(|a, b| {
-        if a.0 == b.0 {
-            a.1.cmp(&b.1)
-        } else {
-            a.0.cmp(&b.0)
+        use std::cmp::Ordering;
+        match a.rank.cmp(&b.rank) {
+            Ordering::Equal => a.name.cmp(&b.name),
+            other => other,
         }
     });
     let publish_order: Vec<String> = publish_order
         .into_iter()
-        .map(|(_, ord_crate)| ord_crate)
+        .map(|ord_crate| ord_crate.name)
         .collect();
     println!(
         "Defined the overall publish order: {}\n",
@@ -329,13 +329,13 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             .join(", ")
     );
 
-    let mut published_crates: HashSet<String> = HashSet::new();
+    let mut processed_crates: HashSet<String> = HashSet::new();
     for sel_crate in selected_crates_order {
-        if published_crates.get(sel_crate).is_some() {
-            println!("[{sel_crate}] Crate has already been published");
+        if processed_crates.get(sel_crate).is_some() {
             continue;
         }
-        published_crates.insert(sel_crate.into());
+        processed_crates.insert(sel_crate.into());
+
         println!("[{sel_crate}] Processing crate");
 
         let details = crates.details.get(sel_crate).unwrap();
@@ -351,11 +351,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             details.write_dependency_version(krate, &crate_details.version)?;
         }
 
-        let crates_to_publish = crates.what_needs_publishing(
-            vec![sel_crate.into()],
-            &opts.path,
-            &mut needs_publishing,
-        )?;
+        let crates_to_publish = crates.what_needs_publishing(vec![sel_crate.into()], &opts.path)?;
 
         if crates_to_publish.is_empty() {
             println!("[{sel_crate}] Crate does not need to be published");
@@ -364,7 +360,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             println!("[{sel_crate}] Publishing crate {}", crates_to_publish[0])
         } else {
             println!(
-              "[{sel_crate}] Crates will be published in the following order for publishing {sel_crate}: {}",
+              "[{sel_crate}] Crates will be checked in the following order for publishing {sel_crate}: {}",
               crates_to_publish
                   .iter()
                   .map(|krate| krate.into())
@@ -374,6 +370,19 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         }
 
         for krate in crates_to_publish {
+            let details = crates.details.get(&krate).unwrap();
+
+            let needs_publish = if let Some(needs_publish) = needs_publishing.get(&krate) {
+                *needs_publish
+            } else {
+                let needs_publish = details.needs_publishing(&opts.path)?;
+                needs_publishing.insert((&krate).into(), needs_publish);
+                needs_publish
+            };
+            if !needs_publish {
+                continue;
+            }
+
             crates.maybe_bump_crate_version(&krate, &opts.path, &mut version_bumps)?;
 
             crates.strip_dev_deps_and_publish(&krate)?;
@@ -392,7 +401,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                     .write_dependency_version(&krate, &published_crate_details.version)?;
             }
 
-            published_crates.insert(krate);
+            processed_crates.insert(krate);
         }
     }
 

@@ -118,6 +118,8 @@ impl Crates {
             std::thread::sleep(std::time::Duration::from_millis(2500))
         }
 
+        // Wait for the crate to be uploaded to the index after it is registered
+        // on crates.io's database
         std::thread::sleep(std::time::Duration::from_millis(2500));
 
         Ok(())
@@ -147,11 +149,9 @@ impl Crates {
         crates: Vec<String>,
         // Have to use &PathBuf instead of AsRef<Path> due to compiler recursion bug
         root: &PathBuf,
-        needs_publishing: &mut HashMap<String, bool>,
     ) -> anyhow::Result<Vec<String>> {
-        struct Details<'a> {
+        struct Details {
             dependees: HashSet<String>,
-            details: &'a CrateDetails,
             depth: usize,
             needs_publishing: bool,
         }
@@ -163,7 +163,7 @@ impl Crates {
 
         fn note_crates<'a>(
             all: &'a Crates,
-            tree: &mut HashMap<String, Details<'a>>,
+            tree: &mut HashMap<String, Details>,
             crates: impl IntoIterator<Item = String>,
             depth: usize,
         ) {
@@ -176,7 +176,6 @@ impl Crates {
 
                 let entry = tree.entry(name).or_insert_with(|| Details {
                     dependees: HashSet::new(),
-                    details,
                     depth,
                     needs_publishing: false,
                 });
@@ -196,7 +195,7 @@ impl Crates {
         // build deps but ignore dev deps, since those are irrelevant for publishing.
         // We need to wait until we have our entire sub-tree to do this, built above.
 
-        fn populate_dependees<'a>(all: &'a Crates, tree: &mut HashMap<String, Details<'a>>) {
+        fn populate_dependees<'a>(all: &'a Crates, tree: &mut HashMap<String, Details>) {
             let crates_in_sub_tree: HashSet<String> = tree.keys().cloned().collect();
             for (name, details) in tree.iter_mut() {
                 let dependees = all.dependees.get(name).expect("should exist");
@@ -218,25 +217,13 @@ impl Crates {
         fn set_needs_publishing(
             tree: &mut HashMap<String, Details>,
             name: &str,
-            root: &PathBuf,
-            needs_publishing: &mut HashMap<String, bool>,
         ) -> anyhow::Result<()> {
             let entry = tree.get_mut(name).expect("should exist");
 
-            if entry.details.should_be_published {
-                let needs_publish = if let Some(needs_publish) = needs_publishing.get(name) {
-                    *needs_publish
-                } else {
-                    let needs_publish = entry.details.needs_publishing(root)?;
-                    needs_publishing.insert(name.into(), needs_publish);
-                    needs_publish
-                };
-
-                if needs_publish && entry.details.should_be_published {
-                    entry.needs_publishing = true;
-                    for dep in entry.dependees.clone().iter() {
-                        set_needs_publishing(tree, dep, root, needs_publishing)?;
-                    }
+            if !entry.needs_publishing {
+                entry.needs_publishing = true;
+                for dep in entry.dependees.clone().iter() {
+                    set_needs_publishing(tree, dep)?;
                 }
             }
 
@@ -257,7 +244,7 @@ impl Crates {
                 continue;
             }
 
-            set_needs_publishing(&mut tree, name, root, needs_publishing)?;
+            set_needs_publishing(&mut tree, name)?;
         }
 
         // Step 4: Return a filtered list of crates we need to bump versions/publish
