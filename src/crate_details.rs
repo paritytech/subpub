@@ -288,7 +288,7 @@ impl CrateDetails {
             tmp_dir.path().to_path_buf()
         };
 
-        println!("[{}] Generating .crate file", self.name);
+        log::info!("[{}] Generating .crate file", self.name);
         let mut cmd = Command::new("cargo");
         if !cmd
             .current_dir(crate_dir)
@@ -307,7 +307,7 @@ impl CrateDetails {
             .join(format!("{name}-{}.crate", self.version));
         let pkg_bytes = std::fs::read(&pkg_path)?;
 
-        println!(
+        log::info!(
             "[{}] Checking generated .crate file against crates.io",
             self.name
         );
@@ -340,7 +340,7 @@ impl CrateDetails {
             let versions = external::crates_io::crate_versions(&self.name)?;
             let new_version = bump_for_breaking_change(versions, self.version.clone());
             if let Some(new_version) = new_version {
-                println!("Bumping crate from {} to {}", self.version, new_version);
+                log::info!("Bumping crate from {} to {}", self.version, new_version);
                 self.write_own_version(new_version)?;
                 for _dep in self.all_deps() {
                     self.write_dependency_version(&self.name, &self.version)?;
