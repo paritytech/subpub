@@ -84,6 +84,11 @@ struct PublishOpts {
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::registry()
         .with(
+            tracing_subscriber::EnvFilter::builder()
+                .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
+                .from_env_lossy(),
+        )
+        .with(
             tracing_subscriber::fmt::layer()
                 .without_time()
                 .with_writer(std::io::stdout)

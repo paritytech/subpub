@@ -275,7 +275,7 @@ impl CrateDetails {
     pub fn needs_publishing_inner<P: AsRef<Path>>(&self, root: P) -> anyhow::Result<bool> {
         let name = &self.name;
 
-        let span = span!(Level::INFO, "comparison", crate = self.name);
+        let span = span!(Level::INFO, "__", crate = self.name);
         let _enter = span.enter();
 
         info!(
