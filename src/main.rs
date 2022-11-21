@@ -353,7 +353,6 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             info!("Crate was already processed",);
             continue;
         }
-        processed_crates.insert(sel_crate.into());
 
         info!("Processing crate");
 
@@ -400,11 +399,13 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 crates.maybe_bump_crate_version(&krate, &opts.path, &mut version_bumps)?;
                 crates.strip_dev_deps_and_publish(&krate)?;
             } else {
-                info!("[{sel_crate}] Crate {krate} does not need to be published");
+                info!("Crate {krate} does not need to be published");
             }
 
             processed_crates.insert(krate);
         }
+
+        processed_crates.insert(sel_crate.into());
     }
 
     // git_checkpoint_revert_all(&opts.path)?;

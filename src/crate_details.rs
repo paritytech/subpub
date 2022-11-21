@@ -22,7 +22,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use tracing::{debug, info};
+use tracing::{info, span, Level};
 
 #[derive(Debug, Clone)]
 pub struct CrateDetails {
@@ -275,6 +275,14 @@ impl CrateDetails {
     pub fn needs_publishing_inner<P: AsRef<Path>>(&self, root: P) -> anyhow::Result<bool> {
         let name = &self.name;
 
+        let span = span!(Level::INFO, "comparison", crate = self.name);
+        let _enter = span.enter();
+
+        info!(
+            "Comparing crate {} against crates.io to see if it needs to be published",
+            self.name
+        );
+
         self.strip_dev_deps(&root)?;
 
         let crate_dir = self
@@ -318,11 +326,11 @@ impl CrateDetails {
         };
 
         if crates_io_bytes != pkg_bytes {
-            debug!("[{name}] the file at {pkg_path:?} is different from the published version");
+            info!("The file at {pkg_path:?} is different from the published version");
             return Ok(true);
         }
 
-        debug!("[{name}] this crate is identical to the version from crates.io");
+        info!("This crate is identical to the version from crates.io");
         Ok(false)
     }
 
