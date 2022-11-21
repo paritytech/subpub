@@ -227,7 +227,7 @@ impl CrateDetails {
                     } else {
                         item.as_table_like_mut().with_context(|| {
                             format!(
-                                "{dep_type} {key} should be a string or table-like in {:?}",
+                                "{dep_type} 's key {key} should be a string or table-like in {:?}",
                                 toml_path
                             )
                         })?
