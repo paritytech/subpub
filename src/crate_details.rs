@@ -22,6 +22,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use tracing::{debug, info};
 
 #[derive(Debug, Clone)]
 pub struct CrateDetails {
@@ -288,7 +289,7 @@ impl CrateDetails {
             tmp_dir.path().to_path_buf()
         };
 
-        log::info!("[{}] Generating .crate file", self.name);
+        info!("[{}] Generating .crate file", self.name);
         let mut cmd = Command::new("cargo");
         if !cmd
             .current_dir(crate_dir)
@@ -307,7 +308,7 @@ impl CrateDetails {
             .join(format!("{name}-{}.crate", self.version));
         let pkg_bytes = std::fs::read(&pkg_path)?;
 
-        log::info!(
+        info!(
             "[{}] Checking generated .crate file against crates.io",
             self.name
         );
@@ -320,13 +321,11 @@ impl CrateDetails {
         };
 
         if crates_io_bytes != pkg_bytes {
-            log::debug!(
-                "[{name}] the file at {pkg_path:?} is different from the published version"
-            );
+            debug!("[{name}] the file at {pkg_path:?} is different from the published version");
             return Ok(true);
         }
 
-        log::debug!("[{name}] this crate is identical to the version from crates.io");
+        debug!("[{name}] this crate is identical to the version from crates.io");
         Ok(false)
     }
 
@@ -340,7 +339,7 @@ impl CrateDetails {
             let versions = external::crates_io::crate_versions(&self.name)?;
             let new_version = bump_for_breaking_change(versions, self.version.clone());
             if let Some(new_version) = new_version {
-                log::info!("Bumping crate from {} to {}", self.version, new_version);
+                info!("Bumping crate from {} to {}", self.version, new_version);
                 self.write_own_version(new_version)?;
                 for _dep in self.all_deps() {
                     self.write_dependency_version(&self.name, &self.version)?;

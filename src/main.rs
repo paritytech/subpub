@@ -26,6 +26,8 @@ use crates::Crates;
 use git::git_checkpoint_revert_all;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use tracing_log::env_logger;
+use tracing::info;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -143,7 +145,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         .into_iter()
         .map(|ord_crate| ord_crate.name)
         .collect();
-    log::info!(
+    info!(
         "Defined the overall publish order: {}\n",
         publish_order
             .iter()
@@ -319,7 +321,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         check_excluded_crates(&crates, krate, None, krate, &opts.exclude, &[])?;
     }
 
-    log::info!(
+    info!(
         "Processing crates in this order: {}\n",
         selected_crates_order
             .iter()
@@ -331,12 +333,12 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     let mut processed_crates: HashSet<String> = HashSet::new();
     for sel_crate in selected_crates_order {
         if processed_crates.get(sel_crate).is_some() {
-            log::info!("[{sel_crate}] Crate was already processed",);
+            info!("[{sel_crate}] Crate was already processed",);
             continue;
         }
         processed_crates.insert(sel_crate.into());
 
-        log::info!("[{sel_crate}] Processing crate");
+        info!("[{sel_crate}] Processing crate");
 
         let details = crates.details.get(sel_crate).unwrap();
 
@@ -354,12 +356,12 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         let crates_to_publish = crates.what_needs_publishing(sel_crate, &publish_order)?;
 
         if crates_to_publish.is_empty() {
-            log::info!("[{sel_crate}] Crate does not need to be published");
+            info!("[{sel_crate}] Crate does not need to be published");
             continue;
         } else if crates_to_publish.len() == 1 {
-            log::info!("[{sel_crate}] Publishing crate {}", crates_to_publish[0])
+            info!("[{sel_crate}] Publishing crate {}", crates_to_publish[0])
         } else {
-            log::info!(
+            info!(
               "[{sel_crate}] Crates will be processed in the following order for publishing {sel_crate}: {}",
               crates_to_publish
                   .iter()
@@ -371,7 +373,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
         for krate in crates_to_publish {
             if processed_crates.get(sel_crate).is_some() {
-                log::info!("[{sel_crate}] Crate {krate} was already processed",);
+                info!("[{sel_crate}] Crate {krate} was already processed",);
                 continue;
             }
 
@@ -381,7 +383,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 crates.maybe_bump_crate_version(&krate, &opts.path, &mut version_bumps)?;
                 crates.strip_dev_deps_and_publish(&krate)?;
             } else {
-                log::info!("[{sel_crate}] Crate {krate} does not need to be published");
+                info!("[{sel_crate}] Crate {krate} does not need to be published");
             }
 
             processed_crates.insert(krate);
