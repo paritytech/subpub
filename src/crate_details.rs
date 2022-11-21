@@ -330,7 +330,7 @@ impl CrateDetails {
             return Ok(true);
         }
 
-        info!("This crate is identical to the version from crates.io");
+        info!("The crate is identical to the version from crates.io");
         Ok(false)
     }
 
