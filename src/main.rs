@@ -28,9 +28,7 @@ use git::git_checkpoint_revert_all;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use tracing::{info, span, Level};
-use tracing_log::LogTracer;
 use tracing_subscriber::prelude::*;
-use tracing_subscriber::EnvFilter;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
