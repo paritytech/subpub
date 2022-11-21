@@ -123,8 +123,12 @@ impl CrateDetails {
             .chain(self.build_deps.iter())
     }
 
-    pub fn deps_relevant_for_publishing(&self) -> impl Iterator<Item = &String> {
+    pub fn deps_relevant_during_publish(&self) -> impl Iterator<Item = &String> {
         self.deps.iter().chain(self.build_deps.iter())
+    }
+
+    pub fn deps_to_publish(&self) -> impl Iterator<Item = &String> {
+        self.deps.iter()
     }
 
     /// Set any references to the dependency provided to the version given.

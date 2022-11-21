@@ -17,6 +17,7 @@
 use crate::crate_details::CrateDetails;
 use crate::external;
 use crate::git::*;
+use anyhow::Context;
 
 use anyhow::anyhow;
 use std::collections::{HashMap, HashSet};
@@ -29,8 +30,6 @@ pub struct Crates {
     root: PathBuf,
     // Details for a given crate, including dependencies.
     pub details: HashMap<String, CrateDetails>,
-    // Which crates depend on a given crate.
-    dependees: HashMap<String, Dependees>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -94,11 +93,7 @@ impl Crates {
             }
         }
 
-        Ok(Crates {
-            root,
-            details,
-            dependees,
-        })
+        Ok(Crates { root, details })
     }
 
     /// Remove any dev-dependency sections in the TOML file and publish.
@@ -144,120 +139,43 @@ impl Crates {
     ///
     /// **Note:** it may be that one or more of the crate names provided are already
     /// published in their current state, in which case they won't be returned in the result.
-    pub fn what_needs_publishing(
+    pub fn what_needs_publishing<K: AsRef<str>>(
         &mut self,
-        crates: Vec<String>,
-        // Have to use &PathBuf instead of AsRef<Path> due to compiler recursion bug
-        _root: &PathBuf,
+        krate: K,
+        publish_order: &[String],
     ) -> anyhow::Result<Vec<String>> {
-        struct Details {
-            dependees: HashSet<String>,
-            depth: usize,
-            needs_publishing: bool,
-        }
-        let mut tree: HashMap<String, Details> = HashMap::new();
-
-        // Step 1: make a note of the crates we care about based on the names
-        // provided, which are the ones we ultimately want to be published
-        // in their current state.
-
-        fn note_crates<'a>(
-            all: &'a Crates,
-            tree: &mut HashMap<String, Details>,
-            crates: impl IntoIterator<Item = String>,
-            depth: usize,
-        ) {
-            for name in crates {
-                let details = match all.details.get(&name) {
-                    Some(details) => details,
-                    // Crate doesn't exist; ignore it.
-                    None => continue,
-                };
-
-                let entry = tree.entry(name).or_insert_with(|| Details {
-                    dependees: HashSet::new(),
-                    depth,
-                    needs_publishing: false,
-                });
-
-                // We care about the deepest depth we find, so update as needed.
-                if entry.depth < depth {
-                    entry.depth = depth
-                }
-                // Recurse and add all dependencies to our tree, too. We need to check whether
-                // any of those need publishing as well.
-                note_crates(all, tree, details.deps.iter().cloned(), depth + 1);
-            }
-        }
-        note_crates(self, &mut tree, crates, 0);
-
-        // Step 2: populate the dependees for each crate. We pay attention to deps and
-        // build deps but ignore dev deps, since those are irrelevant for publishing.
-        // We need to wait until we have our entire sub-tree to do this, built above.
-
-        fn populate_dependees<'a>(all: &'a Crates, tree: &mut HashMap<String, Details>) {
-            let crates_in_sub_tree: HashSet<String> = tree.keys().cloned().collect();
-            for (name, details) in tree.iter_mut() {
-                let dependees = all.dependees.get(name).expect("should exist");
-
-                details.dependees = dependees
-                    .build_deps
-                    .union(&dependees.deps)
-                    .cloned()
-                    .filter(|d| crates_in_sub_tree.contains(d))
-                    .collect();
-            }
-        }
-        populate_dependees(self, &mut tree);
-
-        // Step 3: work out which of the crates in this graph need publishing. We work
-        // from the deepest dependencies up, and for each dependency we find that needs
-        // publishing, we mark all crates that depend on it as also needing publishing.
-
-        fn set_needs_publishing(
-            tree: &mut HashMap<String, Details>,
-            name: &str,
+        let mut registered_crates: HashSet<&str> = HashSet::new();
+        fn register_crates<'a>(
+            crates: &'a Crates,
+            registered_crates: &mut HashSet<&'a str>,
+            krate: &'a str,
         ) -> anyhow::Result<()> {
-            let entry = tree.get_mut(name).expect("should exist");
+            if registered_crates.get(krate).is_none() {
+                registered_crates.insert(krate);
 
-            if !entry.needs_publishing {
-                entry.needs_publishing = true;
-                for dep in entry.dependees.clone().iter() {
-                    set_needs_publishing(tree, dep)?;
+                let details = crates
+                    .details
+                    .get(krate)
+                    .with_context(|| format!("Crate does not exist: {krate}"))?;
+
+                for dep in details.deps_to_publish() {
+                    register_crates(crates, registered_crates, dep)?;
                 }
             }
-
             Ok(())
         }
+        register_crates(self, &mut registered_crates, krate.as_ref())?;
 
-        let mut deepest_first: Vec<(String, usize)> = tree
+        Ok(publish_order
             .iter()
-            .map(|(name, details)| (name.clone(), details.depth))
-            .collect();
-        deepest_first.sort_by_key(|(_, depth)| std::cmp::Reverse(*depth));
-
-        for (name, _) in deepest_first.iter() {
-            let details = tree.get_mut(name).expect("should exist");
-
-            // Ignore things that we already know need publishing
-            if details.needs_publishing {
-                continue;
-            }
-
-            set_needs_publishing(&mut tree, name)?;
-        }
-
-        // Step 4: Return a filtered list of crates we need to bump versions/publish
-        // in order to publish the crates originally provided. Return the list im the
-        // order that you'd need to publish them.
-
-        let crates_that_need_publishing = deepest_first
-            .into_iter()
-            .map(|(name, _depth)| name)
-            .filter(|name| tree.get(name).unwrap().needs_publishing)
-            .collect();
-
-        Ok(crates_that_need_publishing)
+            .filter_map(|krate| {
+                if registered_crates.iter().any(|reg_crate| reg_crate == krate) {
+                    Some(krate.into())
+                } else {
+                    None
+                }
+            })
+            .collect())
     }
 }
 

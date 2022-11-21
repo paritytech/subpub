@@ -113,7 +113,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             {
                 continue;
             }
-            let deps: HashSet<&String> = HashSet::from_iter(details.deps_relevant_for_publishing());
+            let deps: HashSet<&String> = HashSet::from_iter(details.deps_relevant_during_publish());
             let ordered_deps = publish_order
                 .iter()
                 .filter(|ord_crate| deps.iter().any(|dep| **dep == ord_crate.name))
@@ -350,7 +350,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             details.write_dependency_version(krate, &crate_details.version)?;
         }
 
-        let crates_to_publish = crates.what_needs_publishing(vec![sel_crate.into()], &opts.path)?;
+        let crates_to_publish = crates.what_needs_publishing(sel_crate, &publish_order)?;
 
         if crates_to_publish.is_empty() {
             println!("[{sel_crate}] Crate does not need to be published");
@@ -359,10 +359,10 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             println!("[{sel_crate}] Publishing crate {}", crates_to_publish[0])
         } else {
             println!(
-              "[{sel_crate}] Crates will be checked in the following order for publishing {sel_crate}: {}",
+              "[{sel_crate}] Crates will be processed in the following order for publishing {sel_crate}: {}",
               crates_to_publish
                   .iter()
-                  .map(|krate| krate.into())
+                  .map(|krate| (krate).into())
                   .collect::<Vec<String>>()
                   .join(", ")
           );
