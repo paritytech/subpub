@@ -18,7 +18,6 @@ mod crate_details;
 mod crates;
 mod external;
 mod git;
-mod logging;
 mod version;
 
 use anyhow::Context;
@@ -84,13 +83,19 @@ struct PublishOpts {
 
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer().with_writer(std::io::stdout))
         .with(
             tracing_subscriber::fmt::layer()
+                .without_time()
+                .with_writer(std::io::stdout)
+                .with_target(false),
+        )
+        .with(
+            tracing_subscriber::fmt::layer()
+                .without_time()
                 .with_writer(std::io::stderr)
+                .with_target(false)
                 .with_filter(tracing_subscriber::filter::LevelFilter::ERROR),
         )
-        .with(logging::CustomLayer)
         .init();
 
     let args = Args::parse();
@@ -341,16 +346,16 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
     let mut processed_crates: HashSet<String> = HashSet::new();
     for sel_crate in selected_crates_order {
-        let span = span!(Level::INFO, "order", crate = sel_crate);
-        let _ = span.enter();
+        let span = span!(Level::INFO, "_", crate = sel_crate);
+        let _enter = span.enter();
 
         if processed_crates.get(sel_crate).is_some() {
-            info!("[{sel_crate}] Crate was already processed",);
+            info!("Crate was already processed",);
             continue;
         }
         processed_crates.insert(sel_crate.into());
 
-        info!("[{sel_crate}] Processing crate");
+        info!("Processing crate");
 
         let details = crates.details.get(sel_crate).unwrap();
 
@@ -368,24 +373,24 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         let crates_to_publish = crates.what_needs_publishing(sel_crate, &publish_order)?;
 
         if crates_to_publish.is_empty() {
-            info!("[{sel_crate}] Crate does not need to be published");
+            info!("Crate does not need to be published");
             continue;
         } else if crates_to_publish.len() == 1 {
-            info!("[{sel_crate}] Publishing crate {}", crates_to_publish[0])
+            info!("Publishing crate {}", crates_to_publish[0])
         } else {
             info!(
-              "[{sel_crate}] Crates will be processed in the following order for publishing {sel_crate}: {}",
-              crates_to_publish
-                  .iter()
-                  .map(|krate| (krate).into())
-                  .collect::<Vec<String>>()
-                  .join(", ")
-          );
+                "Crates will be processed in the following order: {}",
+                crates_to_publish
+                    .iter()
+                    .map(|krate| (krate).into())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            );
         }
 
         for krate in crates_to_publish {
             if processed_crates.get(sel_crate).is_some() {
-                info!("[{sel_crate}] Crate {krate} was already processed",);
+                info!("Crate {krate} was already processed",);
                 continue;
             }
 
