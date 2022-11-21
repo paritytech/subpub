@@ -374,7 +374,6 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 log::info!("[{sel_crate}] Crate {krate} was already processed",);
                 continue;
             }
-            processed_crates.insert((&krate).into());
 
             let details = crates.details.get(&krate).unwrap();
 
@@ -384,6 +383,8 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             } else {
                 log::info!("[{sel_crate}] Crate {krate} does not need to be published");
             }
+
+            processed_crates.insert(krate);
         }
     }
 
