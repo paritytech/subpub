@@ -331,6 +331,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     let mut processed_crates: HashSet<String> = HashSet::new();
     for sel_crate in selected_crates_order {
         if processed_crates.get(sel_crate).is_some() {
+            println!("[{sel_crate}] Crate was already processed",);
             continue;
         }
         processed_crates.insert(sel_crate.into());
@@ -369,6 +370,10 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         }
 
         for krate in crates_to_publish {
+            if processed_crates.get(sel_crate).is_some() {
+                println!("[{sel_crate}] Crate {krate} was already processed",);
+                continue;
+            }
             processed_crates.insert((&krate).into());
 
             let details = crates.details.get(&krate).unwrap();
