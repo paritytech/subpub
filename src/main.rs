@@ -165,7 +165,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         .map(|ord_crate| ord_crate.name)
         .collect();
     info!(
-        "Defined the overall publish order: {}\n",
+        "Defined the overall publish order: {}",
         publish_order
             .iter()
             .map(|krate| krate.to_owned())
@@ -341,7 +341,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     }
 
     info!(
-        "Processing crates in this order: {}\n",
+        "Processing crates in this order: {}",
         selected_crates_order
             .iter()
             .map(|krate| (*krate).into())
