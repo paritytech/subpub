@@ -18,6 +18,7 @@ mod crate_details;
 mod crates;
 mod external;
 mod git;
+mod logging;
 mod version;
 
 use anyhow::Context;
@@ -26,8 +27,10 @@ use crates::Crates;
 use git::git_checkpoint_revert_all;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use tracing_log::env_logger;
-use tracing::info;
+use tracing::{info, span, Level};
+use tracing_log::LogTracer;
+use tracing_subscriber::prelude::*;
+use tracing_subscriber::EnvFilter;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -82,7 +85,15 @@ struct PublishOpts {
 }
 
 fn main() -> anyhow::Result<()> {
-    env_logger::init();
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer().with_writer(std::io::stdout))
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_writer(std::io::stderr)
+                .with_filter(tracing_subscriber::filter::LevelFilter::ERROR),
+        )
+        .with(logging::CustomLayer)
+        .init();
 
     let args = Args::parse();
 
@@ -332,6 +343,9 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
     let mut processed_crates: HashSet<String> = HashSet::new();
     for sel_crate in selected_crates_order {
+        let span = span!(Level::INFO, "order", crate = sel_crate);
+        let _ = span.enter();
+
         if processed_crates.get(sel_crate).is_some() {
             info!("[{sel_crate}] Crate was already processed",);
             continue;
