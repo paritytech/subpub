@@ -376,6 +376,8 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             if details.needs_publishing(&opts.path)? {
                 crates.maybe_bump_crate_version(&krate, &opts.path, &mut version_bumps)?;
                 crates.strip_dev_deps_and_publish(&krate)?;
+            } else {
+                println!("[{sel_crate}] Crate {krate} does not need to be published");
             }
         }
     }
