@@ -18,7 +18,7 @@ use crate::version::bump_for_breaking_change;
 use crate::{external, git::*};
 use anyhow::{anyhow, Context};
 use semver::Version;
-use std::collections::HashMap;
+
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -36,6 +36,8 @@ pub struct CrateDetails {
     // Modifying the files on disk can only be done through the interface below.
     pub toml_path: PathBuf,
 }
+
+const DEPENDENCIES_KEYS: [&str; 3] = ["build-dependencies", "dependencies", "dev-dependencies"];
 
 impl CrateDetails {
     /// Read a Cargo.toml file, pulling out the information we care about.
@@ -67,14 +69,25 @@ impl CrateDetails {
         let mut dev_deps = HashSet::new();
         let mut deps = HashSet::new();
 
-        for item in get_all_dependency_sections(&val, "build-dependencies") {
-            build_deps.extend(filter_workspace_dependencies(item)?);
-        }
-        for item in get_all_dependency_sections(&val, "dev-dependencies") {
-            dev_deps.extend(filter_workspace_dependencies(item)?);
-        }
-        for item in get_all_dependency_sections(&val, "dependencies") {
-            deps.extend(filter_workspace_dependencies(item)?);
+        for key in DEPENDENCIES_KEYS {
+            match key {
+                "build-dependencies" => {
+                    for item in get_all_dependency_sections(&val, key) {
+                        build_deps.extend(filter_workspace_dependencies(item)?)
+                    }
+                }
+                "dependencies" => {
+                    for item in get_all_dependency_sections(&val, key) {
+                        deps.extend(filter_workspace_dependencies(item)?)
+                    }
+                }
+                "dev-dependencies" => {
+                    for item in get_all_dependency_sections(&val, key) {
+                        dev_deps.extend(filter_workspace_dependencies(item)?)
+                    }
+                }
+                _ => anyhow::bail!("Dependency key is not handled: {}", key),
+            }
         }
 
         let published = val
@@ -137,12 +150,7 @@ impl CrateDetails {
 
         let mut toml = self.read_toml()?;
 
-        fn do_set(
-            item: &mut toml_edit::Item,
-            dep_type: &str,
-            toml_path: &PathBuf,
-            registry: &str,
-        ) -> anyhow::Result<()> {
+        fn do_set(item: &mut toml_edit::Item, registry: &str) -> anyhow::Result<()> {
             let table = match item.as_table_like_mut() {
                 Some(table) => table,
                 None => return Ok(()),
@@ -162,15 +170,9 @@ impl CrateDetails {
             Ok(())
         }
 
-        edit_all_dependency_sections(&mut toml, "build-dependencies", |item| {
-            do_set(item, "build-dependency", &self.toml_path, &registry).unwrap()
-        });
-        edit_all_dependency_sections(&mut toml, "dev-dependencies", |item| {
-            do_set(item, "dev-dependency", &self.toml_path, &registry).unwrap()
-        });
-        edit_all_dependency_sections(&mut toml, "dependencies", |item| {
-            do_set(item, "dependency", &self.toml_path, &registry).unwrap()
-        });
+        for key in DEPENDENCIES_KEYS {
+            edit_all_dependency_sections(&mut toml, key, |item| do_set(item, registry).unwrap());
+        }
 
         self.write_toml(&toml)?;
 
@@ -246,22 +248,11 @@ impl CrateDetails {
             Ok(())
         }
 
-        edit_all_dependency_sections(&mut toml, "build-dependencies", |item| {
-            do_set(
-                item,
-                version,
-                dependency,
-                "build-dependency",
-                &self.toml_path,
-            )
-            .unwrap()
-        });
-        edit_all_dependency_sections(&mut toml, "dev-dependencies", |item| {
-            do_set(item, version, dependency, "dev-dependency", &self.toml_path).unwrap()
-        });
-        edit_all_dependency_sections(&mut toml, "dependencies", |item| {
-            do_set(item, version, dependency, "dependency", &self.toml_path).unwrap()
-        });
+        for key in DEPENDENCIES_KEYS {
+            edit_all_dependency_sections(&mut toml, key, |item| {
+                do_set(item, version, dependency, key, &self.toml_path).unwrap()
+            });
+        }
 
         self.write_toml(&toml)?;
 

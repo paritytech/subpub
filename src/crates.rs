@@ -21,7 +21,7 @@ use anyhow::Context;
 
 use anyhow::anyhow;
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+
 use std::path::PathBuf;
 use walkdir::WalkDir;
 

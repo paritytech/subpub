@@ -24,7 +24,7 @@ use anyhow::Context;
 use clap::{Parser, Subcommand};
 use crates::Crates;
 use git::git_checkpoint_revert_all;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashSet};
 use std::path::PathBuf;
 use tracing::{info, span, Level};
 use tracing_subscriber::prelude::*;
@@ -402,7 +402,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             if details.needs_publishing(&opts.path)? {
                 details.maybe_bump_version()?;
                 if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
-                    details.set_registry(&registry);
+                    details.set_registry(&registry)?;
                 }
                 crates.strip_dev_deps_and_publish(&krate)?;
             } else {
