@@ -90,7 +90,7 @@ impl CrateDetails {
             }
         }
 
-        let published = val
+        let should_be_published = val
             .get("package")
             .ok_or_else(|| anyhow!("Cannot read [package] section from toml file."))?
             .get("publish")
@@ -104,7 +104,7 @@ impl CrateDetails {
             dev_deps,
             build_deps,
             toml_path: path,
-            should_be_published: published,
+            should_be_published,
         })
     }
 
@@ -184,12 +184,11 @@ impl CrateDetails {
         &self,
         dependency: &str,
         version: &Version,
-    ) -> anyhow::Result<bool> {
-        if !self.all_deps().any(|dep| dep == dependency) {
-            return Ok(true);
+    ) -> anyhow::Result<()> {
+        if self.all_deps().any(|dep| dep == dependency) {
+            write_dependency_version(&self.toml_path, dependency, version)?;
         }
-
-        write_dependency_version(&self.toml_path, dependency, version)
+        Ok(())
     }
 
     /// Strip dev dependencies.

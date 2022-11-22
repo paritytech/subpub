@@ -341,6 +341,12 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             .join(", ")
     );
 
+    if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
+        for (_, details) in crates.details.iter() {
+            details.set_registry(&registry)?
+        }
+    }
+
     struct DepsAndCargoToml {
         pub deps: HashSet<String>,
         pub cargo_toml: PathBuf,
@@ -412,9 +418,6 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                             write_dependency_version(&dact.cargo_toml, &krate, &details.version)?;
                         }
                     }
-                }
-                if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
-                    details.set_registry(&registry)?;
                 }
                 crates.strip_dev_deps_and_publish(&krate)?;
             } else {

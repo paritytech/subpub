@@ -202,7 +202,7 @@ pub fn write_dependency_version<P: AsRef<Path>>(
     toml_path: P,
     dependency: &str,
     version: &semver::Version,
-) -> anyhow::Result<bool> {
+) -> anyhow::Result<()> {
     let mut toml = toml_read(&toml_path)?;
 
     fn do_set<P: AsRef<Path>>(
@@ -270,5 +270,5 @@ pub fn write_dependency_version<P: AsRef<Path>>(
 
     toml_write(toml_path, &toml)?;
 
-    Ok(true)
+    Ok(())
 }
