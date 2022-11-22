@@ -234,13 +234,25 @@ impl CrateDetails {
     /// This checks whether we actually need to publish a new version of the crate. It'll return `false`
     /// only if, as far as we can see, the current version is published to crates.io, and there have been
     /// no changes to it since.
-    pub fn needs_publishing<P: AsRef<Path>>(&self, root: P) -> anyhow::Result<bool> {
-        let result = self.needs_publishing_inner(&root);
-        git_checkpoint_revert(&root)?;
-        result
+    pub fn needs_publishing<P: AsRef<Path>>(
+        &self,
+        root: P,
+        prev_versions: &[semver::Version],
+    ) -> anyhow::Result<bool> {
+        if let Some(latest_version) = prev_versions.iter().max() {
+            let result = self.needs_publishing_inner(&root, &latest_version);
+            git_checkpoint_revert(&root)?;
+            result
+        } else {
+            Ok(true)
+        }
     }
 
-    pub fn needs_publishing_inner<P: AsRef<Path>>(&self, root: P) -> anyhow::Result<bool> {
+    pub fn needs_publishing_inner<P: AsRef<Path>>(
+        &self,
+        root: P,
+        version: &semver::Version,
+    ) -> anyhow::Result<bool> {
         let name = &self.name;
 
         let span = span!(Level::INFO, "__", crate = self.name);

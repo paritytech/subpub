@@ -82,7 +82,7 @@ struct PublishOpts {
     update: bool,
 
     #[clap(
-        short = 'c',
+        short = 'k',
         long = "check",
         help = "Run checks, e.g. cargo check, for all crates after publishing"
     )]
@@ -171,7 +171,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         .map(|ord_crate| ord_crate.name)
         .collect();
     info!(
-        "Defined the overall publish order: {}",
+        "If we were to publish all crates, it would be in this order: {}",
         publish_order
             .iter()
             .map(|krate| krate.to_owned())
@@ -255,6 +255,9 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
         (input_crates, selected_crates_order)
     };
+    if selected_crates.len() == 0 {
+        anyhow::bail!("No crates could be selected from the CLI options");
+    }
 
     let unordered_selected_crates = selected_crates
         .iter()
@@ -343,7 +346,8 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         Ok(())
     }
     for krate in &selected_crates {
-        validate_crates(&crates, krate, None, krate, &opts.exclude, &[])?;
+        info!("Validating crate {krate}");
+        // validate_crates(&crates, krate, None, krate, &opts.exclude, &[])?;
     }
 
     info!(
@@ -425,7 +429,8 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
             let details = crates.details.get_mut(&krate).unwrap();
 
-            if details.needs_publishing(&opts.path)? {
+            let versions = external::crates_io::crate_versions(&krate)?;
+            if details.needs_publishing(&opts.path, &versions)? {
                 if details.maybe_bump_version()? {
                     for dact in &deps_and_cargo_tomls {
                         if dact.deps.iter().any(|dep| *dep == krate) {

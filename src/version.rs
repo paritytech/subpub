@@ -48,10 +48,10 @@ pub fn maybe_bump_for_breaking_change(
     prev_versions
         .into_iter()
         .max()
-        .map(|max_prev_version| {
-            let max_version = match &current_version.cmp(&max_prev_version) {
+        .map(|latest_version| {
+            let max_version = match &current_version.cmp(&latest_version) {
                 Ordering::Greater => (&current_version).to_owned(),
-                _ => max_prev_version,
+                _ => latest_version,
             };
             bump_for_breaking_change(max_version)
         })
