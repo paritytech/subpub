@@ -21,7 +21,6 @@ mod git;
 mod toml;
 mod version;
 
-use crate::git::{git_checkpoint, GCM};
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use crates::Crates;
@@ -359,8 +358,6 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             cargo_toml: details.toml_path.clone(),
         })
         .collect::<Vec<_>>();
-
-    git_checkpoint(&opts.root, GCM::Save)?;
 
     let mut processed_crates: HashSet<String> = HashSet::new();
     for sel_crate in selected_crates_order {

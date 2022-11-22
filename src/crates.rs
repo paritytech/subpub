@@ -21,6 +21,8 @@ use crate::toml::toml_read;
 use crate::toml::toml_write;
 use anyhow::Context;
 use std::path::Path;
+use strum::EnumString;
+use strum::ToString;
 
 use anyhow::anyhow;
 use std::collections::{HashMap, HashSet};
@@ -162,7 +164,20 @@ fn crate_cargo_tomls(root: PathBuf) -> Vec<PathBuf> {
         .collect()
 }
 
-pub const DEPENDENCIES_KEYS: [&str; 3] = ["build-dependencies", "dependencies", "dev-dependencies"];
+#[derive(EnumString, strum::Display)]
+pub enum CrateDependencyKey {
+    #[strum(to_string = "build-dependencies")]
+    BuildDependencies,
+    #[strum(to_string = "dependencies")]
+    Dependencies,
+    #[strum(to_string = "dev-dependencies")]
+    DevDependencies,
+}
+pub const CRATE_DEPENDENCY_KEYS: [CrateDependencyKey; 3] = [
+    CrateDependencyKey::BuildDependencies,
+    CrateDependencyKey::Dependencies,
+    CrateDependencyKey::DevDependencies,
+];
 
 fn get_target_dependency_sections_mut<'a>(
     document: &'a mut toml_edit::Document,
@@ -243,7 +258,8 @@ pub fn write_dependency_version<P: AsRef<Path>>(
         Ok(())
     }
 
-    for key in DEPENDENCIES_KEYS {
+    for dep_key in CRATE_DEPENDENCY_KEYS {
+        let key = &dep_key.to_string();
         edit_all_dependency_sections(&mut toml, key, |item| {
             do_set(item, version, dependency, key, &toml_path).unwrap()
         });

@@ -14,7 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with subpub.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::crates::{edit_all_dependency_sections, write_dependency_version, DEPENDENCIES_KEYS};
+use crate::crates::{
+    edit_all_dependency_sections, write_dependency_version, CrateDependencyKey,
+    CRATE_DEPENDENCY_KEYS,
+};
 use crate::toml::{toml_read, toml_write};
 use crate::version::maybe_bump_for_breaking_change;
 use crate::{external, git::*};
@@ -69,24 +72,23 @@ impl CrateDetails {
         let mut dev_deps = HashSet::new();
         let mut deps = HashSet::new();
 
-        for key in DEPENDENCIES_KEYS {
+        for key in CRATE_DEPENDENCY_KEYS {
             match key {
-                "build-dependencies" => {
-                    for item in get_all_dependency_sections(&val, key) {
+                CrateDependencyKey::BuildDependencies => {
+                    for item in get_all_dependency_sections(&val, &key.to_string()) {
                         build_deps.extend(filter_workspace_dependencies(item)?)
                     }
                 }
-                "dependencies" => {
-                    for item in get_all_dependency_sections(&val, key) {
+                CrateDependencyKey::Dependencies => {
+                    for item in get_all_dependency_sections(&val, &key.to_string()) {
                         deps.extend(filter_workspace_dependencies(item)?)
                     }
                 }
-                "dev-dependencies" => {
-                    for item in get_all_dependency_sections(&val, key) {
+                CrateDependencyKey::DevDependencies => {
+                    for item in get_all_dependency_sections(&val, &key.to_string()) {
                         dev_deps.extend(filter_workspace_dependencies(item)?)
                     }
                 }
-                _ => anyhow::bail!("Dependency key is not handled: {}", key),
             }
         }
 
@@ -170,8 +172,10 @@ impl CrateDetails {
             Ok(())
         }
 
-        for key in DEPENDENCIES_KEYS {
-            edit_all_dependency_sections(&mut toml, key, |item| do_set(item, registry).unwrap());
+        for key in CRATE_DEPENDENCY_KEYS {
+            edit_all_dependency_sections(&mut toml, &key.to_string(), |item| {
+                do_set(item, registry).unwrap()
+            });
         }
 
         self.write_toml(&toml)?;
