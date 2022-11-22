@@ -17,7 +17,10 @@
 use crate::crate_details::CrateDetails;
 use crate::external;
 use crate::git::*;
+use crate::toml::toml_read;
+use crate::toml::toml_write;
 use anyhow::Context;
+use std::path::Path;
 
 use anyhow::anyhow;
 use std::collections::{HashMap, HashSet};
@@ -162,4 +165,110 @@ fn crate_cargo_tomls(root: PathBuf) -> Vec<PathBuf> {
         .filter(|entry| entry.path() != root_toml)
         .map(|entry| entry.into_path())
         .collect()
+}
+
+pub const DEPENDENCIES_KEYS: [&str; 3] = ["build-dependencies", "dependencies", "dev-dependencies"];
+
+fn get_target_dependency_sections_mut<'a>(
+    document: &'a mut toml_edit::Document,
+    label: &'a str,
+) -> impl Iterator<Item = &'a mut toml_edit::Item> + 'a {
+    document
+        .get_mut("target")
+        .and_then(|t| t.as_table_like_mut())
+        .into_iter()
+        .flat_map(|t| {
+            // For each item of the "target" table, see if we can find a `label` section in it.
+            t.iter_mut()
+                .flat_map(|(_name, item)| item.as_table_like_mut())
+                .flat_map(|t| t.get_mut(label))
+        })
+}
+
+pub fn edit_all_dependency_sections<F: FnMut(&mut toml_edit::Item)>(
+    document: &mut toml_edit::Document,
+    label: &str,
+    mut f: F,
+) {
+    if let Some(item) = document.get_mut(label) {
+        f(item);
+    }
+    for item in get_target_dependency_sections_mut(document, label) {
+        f(item)
+    }
+}
+
+pub fn write_dependency_version<P: AsRef<Path>>(
+    toml_path: P,
+    dependency: &str,
+    version: &semver::Version,
+) -> anyhow::Result<bool> {
+    let mut toml = toml_read(&toml_path)?;
+
+    fn do_set<P: AsRef<Path>>(
+        item: &mut toml_edit::Item,
+        version: &semver::Version,
+        dep: &str,
+        dep_type: &str,
+        toml_path: P,
+    ) -> anyhow::Result<()> {
+        let table = match item.as_table_like_mut() {
+            Some(table) => table,
+            None => return Ok(()),
+        };
+
+        for (key, item) in table.iter_mut() {
+            if key == dep {
+                if item.is_str() {
+                    if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
+                        *item = toml_edit::value(version.to_string());
+                        let mut table = toml_edit::table();
+                        table["version"] = toml_edit::value(version.to_string());
+                        table["registry"] = toml_edit::value(registry.to_string());
+                        *item = table;
+                    } else {
+                        *item = toml_edit::value(version.to_string());
+                    }
+                } else {
+                    item["version"] = toml_edit::value(version.to_string());
+                    if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
+                        item["registry"] = toml_edit::value(registry.to_string());
+                    }
+                }
+            } else {
+                let item = if item.as_str().is_some() {
+                    continue;
+                } else {
+                    item.as_table_like_mut().with_context(|| {
+                        format!(
+                            "{dep_type} 's key {key} should be a string or table-like in {:?}",
+                            toml_path.as_ref().as_os_str()
+                        )
+                    })?
+                };
+                if item
+                    .get("package")
+                    .map(|pkg| pkg.as_str() == Some(dep))
+                    .unwrap_or(false)
+                {
+                    item.insert("version", toml_edit::value(version.to_string()));
+                    if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
+                        item.insert("registry", toml_edit::value(registry.to_string()));
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    for key in DEPENDENCIES_KEYS {
+        edit_all_dependency_sections(&mut toml, key, |item| {
+            do_set(item, version, dependency, key, &toml_path).unwrap()
+        });
+    }
+
+    toml_write(toml_path, &toml)?;
+
+    Ok(true)
 }

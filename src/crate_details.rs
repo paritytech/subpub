@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with subpub.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::crates::{edit_all_dependency_sections, write_dependency_version, DEPENDENCIES_KEYS};
+use crate::toml::{toml_read, toml_write};
 use crate::version::bump_for_breaking_change;
 use crate::{external, git::*};
 use anyhow::{anyhow, Context};
@@ -37,12 +39,10 @@ pub struct CrateDetails {
     pub toml_path: PathBuf,
 }
 
-const DEPENDENCIES_KEYS: [&str; 3] = ["build-dependencies", "dependencies", "dev-dependencies"];
-
 impl CrateDetails {
     /// Read a Cargo.toml file, pulling out the information we care about.
     pub fn load(path: PathBuf) -> anyhow::Result<CrateDetails> {
-        let val: toml_edit::Document = read_toml(&path)?;
+        let val: toml_edit::Document = toml_read(&path)?;
 
         let name = val
             .get("package")
@@ -130,7 +130,7 @@ impl CrateDetails {
         Ok(())
     }
 
-    fn all_deps(&self) -> impl Iterator<Item = &String> {
+    pub fn all_deps(&self) -> impl Iterator<Item = &String> {
         self.deps
             .iter()
             .chain(self.dev_deps.iter())
@@ -189,74 +189,7 @@ impl CrateDetails {
             return Ok(true);
         }
 
-        let mut toml = self.read_toml()?;
-
-        fn do_set(
-            item: &mut toml_edit::Item,
-            version: &Version,
-            dep: &str,
-            dep_type: &str,
-            toml_path: &PathBuf,
-        ) -> anyhow::Result<()> {
-            let table = match item.as_table_like_mut() {
-                Some(table) => table,
-                None => return Ok(()),
-            };
-
-            for (key, item) in table.iter_mut() {
-                if key == dep {
-                    if item.is_str() {
-                        if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
-                            *item = toml_edit::value(version.to_string());
-                            let mut table = toml_edit::table();
-                            table["version"] = toml_edit::value(version.to_string());
-                            table["registry"] = toml_edit::value(registry.to_string());
-                            *item = table;
-                        } else {
-                            *item = toml_edit::value(version.to_string());
-                        }
-                    } else {
-                        item["version"] = toml_edit::value(version.to_string());
-                        if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
-                            item["registry"] = toml_edit::value(registry.to_string());
-                        }
-                    }
-                } else {
-                    let item = if item.as_str().is_some() {
-                        continue;
-                    } else {
-                        item.as_table_like_mut().with_context(|| {
-                            format!(
-                                "{dep_type} 's key {key} should be a string or table-like in {:?}",
-                                toml_path
-                            )
-                        })?
-                    };
-                    if item
-                        .get("package")
-                        .map(|pkg| pkg.as_str() == Some(dep))
-                        .unwrap_or(false)
-                    {
-                        item.insert("version", toml_edit::value(version.to_string()));
-                        if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
-                            item.insert("registry", toml_edit::value(registry.to_string()));
-                        }
-                    }
-                }
-            }
-
-            Ok(())
-        }
-
-        for key in DEPENDENCIES_KEYS {
-            edit_all_dependency_sections(&mut toml, key, |item| {
-                do_set(item, version, dependency, key, &self.toml_path).unwrap()
-            });
-        }
-
-        self.write_toml(&toml)?;
-
-        Ok(true)
+        write_dependency_version(&self.toml_path, dependency, version)
     }
 
     /// Strip dev dependencies.
@@ -370,31 +303,28 @@ impl CrateDetails {
         Ok(false)
     }
 
-    pub fn maybe_bump_version(&mut self) -> anyhow::Result<()> {
+    pub fn maybe_bump_version(&mut self) -> anyhow::Result<bool> {
         let versions = external::crates_io::crate_versions(&self.name)?;
         let new_version = bump_for_breaking_change(versions, self.version.clone());
-        if let Some(new_version) = new_version {
+        let bumped = if let Some(new_version) = new_version {
             info!(
                 "Bumping crate {} from {} to {}",
                 self.name, self.version, new_version
             );
             self.write_own_version(new_version)?;
-            for _dep in self.all_deps() {
-                self.write_dependency_version(&self.name, &self.version)?;
-            }
-        }
-        Ok(())
+            true
+        } else {
+            false
+        };
+        Ok(bumped)
     }
 
     fn read_toml(&self) -> anyhow::Result<toml_edit::Document> {
-        read_toml(&self.toml_path)
+        toml_read(&self.toml_path)
     }
 
     fn write_toml(&self, toml: &toml_edit::Document) -> anyhow::Result<()> {
-        let name = &self.name;
-        std::fs::write(&self.toml_path, &toml.to_string())
-            .with_context(|| format!("Cannot save the updated Cargo.toml for {name}"))?;
-        Ok(())
+        toml_write(&self.toml_path, toml)
     }
 }
 
@@ -416,48 +346,6 @@ fn get_all_dependency_sections<'a>(
         });
 
     document.get(label).into_iter().chain(target)
-}
-
-/// Similar to `get_all_dependencies`, but mutable iterates over just `[target.'foo'.label]` sections.
-fn get_target_dependency_sections_mut<'a>(
-    document: &'a mut toml_edit::Document,
-    label: &'a str,
-) -> impl Iterator<Item = &'a mut toml_edit::Item> + 'a {
-    document
-        .get_mut("target")
-        .and_then(|t| t.as_table_like_mut())
-        .into_iter()
-        .flat_map(|t| {
-            // For each item of the "target" table, see if we can find a `label` section in it.
-            t.iter_mut()
-                .flat_map(|(_name, item)| item.as_table_like_mut())
-                .flat_map(|t| t.get_mut(label))
-        })
-}
-
-/// Allows a function to be provided that is passed each mutable `Item` we find when searching for
-/// "dependencies"/"dev-dependencies"/"build-dependencies".
-fn edit_all_dependency_sections<F: FnMut(&mut toml_edit::Item)>(
-    document: &mut toml_edit::Document,
-    label: &str,
-    mut f: F,
-) {
-    if let Some(item) = document.get_mut(label) {
-        f(item);
-    }
-    for item in get_target_dependency_sections_mut(document, label) {
-        f(item)
-    }
-}
-
-// Load a TOML file.
-fn read_toml(path: &Path) -> anyhow::Result<toml_edit::Document> {
-    let toml_string = std::fs::read_to_string(path)
-        .with_context(|| format!("Cannot read the Cargo.toml at {path:?}"))?;
-    let toml = toml_string
-        .parse::<toml_edit::Document>()
-        .with_context(|| format!("Cannot parse the Cargo.toml at {path:?}"))?;
-    Ok(toml)
 }
 
 /// Given a path to some dependencies in a TOML file, pull out the package names

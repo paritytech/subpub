@@ -1,12 +1,8 @@
-use anyhow::Context;
-use std::fs;
 use std::path::Path;
 use std::process::Command;
 
 const CHECKPOINT_SAVE: &str = "[subpub] CHECKPOINT_SAVE";
 const CHECKPOINT_REVERT: &str = "[subpub] CHECKPOINT_REVERT";
-
-const THIS_FILE: &str = file!();
 
 pub enum GCM {
     Save,
@@ -100,85 +96,5 @@ pub fn git_checkpoint_revert<P: AsRef<Path>>(root: P) -> anyhow::Result<()> {
             break;
         }
     }
-    Ok(())
-}
-
-pub fn git_checkpoint_revert_all<P: AsRef<Path>>(root: P) -> anyhow::Result<()> {
-    let mut cmd = Command::new("git");
-    let output = cmd
-        .current_dir(&root)
-        .arg("log")
-        .arg("--pretty=%H\n%B")
-        .output()?;
-    if !output.status.success() {
-        anyhow::bail!("Failed to get commit message of last commit");
-    }
-
-    let output = String::from_utf8_lossy(&output.stdout[..]);
-    let mut output = output.split('\n');
-
-    let (rebase_cmds, last_commit) = {
-        let mut rebase_cmds = String::new();
-        let mut last_commit = None;
-        while let Some(commit_sha) = output.next() {
-            if commit_sha.is_empty() {
-                continue;
-            }
-            let commit_msg = output
-                .next()
-                .with_context(|| format!("Expected commit message for commit {commit_sha}"))?;
-            let commit_msg = commit_msg.trim();
-            match commit_msg {
-                CHECKPOINT_REVERT => {
-                    rebase_cmds.push_str(&format!("drop {commit_sha}\n"));
-                    last_commit = Some(commit_sha);
-                }
-                CHECKPOINT_SAVE => {
-                    rebase_cmds.push_str(&format!("pick {commit_sha}\n"));
-                    last_commit = Some(commit_sha);
-                }
-                _ => break,
-            }
-        }
-        (rebase_cmds, last_commit)
-    };
-
-    let last_commit = if let Some(commit) = last_commit {
-        commit
-    } else {
-        return Ok(());
-    };
-
-    let filter_script_path = Path::new(THIS_FILE)
-        .parent()
-        .with_context(|| format!("Failed to parse the parent of {THIS_FILE}"))?
-        .parent()
-        .with_context(|| format!("Failed to parse the parent's parent of {THIS_FILE}"))?
-        .join("commit-filter.sh");
-    let filter_script_path = if filter_script_path.is_absolute() {
-        filter_script_path
-    } else {
-        std::env::current_dir()?.join(filter_script_path)
-    };
-
-    let tmp_dir = tempfile::tempdir()?;
-    let rebase_cmds_path = &tmp_dir.path().join("rebase-commands");
-    fs::write(rebase_cmds_path, rebase_cmds)?;
-
-    let mut cmd = Command::new("git");
-    if !cmd
-        .current_dir(&root)
-        .env("REBASE_COMMANDS", rebase_cmds_path.as_os_str())
-        .arg("-c")
-        .arg(format!("sequence.editor={}", filter_script_path.display()))
-        .arg("rebase")
-        .arg("-i")
-        .arg(format!("{}~1", last_commit))
-        .status()?
-        .success()
-    {
-        anyhow::bail!("Failed to filter commit list");
-    };
-
     Ok(())
 }

@@ -18,28 +18,24 @@ mod crate_details;
 mod crates;
 mod external;
 mod git;
+mod toml;
 mod version;
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use crates::Crates;
-use git::git_checkpoint_revert_all;
-use std::collections::{HashSet};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use tracing::{info, span, Level};
 use tracing_subscriber::prelude::*;
+
+use crate::crates::write_dependency_version;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
     #[clap(subcommand)]
     command: Command,
-}
-
-#[derive(Parser, Debug, Clone)]
-struct CleanOpts {
-    #[clap(long, help = "Path to the workspace root")]
-    path: PathBuf,
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -52,8 +48,6 @@ struct CheckOpts {
 enum Command {
     #[clap(about = "Publish crates in order from least to most dependees")]
     Publish(PublishOpts),
-    #[clap(about = "Revert all the commits made by subpub")]
-    Clean(CleanOpts),
     #[clap(about = "Check that all crates are compliant to crates.io")]
     Check(CheckOpts),
 }
@@ -107,7 +101,6 @@ fn main() -> anyhow::Result<()> {
 
     match args.command {
         Command::Publish(opts) => publish(opts),
-        Command::Clean(opts) => git_checkpoint_revert_all(opts.path),
         Command::Check(opts) => check(opts),
     }
 }
@@ -268,12 +261,12 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         );
     }
 
-    fn check_excluded_crates(
+    fn validate_crates(
         crates: &Crates,
         initial_crate: &String,
         parent_crate: Option<&String>,
         krate: &String,
-        excluded_crates: &Vec<String>,
+        excluded_crates: &[String],
         visited_crates: &[&String],
     ) -> anyhow::Result<()> {
         if visited_crates
@@ -319,7 +312,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 .copied()
                 .chain(vec![krate].into_iter())
                 .collect::<Vec<_>>();
-            check_excluded_crates(
+            validate_crates(
                 crates,
                 initial_crate,
                 if krate == initial_crate {
@@ -336,7 +329,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         Ok(())
     }
     for krate in &selected_crates {
-        check_excluded_crates(&crates, krate, None, krate, &opts.exclude, &[])?;
+        validate_crates(&crates, krate, None, krate, &opts.exclude, &[])?;
     }
 
     info!(
@@ -347,6 +340,19 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             .collect::<Vec<String>>()
             .join(", ")
     );
+
+    struct DepsAndCargoToml {
+        pub deps: HashSet<String>,
+        pub cargo_toml: PathBuf,
+    }
+    let deps_and_cargo_tomls = crates
+        .details
+        .iter()
+        .map(|(_, details)| DepsAndCargoToml {
+            deps: details.all_deps().map(|dep| dep.into()).collect(),
+            cargo_toml: details.toml_path.clone(),
+        })
+        .collect::<Vec<_>>();
 
     let mut processed_crates: HashSet<String> = HashSet::new();
     for sel_crate in selected_crates_order {
@@ -382,7 +388,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             info!("Publishing crate {}", crates_to_publish[0])
         } else {
             info!(
-                "Crates will be processed in the following order: {}",
+                "Crates will be processed in the following order for publishing {sel_crate}: {}",
                 crates_to_publish
                     .iter()
                     .map(|krate| (krate).into())
@@ -400,7 +406,13 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             let details = crates.details.get_mut(&krate).unwrap();
 
             if details.needs_publishing(&opts.path)? {
-                details.maybe_bump_version()?;
+                if details.maybe_bump_version()? {
+                    for dact in &deps_and_cargo_tomls {
+                        if dact.deps.iter().any(|dep| *dep == krate) {
+                            write_dependency_version(&dact.cargo_toml, &krate, &details.version)?;
+                        }
+                    }
+                }
                 if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
                     details.set_registry(&registry)?;
                 }
