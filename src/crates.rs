@@ -220,20 +220,9 @@ pub fn write_dependency_version<P: AsRef<Path>>(
         for (key, item) in table.iter_mut() {
             if key == dep {
                 if item.is_str() {
-                    if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
-                        *item = toml_edit::value(version.to_string());
-                        let mut table = toml_edit::table();
-                        table["version"] = toml_edit::value(version.to_string());
-                        table["registry"] = toml_edit::value(registry.to_string());
-                        *item = table;
-                    } else {
-                        *item = toml_edit::value(version.to_string());
-                    }
+                    *item = toml_edit::value(version.to_string());
                 } else {
                     item["version"] = toml_edit::value(version.to_string());
-                    if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
-                        item["registry"] = toml_edit::value(registry.to_string());
-                    }
                 }
             } else {
                 let item = if item.as_str().is_some() {
@@ -252,9 +241,6 @@ pub fn write_dependency_version<P: AsRef<Path>>(
                     .unwrap_or(false)
                 {
                     item.insert("version", toml_edit::value(version.to_string()));
-                    if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
-                        item.insert("registry", toml_edit::value(registry.to_string()));
-                    }
                 }
             }
         }
