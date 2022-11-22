@@ -21,8 +21,9 @@ mod git;
 mod toml;
 mod version;
 
+use crate::git::{git_checkpoint, GCM};
 use anyhow::Context;
-use clap::{Parser, Subcommand};
+use clap::{Parser};
 use crates::Crates;
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -31,31 +32,11 @@ use tracing_subscriber::prelude::*;
 
 use crate::crates::write_dependency_version;
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
-    #[clap(subcommand)]
-    command: Command,
-}
-
-#[derive(Parser, Debug, Clone)]
-struct CheckOpts {
     #[clap(long, help = "Path to the workspace root")]
-    path: PathBuf,
-}
-
-#[derive(Subcommand, Debug)]
-enum Command {
-    #[clap(about = "Publish crates in order from least to most dependees")]
-    Publish(PublishOpts),
-    #[clap(about = "Check that all crates are compliant to crates.io")]
-    Check(CheckOpts),
-}
-
-#[derive(Parser, Debug, Clone)]
-struct PublishOpts {
-    #[clap(long, help = "Path to the workspace root")]
-    path: PathBuf,
+    root: PathBuf,
 
     #[clap(short = 'c', long = "crate", help = "Crates to be published")]
     crates: Vec<String>,
@@ -106,18 +87,11 @@ fn main() -> anyhow::Result<()> {
 
     let args = Args::parse();
 
-    match args.command {
-        Command::Publish(opts) => publish(opts),
-        Command::Check(opts) => check(opts),
-    }
+    publish(args)
 }
 
-fn check(_opts: CheckOpts) -> anyhow::Result<()> {
-    todo!("Implement check");
-}
-
-fn publish(opts: PublishOpts) -> anyhow::Result<()> {
-    let mut crates = Crates::load_crates_in_workspace(opts.path.clone())?;
+fn publish(opts: Args) -> anyhow::Result<()> {
+    let mut crates = Crates::load_crates_in_workspace(opts.root.clone())?;
 
     struct OrderedCrate {
         name: String,
@@ -371,6 +345,8 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         })
         .collect::<Vec<_>>();
 
+    git_checkpoint(&opts.root, GCM::Save)?;
+
     let mut processed_crates: HashSet<String> = HashSet::new();
     for sel_crate in selected_crates_order {
         let span = span!(Level::INFO, "_", crate = sel_crate);
@@ -423,7 +399,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             let details = crates.details.get_mut(&krate).unwrap();
 
             let prev_versions = external::crates_io::crate_versions(&krate)?;
-            if details.needs_publishing(&opts.path, &prev_versions)? {
+            if details.needs_publishing(&opts.root, &prev_versions)? {
                 if details.maybe_bump_version(prev_versions)? {
                     for dact in &deps_and_cargo_tomls {
                         if dact.deps.iter().any(|dep| *dep == krate) {
@@ -444,7 +420,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
     if opts.post_check {
         let mut cmd = std::process::Command::new("cargo");
-        let mut cmd = cmd.current_dir(&opts.path).arg("update");
+        let mut cmd = cmd.current_dir(&opts.root).arg("update");
         for krate in &processed_crates {
             cmd = cmd.arg("-p").arg(krate);
         }
@@ -454,7 +430,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
         for (_, details) in crates.details.iter() {
             let mut cmd = std::process::Command::new("cargo");
-            cmd.current_dir(&opts.path)
+            cmd.current_dir(&opts.root)
                 .arg("check")
                 .arg("-p")
                 .arg(&details.name);

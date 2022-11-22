@@ -86,14 +86,9 @@ impl Crates {
         Ok(())
     }
 
-    /// return a list of the crates that will need publishing in order to ensure that the
-    /// crates provided to this can be published in their current state.
-    ///
-    /// **Note:** it may be that one or more of the crate names provided are already
-    /// published in their current state, in which case they won't be returned in the result.
-    pub fn what_needs_publishing<K: AsRef<str>>(
+    pub fn what_needs_publishing<Crate: AsRef<str>>(
         &mut self,
-        krate: K,
+        krate: Crate,
         publish_order: &[String],
     ) -> anyhow::Result<Vec<String>> {
         let mut registered_crates: HashSet<&str> = HashSet::new();
@@ -108,7 +103,7 @@ impl Crates {
                 let details = crates
                     .details
                     .get(krate)
-                    .with_context(|| format!("Crate does not exist: {krate}"))?;
+                    .with_context(|| format!("Crate not found: {krate}"))?;
 
                 for dep in details.deps_to_publish() {
                     register_crates(crates, registered_crates, dep)?;
