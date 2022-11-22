@@ -53,9 +53,8 @@ pub fn maybe_bump_for_breaking_change(
                 Ordering::Greater => (&current_version).to_owned(),
                 _ => max_prev_version,
             };
-            Some(bump_for_breaking_change(max_version))
+            bump_for_breaking_change(max_version)
         })
-        .flatten()
         .or_else(|| {
             if current_version.pre == semver::Prerelease::EMPTY {
                 None
