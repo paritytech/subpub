@@ -31,29 +31,33 @@ pub fn bump_for_breaking_change(
     prev_versions: Vec<Version>,
     mut version: Version,
 ) -> Option<Version> {
-    match prev_versions.into_iter().max() {
-        Some(mut max_version) => match version.cmp(&max_version) {
-            Ordering::Greater => None,
-            _ => {
-                max_version.pre = semver::Prerelease::EMPTY;
-                if max_version.major == 0 {
-                    max_version.minor += 1;
-                    max_version.patch = 0;
-                } else {
-                    max_version.major += 1;
-                    max_version.minor = 0;
-                    max_version.patch = 0;
+    prev_versions
+        .into_iter()
+        .max()
+        .map(
+            |mut max_prev_version| match version.cmp(&max_prev_version) {
+                Ordering::Greater => None,
+                _ => {
+                    max_prev_version.pre = semver::Prerelease::EMPTY;
+                    if max_prev_version.major == 0 {
+                        max_prev_version.minor += 1;
+                        max_prev_version.patch = 0;
+                    } else {
+                        max_prev_version.major += 1;
+                        max_prev_version.minor = 0;
+                        max_prev_version.patch = 0;
+                    }
+                    Some(max_prev_version)
                 }
-                Some(max_version)
-            }
-        },
-        None => {
+            },
+        )
+        .flatten()
+        .or_else(|| {
             if version.pre == semver::Prerelease::EMPTY {
                 None
             } else {
                 version.pre = semver::Prerelease::EMPTY;
                 Some(version)
             }
-        }
-    }
+        })
 }
