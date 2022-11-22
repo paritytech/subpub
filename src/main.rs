@@ -84,7 +84,7 @@ struct PublishOpts {
     #[clap(
         short = 'c',
         long = "check",
-        help = "Run checks, e.g. cargo check, for published crates after publishing"
+        help = "Run checks, e.g. cargo check, for all crates after publishing"
     )]
     check: bool,
 }
