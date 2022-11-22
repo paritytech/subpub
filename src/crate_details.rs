@@ -158,10 +158,10 @@ impl CrateDetails {
 
             for (_, item) in table.iter_mut() {
                 if let Some(version) = item.as_str() {
-                    let mut table = toml_edit::table();
-                    table["version"] = toml_edit::value(version.to_string());
-                    table["registry"] = toml_edit::value(registry.to_string());
-                    *item = table;
+                    let mut tbl = toml_edit::InlineTable::new();
+                    tbl["version"] = version.to_string().into();
+                    tbl["registry"] = registry.to_string().into();
+                    *item = toml_edit::Item::Value(toml_edit::Value::InlineTable(tbl));
                 } else {
                     item["registry"] = toml_edit::value(registry.to_string());
                 }
