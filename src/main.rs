@@ -439,15 +439,6 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         anyhow::bail!("Command failed: {cmd:?}");
     };
 
-    let mut cmd = std::process::Command::new("cargo");
-    let mut cmd = cmd.current_dir(&opts.path).arg("update");
-    for krate in &processed_crates {
-        cmd = cmd.arg("-p").arg(krate);
-    }
-    if !cmd.status()?.success() {
-        anyhow::bail!("Command failed: {cmd:?}");
-    };
-
     for (_, details) in crates.details.iter() {
         let mut cmd = std::process::Command::new("cargo");
         cmd.arg("check").arg("-p").arg(&details.name);
