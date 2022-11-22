@@ -441,7 +441,10 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
     for (_, details) in crates.details.iter() {
         let mut cmd = std::process::Command::new("cargo");
-        cmd.arg("check").arg("-p").arg(&details.name);
+        cmd.current_dir(&opts.path)
+            .arg("check")
+            .arg("-p")
+            .arg(&details.name);
         if !cmd.status()?.success() {
             anyhow::bail!("Command failed: {cmd:?}");
         };

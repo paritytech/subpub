@@ -45,10 +45,11 @@ pub fn maybe_bump_for_breaking_change(
     prev_versions: Vec<Version>,
     mut current_version: Version,
 ) -> Option<Version> {
+    println!("prev_versions {:?}", prev_versions);
     prev_versions
         .into_iter()
         .max()
-        .map(|mut max_prev_version| {
+        .map(|max_prev_version| {
             let max_version = match &current_version.cmp(&max_prev_version) {
                 Ordering::Greater => (&current_version).to_owned(),
                 _ => max_prev_version,
