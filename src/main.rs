@@ -75,18 +75,11 @@ struct PublishOpts {
     exclude: Vec<String>,
 
     #[clap(
-        short = 'u',
-        long = "update",
-        help = "Update Cargo.lock for published crates after publishing"
-    )]
-    update: bool,
-
-    #[clap(
         short = 'k',
-        long = "check",
-        help = "Run checks, e.g. cargo check, for all crates after publishing"
+        long = "post-check",
+        help = "Run post checks, e.g. cargo check, after publishing"
     )]
-    check: bool,
+    post_check: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -429,9 +422,9 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
             let details = crates.details.get_mut(&krate).unwrap();
 
-            let versions = external::crates_io::crate_versions(&krate)?;
-            if details.needs_publishing(&opts.path, &versions)? {
-                if details.maybe_bump_version(versions)? {
+            let prev_versions = external::crates_io::crate_versions(&krate)?;
+            if details.needs_publishing(&opts.path, &prev_versions)? {
+                if details.maybe_bump_version(prev_versions)? {
                     for dact in &deps_and_cargo_tomls {
                         if dact.deps.iter().any(|dep| *dep == krate) {
                             write_dependency_version(&dact.cargo_toml, &krate, &details.version)?;
@@ -449,7 +442,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         processed_crates.insert(sel_crate.into());
     }
 
-    if opts.update {
+    if opts.post_check {
         let mut cmd = std::process::Command::new("cargo");
         let mut cmd = cmd.current_dir(&opts.path).arg("update");
         for krate in &processed_crates {
@@ -458,9 +451,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         if !cmd.status()?.success() {
             anyhow::bail!("Command failed: {cmd:?}");
         };
-    }
 
-    if opts.check {
         for (_, details) in crates.details.iter() {
             let mut cmd = std::process::Command::new("cargo");
             cmd.current_dir(&opts.path)

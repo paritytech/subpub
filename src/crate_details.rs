@@ -314,8 +314,11 @@ impl CrateDetails {
         Ok(false)
     }
 
-    pub fn maybe_bump_version(&mut self, versions: Vec<semver::Version>) -> anyhow::Result<bool> {
-        let new_version = maybe_bump_for_breaking_change(versions, self.version.clone());
+    pub fn maybe_bump_version(
+        &mut self,
+        prev_versions: Vec<semver::Version>,
+    ) -> anyhow::Result<bool> {
+        let new_version = maybe_bump_for_breaking_change(prev_versions, self.version.clone());
         let bumped = if let Some(new_version) = new_version {
             info!(
                 "Bumping crate {} from {} to {}",
