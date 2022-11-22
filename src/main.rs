@@ -23,7 +23,7 @@ mod version;
 
 use crate::git::{git_checkpoint, GCM};
 use anyhow::Context;
-use clap::{Parser};
+use clap::{Parser, Subcommand};
 use crates::Crates;
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -32,9 +32,22 @@ use tracing_subscriber::prelude::*;
 
 use crate::crates::write_dependency_version;
 
-#[derive(Parser, Debug, Clone)]
+#[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
+    #[clap(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand, Debug)]
+enum Command {
+    #[clap(about = "Publish crates in order from least to most dependees")]
+    Publish(PublishOpts),
+}
+
+#[derive(Parser, Debug, Clone)]
+#[clap(author, version, about, long_about = None)]
+struct PublishOpts {
     #[clap(long, help = "Path to the workspace root")]
     root: PathBuf,
 
@@ -87,10 +100,12 @@ fn main() -> anyhow::Result<()> {
 
     let args = Args::parse();
 
-    publish(args)
+    match args.command {
+        Command::Publish(opts) => publish(opts),
+    }
 }
 
-fn publish(opts: Args) -> anyhow::Result<()> {
+fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     let mut crates = Crates::load_crates_in_workspace(opts.root.clone())?;
 
     struct OrderedCrate {
