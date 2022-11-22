@@ -45,7 +45,6 @@ pub fn maybe_bump_for_breaking_change(
     prev_versions: Vec<Version>,
     mut current_version: Version,
 ) -> Option<Version> {
-    println!("prev_versions {:?}", prev_versions);
     prev_versions
         .into_iter()
         .max()

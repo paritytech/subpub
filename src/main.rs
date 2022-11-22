@@ -73,6 +73,20 @@ struct PublishOpts {
         help = "Crates to be excluded from the publishing process"
     )]
     exclude: Vec<String>,
+
+    #[clap(
+        short = 'u',
+        long = "update",
+        help = "Update Cargo.lock for published crates after publishing"
+    )]
+    update: bool,
+
+    #[clap(
+        short = 'c',
+        long = "check",
+        help = "Run checks, e.g. cargo check, for published crates after publishing"
+    )]
+    check: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -430,24 +444,28 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         processed_crates.insert(sel_crate.into());
     }
 
-    let mut cmd = std::process::Command::new("cargo");
-    let mut cmd = cmd.current_dir(&opts.path).arg("update");
-    for krate in &processed_crates {
-        cmd = cmd.arg("-p").arg(krate);
-    }
-    if !cmd.status()?.success() {
-        anyhow::bail!("Command failed: {cmd:?}");
-    };
-
-    for (_, details) in crates.details.iter() {
+    if opts.update {
         let mut cmd = std::process::Command::new("cargo");
-        cmd.current_dir(&opts.path)
-            .arg("check")
-            .arg("-p")
-            .arg(&details.name);
+        let mut cmd = cmd.current_dir(&opts.path).arg("update");
+        for krate in &processed_crates {
+            cmd = cmd.arg("-p").arg(krate);
+        }
         if !cmd.status()?.success() {
             anyhow::bail!("Command failed: {cmd:?}");
         };
+    }
+
+    if opts.check {
+        for (_, details) in crates.details.iter() {
+            let mut cmd = std::process::Command::new("cargo");
+            cmd.current_dir(&opts.path)
+                .arg("check")
+                .arg("-p")
+                .arg(&details.name);
+            if !cmd.status()?.success() {
+                anyhow::bail!("Command failed: {cmd:?}");
+            };
+        }
     }
 
     Ok(())
