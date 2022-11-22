@@ -240,7 +240,7 @@ impl CrateDetails {
         prev_versions: &[semver::Version],
     ) -> anyhow::Result<bool> {
         if let Some(latest_version) = prev_versions.iter().max() {
-            let result = self.needs_publishing_inner(&root, &latest_version);
+            let result = self.needs_publishing_inner(&root, latest_version);
             git_checkpoint_revert(&root)?;
             result
         } else {
@@ -293,7 +293,7 @@ impl CrateDetails {
         };
         let pkg_path = target_dir
             .join("package")
-            .join(format!("{name}-{}.crate", self.version));
+            .join(format!("{name}-{}.crate", version));
         let pkg_bytes = std::fs::read(&pkg_path)?;
 
         info!("Checking generated .crate file against crates.io");
@@ -314,8 +314,7 @@ impl CrateDetails {
         Ok(false)
     }
 
-    pub fn maybe_bump_version(&mut self) -> anyhow::Result<bool> {
-        let versions = external::crates_io::crate_versions(&self.name)?;
+    pub fn maybe_bump_version(&mut self, versions: Vec<semver::Version>) -> anyhow::Result<bool> {
         let new_version = maybe_bump_for_breaking_change(versions, self.version.clone());
         let bumped = if let Some(new_version) = new_version {
             info!(

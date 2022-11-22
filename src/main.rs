@@ -255,7 +255,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
         (input_crates, selected_crates_order)
     };
-    if selected_crates.len() == 0 {
+    if selected_crates.is_empty() {
         anyhow::bail!("No crates could be selected from the CLI options");
     }
 
@@ -431,7 +431,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
             let versions = external::crates_io::crate_versions(&krate)?;
             if details.needs_publishing(&opts.path, &versions)? {
-                if details.maybe_bump_version()? {
+                if details.maybe_bump_version(versions)? {
                     for dact in &deps_and_cargo_tomls {
                         if dact.deps.iter().any(|dep| *dep == krate) {
                             write_dependency_version(&dact.cargo_toml, &krate, &details.version)?;

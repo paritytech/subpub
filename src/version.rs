@@ -50,7 +50,7 @@ pub fn maybe_bump_for_breaking_change(
         .max()
         .map(|latest_version| {
             let max_version = match &current_version.cmp(&latest_version) {
-                Ordering::Greater => (&current_version).to_owned(),
+                Ordering::Greater => current_version.to_owned(),
                 _ => latest_version,
             };
             bump_for_breaking_change(max_version)
