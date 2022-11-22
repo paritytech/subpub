@@ -37,8 +37,6 @@ pub struct CrateDetails {
     pub build_deps: HashSet<String>,
     pub dev_deps: HashSet<String>,
     pub should_be_published: bool,
-
-    // Modifying the files on disk can only be done through the interface below.
     pub toml_path: PathBuf,
 }
 
