@@ -17,6 +17,20 @@
 pub use semver::Version;
 use std::cmp::Ordering;
 
+fn bump_for_breaking_change(mut version: Version) -> Version {
+    if version.pre != semver::Prerelease::EMPTY {
+        version.pre = semver::Prerelease::EMPTY;
+    } else if version.major == 0 {
+        version.minor += 1;
+        version.patch = 0;
+    } else {
+        version.major += 1;
+        version.minor = 0;
+        version.patch = 0;
+    }
+    version
+}
+
 /// Bump the version for a breaking change and to release. Examples of bumps carried out:
 ///
 /// ```text
@@ -27,41 +41,20 @@ use std::cmp::Ordering;
 /// ```
 ///
 /// Return the new version.
-pub fn bump_for_breaking_change(
+pub fn maybe_bump_for_breaking_change(
     prev_versions: Vec<Version>,
     mut current_version: Version,
 ) -> Option<Version> {
     prev_versions
         .into_iter()
         .max()
-        .map(
-            |mut max_prev_version| match &current_version.cmp(&max_prev_version) {
-                Ordering::Greater => {
-                    if max_prev_version.major != 0 && current_version.major == 0 {
-                        let mut current_version = (&current_version).to_owned();
-                        current_version.major = max_prev_version.major + 1;
-                        current_version.minor = 0;
-                        current_version.patch = 0;
-                        current_version.pre = semver::Prerelease::EMPTY;
-                        Some(current_version)
-                    } else {
-                        None
-                    }
-                }
-                _ => {
-                    max_prev_version.pre = semver::Prerelease::EMPTY;
-                    if max_prev_version.major == 0 {
-                        max_prev_version.minor += 1;
-                        max_prev_version.patch = 0;
-                    } else {
-                        max_prev_version.major += 1;
-                        max_prev_version.minor = 0;
-                        max_prev_version.patch = 0;
-                    }
-                    Some(max_prev_version)
-                }
-            },
-        )
+        .map(|mut max_prev_version| {
+            let max_version = match &current_version.cmp(&max_prev_version) {
+                Ordering::Greater => (&current_version).to_owned(),
+                _ => max_prev_version,
+            };
+            Some(bump_for_breaking_change(max_version))
+        })
         .flatten()
         .or_else(|| {
             if current_version.pre == semver::Prerelease::EMPTY {

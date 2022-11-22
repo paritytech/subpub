@@ -16,7 +16,7 @@
 
 use crate::crates::{edit_all_dependency_sections, write_dependency_version, DEPENDENCIES_KEYS};
 use crate::toml::{toml_read, toml_write};
-use crate::version::bump_for_breaking_change;
+use crate::version::maybe_bump_for_breaking_change;
 use crate::{external, git::*};
 use anyhow::{anyhow, Context};
 use semver::Version;
@@ -304,7 +304,7 @@ impl CrateDetails {
 
     pub fn maybe_bump_version(&mut self) -> anyhow::Result<bool> {
         let versions = external::crates_io::crate_versions(&self.name)?;
-        let new_version = bump_for_breaking_change(versions, self.version.clone());
+        let new_version = maybe_bump_for_breaking_change(versions, self.version.clone());
         let bumped = if let Some(new_version) = new_version {
             info!(
                 "Bumping crate {} from {} to {}",
