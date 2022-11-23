@@ -108,6 +108,7 @@ fn main() -> anyhow::Result<()> {
 
 fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     let mut crates = Crates::load_crates_in_workspace(opts.root.clone())?;
+    crates.setup_crates();
 
     struct OrderedCrate {
         name: String,

@@ -66,16 +66,27 @@ impl Crates {
 
     pub fn setup_crates(&self) -> anyhow::Result<()> {
         for details in self.details.values() {
-            // "cargo publish" *assumes* that each crate has a README.md without
-            // if it doesn't specify README.md in its Cargo.toml, thus the
-            // publish will always fail in case the crate doesn't have a README
-            // file. To counteract that we'll a sample README.md file.
+            // In case a crate doesn't define a "readme" field in its
+            // Cargo.toml, "cargo publish" *assumes*, without first checking,
+            // that a README.md file exists beside Cargo.toml. Publishing will
+            // fail in case the crate doesn't comply with that assumption. To
+            // counteract that we'll a sample README.md file for crates which
+            // don't specify or have one.
             if details.readme.is_none() {
-                let crate_readme = details.toml_path.join("README.md");
-                fs::write(
-                    &crate_readme,
-                    "Auto-generated README.md for publishing to crates.io",
-                )?;
+                let crate_readme = details
+                    .toml_path
+                    .parent()
+                    .with_context(|| format!("Failed to find parent of {:?}", details.toml_path))?
+                    .join("README.md");
+                if fs::metadata(&crate_readme).is_err() {
+                    fs::write(
+                        &crate_readme,
+                        format!(
+                            "# {}\n\nAuto-generated README.md for publishing to crates.io",
+                            details.name
+                        ),
+                    )?;
+                }
             }
         }
         Ok(())
