@@ -29,8 +29,6 @@ use std::path::PathBuf;
 use tracing::{info, span, Level};
 use tracing_subscriber::prelude::*;
 
-
-
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
@@ -417,9 +415,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
             if let Some(bumped_version) = bumped_version {
                 for (_, details) in crates.details.iter() {
-                    if details.all_deps().any(|dep| *dep == krate) {
-                        details.write_dependency_version(&krate, &bumped_version)?;
-                    }
+                    details.write_dependency_version(&krate, &bumped_version)?;
                 }
             }
 

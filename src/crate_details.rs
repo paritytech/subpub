@@ -241,10 +241,17 @@ impl CrateDetails {
         root: P,
         prev_versions: &[semver::Version],
     ) -> anyhow::Result<bool> {
-        if let Some(latest_version) = prev_versions.iter().max() {
-            let result = self.needs_publishing_inner(&root, latest_version);
-            git_checkpoint_revert(&root)?;
-            result
+        if prev_versions
+            .iter()
+            .any(|prev_version| *prev_version == self.version)
+        {
+            if let Some(latest_version) = prev_versions.iter().max() {
+                let result = self.needs_publishing_inner(&root, latest_version);
+                git_checkpoint_revert(&root)?;
+                result
+            } else {
+                Ok(true)
+            }
         } else {
             Ok(true)
         }
