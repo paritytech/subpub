@@ -221,9 +221,9 @@ impl CrateDetails {
 
         // Only write the toml file back if we did remove something.
         if removed_top_level || removed_target_deps {
-            git_checkpoint(&root, GCM::Save)?;
+            git_checkpoint(&root, GCKP::Save)?;
             self.write_toml(&toml)?;
-            git_checkpoint(&root, GCM::RevertLater)?;
+            git_checkpoint(&root, GCKP::RevertLater)?;
         }
 
         Ok(())

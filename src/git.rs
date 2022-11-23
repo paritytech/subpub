@@ -4,12 +4,12 @@ use std::process::Command;
 const CHECKPOINT_SAVE: &str = "[subpub] CHECKPOINT_SAVE";
 const CHECKPOINT_REVERT: &str = "[subpub] CHECKPOINT_REVERT";
 
-pub enum GCM {
+pub enum GCKP {
     Save,
     RevertLater,
 }
 
-pub fn git_checkpoint<P: AsRef<Path>>(root: P, op: GCM) -> anyhow::Result<()> {
+pub fn git_checkpoint<P: AsRef<Path>>(root: P, op: GCKP) -> anyhow::Result<()> {
     let mut cmd = Command::new("git");
     let git_status_output = cmd
         .current_dir(&root)
@@ -41,8 +41,8 @@ pub fn git_checkpoint<P: AsRef<Path>>(root: P, op: GCM) -> anyhow::Result<()> {
         }
 
         let commit_msg = match op {
-            GCM::Save => CHECKPOINT_SAVE,
-            GCM::RevertLater => CHECKPOINT_REVERT,
+            GCKP::Save => CHECKPOINT_SAVE,
+            GCKP::RevertLater => CHECKPOINT_REVERT,
         };
         let mut cmd = Command::new("git");
         if !cmd
