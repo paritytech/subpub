@@ -50,27 +50,31 @@ struct PublishOpts {
     #[clap(long, help = "Path to the workspace root")]
     root: PathBuf,
 
-    #[clap(short = 'c', long = "crate", help = "Crates to be published")]
+    #[clap(
+        short = 'c',
+        long = "crate",
+        help = "Select crates to be published. If empty, all crates in the workspace of --root will be published."
+    )]
     crates: Vec<String>,
 
     #[clap(
         short = 's',
         long = "start-from",
-        help = "Start publishing from this crate"
+        help = "Start publishing from this crate. Useful to resume the process in case it fails for some reason. This option does not take into account code changes between the stop of the first attempt and the resumption, so you might potentially miss some crates in case they're added and/or renamed within that gap."
     )]
     start_from: Option<String>,
 
     #[clap(
         short = 'e',
         long = "exclude",
-        help = "Crates to be excluded from the publishing process"
+        help = "Crates to be excluded from the publishing process."
     )]
     exclude: Vec<String>,
 
     #[clap(
         short = 'k',
         long = "post-check",
-        help = "Run post checks, e.g. cargo check, after publishing"
+        help = "Run post checks, e.g. cargo check, after publishing."
     )]
     post_check: bool,
 }
