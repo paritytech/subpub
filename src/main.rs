@@ -250,7 +250,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     }
 
     info!(
-        "Processing selected crates in this order: {}",
+        "Selected the following crates to be published, in order: {}",
         selected_crates_order
             .iter()
             .map(|krate| (*krate).into())
