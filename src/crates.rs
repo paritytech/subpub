@@ -117,7 +117,7 @@ impl Crates {
     }
 
     pub fn what_needs_publishing<Crate: AsRef<str>>(
-        &mut self,
+        &self,
         krate: Crate,
         publish_order: &[String],
     ) -> anyhow::Result<Vec<String>> {

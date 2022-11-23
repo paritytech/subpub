@@ -29,6 +29,11 @@ use std::path::PathBuf;
 use tracing::{info, span, Level};
 use tracing_subscriber::prelude::*;
 
+use crate::{
+    crates::write_dependency_version,
+    git::{git_checkpoint, GCM},
+};
+
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
@@ -108,7 +113,7 @@ fn main() -> anyhow::Result<()> {
 
 fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     let mut crates = Crates::load_crates_in_workspace(opts.root.clone())?;
-    crates.setup_crates();
+    crates.setup_crates()?;
 
     struct OrderedCrate {
         name: String,
@@ -361,17 +366,19 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
         info!("Processing crate");
 
-        let details = crates.details.get(sel_crate).unwrap();
+        {
+            let details = crates.details.get(sel_crate).unwrap();
 
-        for krate in &publish_order {
-            if krate == sel_crate {
-                break;
+            for krate in &publish_order {
+                if krate == sel_crate {
+                    break;
+                }
+                let crate_details = crates
+                    .details
+                    .get(krate)
+                    .with_context(|| format!("Crate details not found for crate: {krate}"))?;
+                details.write_dependency_version(krate, &crate_details.version)?;
             }
-            let crate_details = crates
-                .details
-                .get(krate)
-                .with_context(|| format!("Crate details not found for crate: {krate}"))?;
-            details.write_dependency_version(krate, &crate_details.version)?;
         }
 
         let crates_to_publish = crates.what_needs_publishing(sel_crate, &publish_order)?;
@@ -398,26 +405,24 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 continue;
             }
 
-            let details = crates.details.get_mut(&krate).unwrap();
+            let last_version = {
+                let details = crates.details.get_mut(&krate).unwrap();
 
-            let prev_versions = external::crates_io::crate_versions(&krate)?;
-            let bumped_version = if details.needs_publishing(&opts.root, &prev_versions)? {
-                let bumped_version = if details.maybe_bump_version(prev_versions)? {
-                    Some(details.version.clone())
+                let prev_versions = external::crates_io::crate_versions(&krate)?;
+                if details.needs_publishing(&opts.root, &prev_versions)? {
+                    details.maybe_bump_version(prev_versions)?;
+                    git_checkpoint(&opts.root, GCM::Save)?;
+                    let last_version = details.version.clone();
+                    crates.strip_dev_deps_and_publish(&krate)?;
+                    last_version
                 } else {
-                    None
-                };
-                crates.strip_dev_deps_and_publish(&krate)?;
-                bumped_version
-            } else {
-                info!("Crate {krate} does not need to be published");
-                None
+                    info!("Crate {krate} does not need to be published");
+                    details.version.clone()
+                }
             };
 
-            if let Some(bumped_version) = bumped_version {
-                for (_, details) in crates.details.iter() {
-                    details.write_dependency_version(&krate, &bumped_version)?;
-                }
+            for (_, details) in crates.details.iter() {
+                details.write_dependency_version(&krate, &last_version);
             }
 
             processed_crates.insert(krate);

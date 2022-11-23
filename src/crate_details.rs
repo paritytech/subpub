@@ -251,13 +251,9 @@ impl CrateDetails {
             .iter()
             .any(|prev_version| *prev_version == self.version)
         {
-            if let Some(latest_version) = prev_versions.iter().max() {
-                let result = self.needs_publishing_inner(&root, latest_version);
-                git_checkpoint_revert(&root)?;
-                result
-            } else {
-                Ok(true)
-            }
+            let result = self.needs_publishing_inner(&root, &self.version);
+            git_checkpoint_revert(&root)?;
+            result
         } else {
             Ok(true)
         }
