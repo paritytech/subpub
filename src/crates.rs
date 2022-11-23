@@ -224,17 +224,18 @@ fn get_target_dependency_sections_mut<'a>(
         })
 }
 
-pub fn edit_all_dependency_sections<F: FnMut(&mut toml_edit::Item)>(
+pub fn edit_all_dependency_sections<T, F: FnMut(&mut toml_edit::Item) -> anyhow::Result<T>>(
     document: &mut toml_edit::Document,
     label: &str,
     mut f: F,
-) {
+) -> anyhow::Result<()> {
     if let Some(item) = document.get_mut(label) {
-        f(item);
+        f(item)?;
     }
     for item in get_target_dependency_sections_mut(document, label) {
-        f(item)
+        f(item)?;
     }
+    Ok(())
 }
 
 pub fn write_dependency_version<P: AsRef<Path>>(
@@ -290,8 +291,8 @@ pub fn write_dependency_version<P: AsRef<Path>>(
     for dep_key in CRATE_DEPENDENCY_KEYS {
         let key = &dep_key.to_string();
         edit_all_dependency_sections(&mut toml, key, |item| {
-            do_set(item, version, dependency, key, &toml_path).unwrap()
-        });
+            do_set(item, version, dependency, key, &toml_path)
+        })?;
     }
 
     toml_write(toml_path, &toml)?;

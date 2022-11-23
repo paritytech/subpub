@@ -178,8 +178,8 @@ impl CrateDetails {
 
         for key in CRATE_DEPENDENCY_KEYS {
             edit_all_dependency_sections(&mut toml, &key.to_string(), |item| {
-                do_set(item, registry).unwrap()
-            });
+                do_set(item, registry)
+            })?;
         }
 
         self.write_toml(&toml)?;
@@ -235,7 +235,7 @@ impl CrateDetails {
         let parent = self
             .toml_path
             .parent()
-            .expect("parent of toml path should exist");
+            .with_context(|| format!("{:?} has no parent directory", self.toml_path))?;
         external::cargo::publish_crate(parent, &self.name)
     }
 
@@ -279,7 +279,7 @@ impl CrateDetails {
         let crate_dir = self
             .toml_path
             .parent()
-            .expect("parent of toml path should exist");
+            .with_context(|| format!("{:?} has no parent directory", self.toml_path))?;
 
         let tmp_dir = tempfile::tempdir()?;
         let target_dir = if let Ok(tmp_dir) = std::env::var("SPUB_TMP") {

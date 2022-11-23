@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with subpub.  If not, see <http://www.gnu.org/licenses/>.
 
+mod checkpoint;
 mod crate_details;
 mod crates;
 mod external;
@@ -21,6 +22,7 @@ mod git;
 mod toml;
 mod version;
 
+use anyhow::anyhow;
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use crates::Crates;
@@ -29,7 +31,7 @@ use std::path::PathBuf;
 use tracing::{info, span, Level};
 use tracing_subscriber::prelude::*;
 
-use crate::git::{git_checkpoint, GCKP};
+use crate::checkpoint::with_save_checkpoint;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -187,23 +189,25 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         publish_order
             .clone()
             .into_iter()
-            .filter(|krate| {
+            .filter_map(|krate| {
                 if opts
                     .exclude
                     .iter()
-                    .any(|excluded_crate| excluded_crate == krate)
+                    .any(|excluded_crate| *excluded_crate == krate)
                 {
-                    return false;
+                    return Some(Ok(krate));
                 }
-
-                let details = crates
-                    .details
-                    .get(krate)
-                    .with_context(|| format!("Crate not found: {krate}"))
-                    .unwrap();
-                details.should_be_published
+                if let Some(details) = crates.details.get(&krate) {
+                    if details.should_be_published {
+                        Some(Ok(krate))
+                    } else {
+                        None
+                    }
+                } else {
+                    Some(Err(anyhow!("Crate not found: {}", krate)))
+                }
             })
-            .collect()
+            .collect::<anyhow::Result<Vec<_>>>()?
     };
     let (selected_crates, selected_crates_order) = if let Some(start_from) = opts.start_from {
         let mut keep = false;
@@ -363,9 +367,11 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
         info!("Processing crate");
 
-        git_checkpoint(&opts.root, GCKP::Save)?;
-        {
-            let details = crates.details.get(sel_crate).unwrap();
+        with_save_checkpoint(&opts.root, || -> anyhow::Result<()> {
+            let details = crates
+                .details
+                .get(sel_crate)
+                .with_context(|| format!("Crate not found: {sel_crate}"))?;
             for krate in &publish_order {
                 if krate == sel_crate {
                     break;
@@ -376,8 +382,8 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                     .with_context(|| format!("Crate details not found for crate: {krate}"))?;
                 details.write_dependency_version(krate, &crate_details.version)?;
             }
-        }
-        git_checkpoint(&opts.root, GCKP::Save)?;
+            Ok(())
+        })??;
 
         let crates_to_publish = crates.what_needs_publishing(sel_crate, &publish_order)?;
 
@@ -404,12 +410,15 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             }
 
             let last_version = {
-                let details = crates.details.get_mut(&krate).unwrap();
+                let details = crates
+                    .details
+                    .get_mut(&krate)
+                    .with_context(|| format!("Crate not found: {krate}"))?;
                 let prev_versions = external::crates_io::crate_versions(&krate)?;
                 if details.needs_publishing(&opts.root, &prev_versions)? {
-                    git_checkpoint(&opts.root, GCKP::Save)?;
-                    details.maybe_bump_version(prev_versions)?;
-                    git_checkpoint(&opts.root, GCKP::Save)?;
+                    with_save_checkpoint(&opts.root, || {
+                        details.maybe_bump_version(prev_versions)
+                    })??;
                     let last_version = details.version.clone();
                     crates.strip_dev_deps_and_publish(&krate)?;
                     last_version
@@ -419,10 +428,12 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 }
             };
 
-            for (_, details) in crates.details.iter() {
-                details.write_dependency_version(&krate, &last_version)?;
-            }
-            git_checkpoint(&opts.root, GCKP::Save)?;
+            with_save_checkpoint(&opts.root, || -> anyhow::Result<()> {
+                for (_, details) in crates.details.iter() {
+                    details.write_dependency_version(&krate, &last_version)?;
+                }
+                Ok(())
+            })??;
 
             processed_crates.insert(krate);
         }
@@ -432,7 +443,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
     if opts.post_check {
         let mut cmd = std::process::Command::new("cargo");
-        let mut cmd = cmd.current_dir(&opts.root).arg("update");
+        let mut cmd = cmd.current_dir(&opts.root).arg("update").arg("-v");
         for krate in &processed_crates {
             cmd = cmd.arg("-p").arg(krate);
         }
