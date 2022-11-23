@@ -156,6 +156,7 @@ impl Crates {
     }
 }
 
+// TODO: use cargo_metadata instead
 /// find all of the crates, returning paths to their Cargo.toml files.
 fn crate_cargo_tomls(root: PathBuf) -> Vec<PathBuf> {
     let root_toml = {

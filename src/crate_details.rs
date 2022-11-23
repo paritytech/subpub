@@ -376,6 +376,7 @@ fn get_all_dependency_sections<'a>(
     document.get(label).into_iter().chain(target)
 }
 
+// TODO: use cargo_metadata instead
 /// Given a path to some dependencies in a TOML file, pull out the package names
 /// for any path based dependencies (ie dependencies in the same workspace).
 fn filter_workspace_dependencies(val: &toml_edit::Item) -> anyhow::Result<HashSet<String>> {
