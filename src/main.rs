@@ -29,10 +29,7 @@ use std::path::PathBuf;
 use tracing::{info, span, Level};
 use tracing_subscriber::prelude::*;
 
-use crate::{
-    crates::write_dependency_version,
-    git::{git_checkpoint, GCM},
-};
+use crate::git::{git_checkpoint, GCM};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -368,7 +365,6 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
         {
             let details = crates.details.get(sel_crate).unwrap();
-
             for krate in &publish_order {
                 if krate == sel_crate {
                     break;
@@ -407,11 +403,10 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
             let last_version = {
                 let details = crates.details.get_mut(&krate).unwrap();
-
                 let prev_versions = external::crates_io::crate_versions(&krate)?;
                 if details.needs_publishing(&opts.root, &prev_versions)? {
-                    details.maybe_bump_version(prev_versions)?;
                     git_checkpoint(&opts.root, GCM::Save)?;
+                    details.maybe_bump_version(prev_versions)?;
                     let last_version = details.version.clone();
                     crates.strip_dev_deps_and_publish(&krate)?;
                     last_version
@@ -422,7 +417,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             };
 
             for (_, details) in crates.details.iter() {
-                details.write_dependency_version(&krate, &last_version);
+                details.write_dependency_version(&krate, &last_version)?;
             }
 
             processed_crates.insert(krate);
