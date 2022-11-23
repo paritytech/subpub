@@ -20,9 +20,9 @@ use crate::git::*;
 use crate::toml::toml_read;
 use crate::toml::toml_write;
 use anyhow::Context;
+use std::fs;
 use std::path::Path;
 use strum::EnumString;
-
 
 use anyhow::anyhow;
 use std::collections::{HashMap, HashSet};
@@ -62,6 +62,23 @@ impl Crates {
         }
 
         Ok(Crates { root, details })
+    }
+
+    pub fn setup_crates(&self) -> anyhow::Result<()> {
+        for details in self.details.values() {
+            // "cargo publish" *assumes* that each crate has a README.md without
+            // if it doesn't specify README.md in its Cargo.toml, thus the
+            // publish will always fail in case the crate doesn't have a README
+            // file. To counteract that we'll a sample README.md file.
+            if details.readme.is_none() {
+                let crate_readme = details.toml_path.join("README.md");
+                fs::write(
+                    &crate_readme,
+                    "Auto-generated README.md for publishing to crates.io",
+                )?;
+            }
+        }
+        Ok(())
     }
 
     /// Remove any dev-dependency sections in the TOML file and publish.

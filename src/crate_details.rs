@@ -38,14 +38,15 @@ pub struct CrateDetails {
     pub dev_deps: HashSet<String>,
     pub should_be_published: bool,
     pub toml_path: PathBuf,
+    pub readme: Option<String>,
 }
 
 impl CrateDetails {
     /// Read a Cargo.toml file, pulling out the information we care about.
-    pub fn load(path: PathBuf) -> anyhow::Result<CrateDetails> {
-        let val: toml_edit::Document = toml_read(&path)?;
+    pub fn load(toml_path: PathBuf) -> anyhow::Result<CrateDetails> {
+        let toml: toml_edit::Document = toml_read(&toml_path)?;
 
-        let name = val
+        let name = toml
             .get("package")
             .ok_or_else(|| anyhow!("Cannot read [package] section from toml file."))?
             .get("name")
@@ -54,7 +55,21 @@ impl CrateDetails {
             .ok_or_else(|| anyhow!("package.name is not a string, but should be."))?
             .to_owned();
 
-        let version = val
+        let readme = if let Some(readme) = toml
+            .get("package")
+            .ok_or_else(|| anyhow!("Cannot read [package] section from toml file."))?
+            .get("readme")
+        {
+            if let Some(readme) = readme.as_str() {
+                Some(readme.to_owned())
+            } else {
+                anyhow::bail!("package.readme is not a string, but should be.");
+            }
+        } else {
+            None
+        };
+
+        let version = toml
             .get("package")
             .ok_or_else(|| anyhow!("Cannot read [package] section from {name}."))?
             .get("version")
@@ -73,24 +88,24 @@ impl CrateDetails {
         for key in CRATE_DEPENDENCY_KEYS {
             match key {
                 CrateDependencyKey::BuildDependencies => {
-                    for item in get_all_dependency_sections(&val, &key.to_string()) {
+                    for item in get_all_dependency_sections(&toml, &key.to_string()) {
                         build_deps.extend(filter_workspace_dependencies(item)?)
                     }
                 }
                 CrateDependencyKey::Dependencies => {
-                    for item in get_all_dependency_sections(&val, &key.to_string()) {
+                    for item in get_all_dependency_sections(&toml, &key.to_string()) {
                         deps.extend(filter_workspace_dependencies(item)?)
                     }
                 }
                 CrateDependencyKey::DevDependencies => {
-                    for item in get_all_dependency_sections(&val, &key.to_string()) {
+                    for item in get_all_dependency_sections(&toml, &key.to_string()) {
                         dev_deps.extend(filter_workspace_dependencies(item)?)
                     }
                 }
             }
         }
 
-        let should_be_published = val
+        let should_be_published = toml
             .get("package")
             .ok_or_else(|| anyhow!("Cannot read [package] section from toml file."))?
             .get("publish")
@@ -103,21 +118,12 @@ impl CrateDetails {
             deps,
             dev_deps,
             build_deps,
-            toml_path: path,
+            toml_path,
             should_be_published,
+            readme,
         })
     }
 
-    /// Bump the version for a breaking change and to release. Examples of bumps carried out:
-    ///
-    /// ```text
-    /// 0.15.0 -> 0.16.0 (bump minor if 0.x.x)
-    /// 4.0.0 -> 5.0.0 (bump major if >1.0.0)
-    /// 4.0.0-dev -> 4.0.0 (remove prerelease label)
-    /// 4.0.0+buildmetadata -> 5.0.0+buildmetadata (preserve build metadata regardless)
-    /// ```
-    ///
-    /// Return the old and new version.
     pub fn write_own_version(&mut self, new_version: Version) -> anyhow::Result<()> {
         // Load TOML file and update the version in that.
         let mut toml = self.read_toml()?;
