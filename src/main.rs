@@ -29,7 +29,7 @@ use std::path::PathBuf;
 use tracing::{info, span, Level};
 use tracing_subscriber::prelude::*;
 
-use crate::crates::write_dependency_version;
+
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -244,6 +244,15 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         anyhow::bail!("No crates could be selected from the CLI options");
     }
 
+    info!(
+        "Processing selected crates in this order: {}",
+        selected_crates_order
+            .iter()
+            .map(|krate| (*krate).into())
+            .collect::<Vec<String>>()
+            .join(", ")
+    );
+
     let unordered_selected_crates = selected_crates
         .iter()
         .filter(|sel_crate| {
@@ -335,33 +344,11 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         // validate_crates(&crates, krate, None, krate, &opts.exclude, &[])?;
     }
 
-    info!(
-        "Processing crates in this order: {}",
-        selected_crates_order
-            .iter()
-            .map(|krate| (*krate).into())
-            .collect::<Vec<String>>()
-            .join(", ")
-    );
-
     if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
         for (_, details) in crates.details.iter() {
             details.set_registry(&registry)?
         }
     }
-
-    struct DepsAndCargoToml {
-        pub deps: HashSet<String>,
-        pub cargo_toml: PathBuf,
-    }
-    let deps_and_cargo_tomls = crates
-        .details
-        .iter()
-        .map(|(_, details)| DepsAndCargoToml {
-            deps: details.all_deps().map(|dep| dep.into()).collect(),
-            cargo_toml: details.toml_path.clone(),
-        })
-        .collect::<Vec<_>>();
 
     let mut processed_crates: HashSet<String> = HashSet::new();
     for sel_crate in selected_crates_order {
@@ -415,17 +402,25 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             let details = crates.details.get_mut(&krate).unwrap();
 
             let prev_versions = external::crates_io::crate_versions(&krate)?;
-            if details.needs_publishing(&opts.root, &prev_versions)? {
-                if details.maybe_bump_version(prev_versions)? {
-                    for dact in &deps_and_cargo_tomls {
-                        if dact.deps.iter().any(|dep| *dep == krate) {
-                            write_dependency_version(&dact.cargo_toml, &krate, &details.version)?;
-                        }
-                    }
-                }
+            let bumped_version = if details.needs_publishing(&opts.root, &prev_versions)? {
+                let bumped_version = if details.maybe_bump_version(prev_versions)? {
+                    Some(details.version.clone())
+                } else {
+                    None
+                };
                 crates.strip_dev_deps_and_publish(&krate)?;
+                bumped_version
             } else {
                 info!("Crate {krate} does not need to be published");
+                None
+            };
+
+            if let Some(bumped_version) = bumped_version {
+                for (_, details) in crates.details.iter() {
+                    if details.all_deps().any(|dep| *dep == krate) {
+                        details.write_dependency_version(&krate, &bumped_version)?;
+                    }
+                }
             }
 
             processed_crates.insert(krate);
