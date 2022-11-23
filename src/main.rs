@@ -363,6 +363,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
         info!("Processing crate");
 
+        git_checkpoint(&opts.root, GCM::Save)?;
         {
             let details = crates.details.get(sel_crate).unwrap();
             for krate in &publish_order {
@@ -376,6 +377,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 details.write_dependency_version(krate, &crate_details.version)?;
             }
         }
+        git_checkpoint(&opts.root, GCM::Save)?;
 
         let crates_to_publish = crates.what_needs_publishing(sel_crate, &publish_order)?;
 
@@ -407,6 +409,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 if details.needs_publishing(&opts.root, &prev_versions)? {
                     git_checkpoint(&opts.root, GCM::Save)?;
                     details.maybe_bump_version(prev_versions)?;
+                    git_checkpoint(&opts.root, GCM::Save)?;
                     let last_version = details.version.clone();
                     crates.strip_dev_deps_and_publish(&krate)?;
                     last_version
@@ -419,6 +422,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             for (_, details) in crates.details.iter() {
                 details.write_dependency_version(&krate, &last_version)?;
             }
+            git_checkpoint(&opts.root, GCM::Save)?;
 
             processed_crates.insert(krate);
         }
