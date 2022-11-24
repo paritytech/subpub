@@ -405,7 +405,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         }
 
         for krate in crates_to_publish {
-            if processed_crates.get(sel_crate).is_some() {
+            if processed_crates.get(&krate).is_some() {
                 info!("Crate {krate} was already processed",);
                 continue;
             }
