@@ -118,7 +118,7 @@ impl CrateDetails {
                 anyhow::bail!("Expected package.publish to be boolean in {:?}", &toml_path)
             }
         } else {
-            false
+            true
         };
 
         Ok(CrateDetails {
