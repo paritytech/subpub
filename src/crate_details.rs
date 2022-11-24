@@ -14,15 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with subpub.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::crates::{
-    edit_all_dependency_sections, write_dependency_version, CrateDependencyKey,
-    CRATE_DEPENDENCY_KEYS,
-};
+use crate::crates::{edit_all_dependency_sections, write_dependency_version, CrateDependencyKey};
 use crate::toml::{toml_read, toml_write};
 use crate::version::maybe_bump_for_breaking_change;
 use crate::{external, git::*};
 use anyhow::{anyhow, Context};
 use semver::Version;
+use strum::IntoEnumIterator;
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -39,6 +37,7 @@ pub struct CrateDetails {
     pub should_be_published: bool,
     pub toml_path: PathBuf,
     pub readme: Option<String>,
+    pub modified: bool,
 }
 
 impl CrateDetails {
@@ -88,7 +87,7 @@ impl CrateDetails {
         let mut dev_deps = HashSet::new();
         let mut deps = HashSet::new();
 
-        for key in CRATE_DEPENDENCY_KEYS {
+        for key in CrateDependencyKey::iter() {
             match key {
                 CrateDependencyKey::BuildDependencies => {
                     for item in get_all_dependency_sections(&toml, &key.to_string()) {
@@ -131,6 +130,7 @@ impl CrateDetails {
             toml_path,
             should_be_published,
             readme,
+            modified: false,
         })
     }
 
@@ -186,7 +186,7 @@ impl CrateDetails {
             Ok(())
         }
 
-        for key in CRATE_DEPENDENCY_KEYS {
+        for key in CrateDependencyKey::iter() {
             edit_all_dependency_sections(&mut toml, &key.to_string(), |item| {
                 do_set(item, registry)
             })?;
