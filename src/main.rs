@@ -159,7 +159,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         .map(|ord_crate| ord_crate.name)
         .collect();
     info!(
-        "If we were to publish all crates, it would be in this order: {}",
+        "If we were to publish all crates, it happen in this order: {}",
         publish_order
             .iter()
             .map(|krate| krate.to_owned())
@@ -183,9 +183,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         );
     }
 
-    let input_crates = if !opts.crates.is_empty() {
-        opts.crates.clone()
-    } else {
+    let input_crates = if opts.crates.is_empty() {
         publish_order
             .clone()
             .into_iter()
@@ -201,6 +199,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                     if details.should_be_published {
                         Some(Ok(krate))
                     } else {
+                        info!("Filtering out crate {krate} because it should not be published");
                         None
                     }
                 } else {
@@ -208,6 +207,8 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 }
             })
             .collect::<anyhow::Result<Vec<_>>>()?
+    } else {
+        opts.crates.clone()
     };
     let (selected_crates, selected_crates_order) = if let Some(start_from) = opts.start_from {
         let mut keep = false;
