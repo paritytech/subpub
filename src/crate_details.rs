@@ -48,22 +48,25 @@ impl CrateDetails {
 
         let name = toml
             .get("package")
-            .ok_or_else(|| anyhow!("Cannot read [package] section from toml file."))?
+            .ok_or_else(|| anyhow!("Cannot read [package] section from {:?}", &toml_path))?
             .get("name")
-            .ok_or_else(|| anyhow!("Cannot read package.name from toml file."))?
+            .ok_or_else(|| anyhow!("Cannot read package.name from {:?}", &toml_path))?
             .as_str()
-            .ok_or_else(|| anyhow!("package.name is not a string, but should be."))?
+            .ok_or_else(|| anyhow!("Cannot read package.name as a string from {:?}", &toml_path))?
             .to_owned();
 
         let readme = if let Some(readme) = toml
             .get("package")
-            .ok_or_else(|| anyhow!("Cannot read [package] section from toml file."))?
+            .ok_or_else(|| anyhow!("Cannot read [package] section from {:?}", &toml_path))?
             .get("readme")
         {
             if let Some(readme) = readme.as_str() {
                 Some(readme.to_owned())
             } else {
-                anyhow::bail!("package.readme is not a string, but should be.");
+                anyhow::bail!(
+                    "Cannot read package.readme as a string from {:?}",
+                    &toml_path
+                );
             }
         } else {
             None
@@ -71,11 +74,11 @@ impl CrateDetails {
 
         let version = toml
             .get("package")
-            .ok_or_else(|| anyhow!("Cannot read [package] section from {name}."))?
+            .ok_or_else(|| anyhow!("Cannot read [package] section from {:?}", &toml_path))?
             .get("version")
-            .ok_or_else(|| anyhow!("Cannot read package.version from {name}."))?
+            .ok_or_else(|| anyhow!("Cannot read package.version from {:?}", &toml_path))?
             .as_str()
-            .ok_or_else(|| anyhow!("Cannot read package.version from {name}."))?
+            .ok_or_else(|| anyhow!("Cannot read package.version from {:?}", &toml_path))?
             .to_owned();
 
         let version = Version::parse(&version)
@@ -105,12 +108,19 @@ impl CrateDetails {
             }
         }
 
-        let should_be_published = toml
+        let should_be_published = if let Some(value) = toml
             .get("package")
-            .ok_or_else(|| anyhow!("Cannot read [package] section from toml file."))?
+            .ok_or_else(|| anyhow!("Cannot read [package] section from {:?}", &toml_path))?
             .get("publish")
-            .and_then(|value| value.as_bool())
-            .unwrap_or(true);
+        {
+            if let Some(value) = value.as_bool() {
+                value
+            } else {
+                anyhow::bail!("Expected package.publish to be boolean in {:?}", &toml_path)
+            }
+        } else {
+            false
+        };
 
         Ok(CrateDetails {
             name,
