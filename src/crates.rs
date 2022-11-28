@@ -20,12 +20,12 @@ use crate::git::*;
 use crate::toml::toml_read;
 use crate::toml::toml_write;
 use anyhow::Context;
-use std::{fs, thread};
 use std::path::Path;
+use std::{fs, thread};
 use strum::EnumIter;
 use strum::EnumString;
 use strum::IntoEnumIterator;
-use tracing::{info};
+use tracing::info;
 
 use anyhow::anyhow;
 use std::collections::{HashMap, HashSet};
@@ -131,7 +131,7 @@ impl Crates {
                 let crates_committed =
                     fs::read_to_string(&crates_committed_file).with_context(|| {
                         format!(
-                            "Failed to read SPUB_CRATES_COMMITTED_FILE ({})",
+                            "Failed to read $SPUB_CRATES_COMMITTED_FILE ({})",
                             crates_committed_file
                         )
                     })?;
