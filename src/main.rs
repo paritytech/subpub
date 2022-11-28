@@ -124,7 +124,7 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn publish(opts: PublishOpts) -> anyhow::Result<()> {
-    let crates = Crates::load_crates_in_workspace(opts.root.clone())?;
+    let mut crates = Crates::load_crates_in_workspace(opts.root.clone())?;
     crates.setup_crates()?;
 
     struct OrderedCrate {
@@ -197,7 +197,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     }
 
     let crates_to_exclude = {
-        let mut crates_to_exclude = HashSet::from_iter(opts.exclude.iter());
+        let mut crates_to_exclude: HashSet<&String> = HashSet::from_iter(opts.exclude.iter());
 
         loop {
             let excluded_crates = crates_to_exclude
@@ -265,7 +265,8 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
     let selected_crates = if let Some(start_from) = opts.start_from {
         let mut keep = false;
-        let selected_crates = input_crates
+        
+        input_crates
             .into_iter()
             .filter(|krate| {
                 if **krate == start_from {
@@ -279,8 +280,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 }
                 keep
             })
-            .collect::<Vec<_>>();
-        selected_crates
+            .collect::<Vec<_>>()
     } else {
         input_crates
     };
