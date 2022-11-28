@@ -67,9 +67,9 @@ struct PublishOpts {
     start_from: Option<String>,
 
     #[clap(
-      short = 'v',
-      long = "verify-from",
-      help = "Only verify crates starting from a given crate when publishing. Useful to skip the process of verifying all crates up to the given crate, which can be time-consuming if the crate depends on lots of other crates which are expensive to verify."
+        short = 'v',
+        long = "verify-from",
+        help = "When publishing, only verify crates starting from this crate. Useful to skip the verification process of all crates up to the given crate, which can be time-consuming if the crate depends on lots of other crates that are expensive to verify."
     )]
     verify_from: Option<String>,
 
@@ -363,7 +363,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         }
     }
 
-    let crates_to_verify = if let Some(verify_from) = &opts.verify_from {
+    let crates_to_verify = opts.verify_from.as_ref().map(|verify_from| {
         let mut crates_to_verify = HashSet::new();
         let mut verify = false;
         for krate in &publish_order {
@@ -374,10 +374,8 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 crates_to_verify.insert(krate);
             }
         }
-        Some(crates_to_verify)
-    } else {
-        None
-    };
+        crates_to_verify
+    });
 
     let mut processed_crates: HashSet<String> = HashSet::new();
     for sel_crate in selected_crates_order {

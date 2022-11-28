@@ -97,25 +97,29 @@ impl Crates {
     /// Remove any dev-dependency sections in the TOML file and publish.
     pub fn strip_dev_deps_and_publish(
         &self,
-        name: &str,
+        krate: &str,
         crates_to_verify: Option<&HashSet<&String>>,
     ) -> anyhow::Result<()> {
-        let details = match self.details.get(name) {
+        let details = match self.details.get(krate) {
             Some(details) => details,
-            None => anyhow::bail!("Crate '{name}' not found"),
+            None => anyhow::bail!("Crate not found: {krate}"),
         };
 
         details.strip_dev_deps(&self.root)?;
         details.publish(
             crates_to_verify
-                .map(|crates_to_verify| crates_to_verify.iter().any(|krate| *krate == name))
+                .map(|crates_to_verify| {
+                    crates_to_verify
+                        .iter()
+                        .any(|crate_to_verify| krate == *crate_to_verify)
+                })
                 .unwrap_or(true),
         )?;
         git_checkpoint_revert(&self.root)?;
 
         // Don't return until the crate has finished being published; it won't
         // be immediately visible on crates.io, so wait until it shows up.
-        while !external::crates_io::does_crate_exist(name, &details.version)? {
+        while !external::crates_io::does_crate_exist(krate, &details.version)? {
             std::thread::sleep(std::time::Duration::from_millis(2500))
         }
 
