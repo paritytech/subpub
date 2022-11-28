@@ -141,7 +141,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             {
                 continue;
             }
-            let deps: HashSet<&String> = HashSet::from_iter(details.deps_relevant_during_publish());
+            let deps: HashSet<&String> = HashSet::from_iter(details.deps_to_publish());
             let ordered_deps = publish_order
                 .iter()
                 .filter(|ord_crate| deps.iter().any(|dep| **dep == ord_crate.name))
@@ -265,7 +265,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
     let selected_crates = if let Some(start_from) = opts.start_from {
         let mut keep = false;
-        
+
         input_crates
             .into_iter()
             .filter(|krate| {

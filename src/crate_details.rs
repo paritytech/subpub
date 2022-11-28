@@ -153,12 +153,8 @@ impl CrateDetails {
             .chain(self.build_deps.iter())
     }
 
-    pub fn deps_relevant_during_publish(&self) -> impl Iterator<Item = &String> {
-        self.deps.iter().chain(self.build_deps.iter())
-    }
-
     pub fn deps_to_publish(&self) -> impl Iterator<Item = &String> {
-        self.deps.iter()
+        self.deps.iter().chain(self.build_deps.iter())
     }
 
     pub fn set_registry<S: AsRef<str>>(&self, registry: S) -> anyhow::Result<()> {
