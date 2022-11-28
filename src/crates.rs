@@ -20,11 +20,12 @@ use crate::git::*;
 use crate::toml::toml_read;
 use crate::toml::toml_write;
 use anyhow::Context;
-use std::fs;
+use std::{fs, thread};
 use std::path::Path;
 use strum::EnumIter;
 use strum::EnumString;
 use strum::IntoEnumIterator;
+use tracing::{info};
 
 use anyhow::anyhow;
 use std::collections::{HashMap, HashSet};
@@ -122,16 +123,36 @@ impl Crates {
         // Don't return until the crate has finished being published; it won't
         // be immediately visible on crates.io, so wait until it shows up.
         while !external::crates_io::does_crate_exist(krate, &details.version)? {
-            std::thread::sleep(std::time::Duration::from_millis(2500))
+            thread::sleep(std::time::Duration::from_millis(2500))
         }
 
-        let _after_publish_delay = if let Some(after_publish_delay) = after_publish_delay {
+        if let Ok(crates_committed_file) = std::env::var("SPUB_CRATES_COMMITTED_FILE") {
+            loop {
+                let crates_committed =
+                    fs::read_to_string(&crates_committed_file).with_context(|| {
+                        format!(
+                            "Failed to read SPUB_CRATES_COMMITTED_FILE ({})",
+                            crates_committed_file
+                        )
+                    })?;
+                for crate_committed in crates_committed.lines() {
+                    if crate_committed == krate {
+                        return Ok(());
+                    }
+                }
+                info!("Polling $SPUB_CRATES_COMMITTED_FILE for crate {krate}");
+                thread::sleep(Duration::from_millis(3000));
+            }
+        };
+
+        let after_publish_delay = if let Some(after_publish_delay) = after_publish_delay {
             Duration::from_secs(*after_publish_delay)
         } else {
             // Wait for the crate to be uploaded to the index after it is registered
             // on crates.io's database
             Duration::from_millis(2500)
         };
+        thread::sleep(after_publish_delay);
 
         Ok(())
     }
