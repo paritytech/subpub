@@ -197,55 +197,71 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     }
 
     let crates_to_exclude = {
-        let mut crates_to_exclude: HashSet<&str> = HashSet::new();
-        for excluded_crate in &opts.exclude {
-            crates_to_exclude.insert(excluded_crate);
-            for krate in &publish_order {
-                let details = crates
-                    .details
-                    .get(krate)
-                    .with_context(|| format!("Crate not found: {krate}"))?;
-                if details.deps_to_publish().any(|dep| dep == excluded_crate) {
+        let mut crates_to_exclude = HashSet::from_iter(opts.exclude.iter());
+
+        let mut visited_dependents: HashSet<&String> = HashSet::new();
+        loop {
+            let crates_to_exclude_len = crates_to_exclude.len();
+
+            // Mark all crates which depend on crates to be excluded
+            let excluded_crates = crates_to_exclude
+                .iter()
+                .map(|excluded_crate| excluded_crate.to_owned())
+                .collect::<Vec<_>>();
+            for excluded_crate in &excluded_crates {
+                crates_to_exclude.insert(excluded_crate);
+                for krate in &publish_order {
+                    let details = crates
+                        .details
+                        .get(krate)
+                        .with_context(|| format!("Crate not found: {krate}"))?;
+                    if details.deps_to_publish().any(|dep| dep == *excluded_crate) {
+                        crates_to_exclude.insert(krate);
+                    }
+                }
+            }
+
+            // Mark all crates are dependencies of crates to be excluded
+            let excluded_crates = crates_to_exclude
+                .iter()
+                .map(|excluded_crate| excluded_crate.to_owned())
+                .collect::<Vec<_>>();
+            fn visit_crates<'a>(
+                crates: &'a Crates,
+                crates_to_exclude: &mut HashSet<&'a String>,
+                visited_dependents: &mut HashSet<&'a String>,
+                krate: &'a String,
+            ) -> anyhow::Result<()> {
+                if visited_dependents.get(krate).is_none() {
+                    visited_dependents.insert(krate);
+
                     crates_to_exclude.insert(krate);
+
+                    let details = crates
+                        .details
+                        .get(krate)
+                        .with_context(|| format!("Crate not found: {krate}"))?;
+
+                    for dep in details.deps_to_publish() {
+                        visit_crates(crates, crates_to_exclude, visited_dependents, dep)?;
+                    }
                 }
+                Ok(())
+            }
+            for excluded_crate in excluded_crates {
+                visit_crates(
+                    &crates,
+                    &mut crates_to_exclude,
+                    &mut visited_dependents,
+                    excluded_crate,
+                )?;
+            }
+
+            if crates_to_exclude.len() == crates_to_exclude_len {
+                break;
             }
         }
 
-        let mut visited_crates: HashSet<&str> = HashSet::new();
-        fn visit_crates<'a>(
-            crates: &'a Crates,
-            crates_to_exclude: &mut HashSet<&'a str>,
-            visited_crates: &mut HashSet<&'a str>,
-            krate: &'a str,
-        ) -> anyhow::Result<()> {
-            if visited_crates.get(krate).is_none() {
-                visited_crates.insert(krate);
-
-                crates_to_exclude.insert(krate);
-
-                let details = crates
-                    .details
-                    .get(krate)
-                    .with_context(|| format!("Crate not found: {krate}"))?;
-
-                for dep in details.deps_to_publish() {
-                    visit_crates(crates, crates_to_exclude, visited_crates, dep)?;
-                }
-            }
-            Ok(())
-        }
-        let excluded_crates = crates_to_exclude
-            .iter()
-            .map(|excluded_crate| excluded_crate.to_owned())
-            .collect::<Vec<_>>();
-        for excluded_crate in excluded_crates {
-            visit_crates(
-                &crates,
-                &mut crates_to_exclude,
-                &mut visited_crates,
-                excluded_crate,
-            )?;
-        }
         crates_to_exclude
     };
 
@@ -331,7 +347,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         initial_crate: &String,
         parent_crate: Option<&String>,
         krate: &String,
-        excluded_crates: &HashSet<&str>,
+        excluded_crates: &HashSet<&String>,
         visited_crates: &[&String],
     ) -> anyhow::Result<()> {
         if visited_crates
@@ -343,7 +359,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
         if excluded_crates
             .iter()
-            .any(|excluded_crate| excluded_crate == krate)
+            .any(|excluded_crate| *excluded_crate == krate)
         {
             if let Some(parent_crate) = parent_crate {
                 anyhow::bail!("Crate {krate} was excluded from CLI options, but it is a dependency of {parent_crate}, and that is a dependency of {initial_crate}, which would be published.");
