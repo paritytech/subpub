@@ -159,7 +159,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         .map(|ord_crate| ord_crate.name)
         .collect();
     info!(
-        "If we were to publish all crates, it happen in this order: {}",
+        "If we were to publish all crates, it would happen in this order: {}",
         publish_order
             .iter()
             .map(|krate| krate.to_owned())
