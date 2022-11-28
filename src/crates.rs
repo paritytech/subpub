@@ -20,9 +20,9 @@ use crate::git::*;
 use crate::toml::toml_read;
 use crate::toml::toml_write;
 use anyhow::Context;
-use strum::EnumIter;
 use std::fs;
 use std::path::Path;
+use strum::EnumIter;
 use strum::EnumString;
 use strum::IntoEnumIterator;
 
@@ -95,14 +95,22 @@ impl Crates {
     }
 
     /// Remove any dev-dependency sections in the TOML file and publish.
-    pub fn strip_dev_deps_and_publish(&self, name: &str) -> anyhow::Result<()> {
+    pub fn strip_dev_deps_and_publish(
+        &self,
+        name: &str,
+        crates_to_verify: Option<&HashSet<&String>>,
+    ) -> anyhow::Result<()> {
         let details = match self.details.get(name) {
             Some(details) => details,
             None => anyhow::bail!("Crate '{name}' not found"),
         };
 
         details.strip_dev_deps(&self.root)?;
-        details.publish()?;
+        details.publish(
+            crates_to_verify
+                .map(|crates_to_verify| crates_to_verify.iter().any(|krate| *krate == name))
+                .unwrap_or(true),
+        )?;
         git_checkpoint_revert(&self.root)?;
 
         // Don't return until the crate has finished being published; it won't

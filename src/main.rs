@@ -66,6 +66,9 @@ struct PublishOpts {
     )]
     start_from: Option<String>,
 
+    #[clap(short = 'v', long = "verify-from")]
+    verify_from: Option<String>,
+
     #[clap(
         short = 'e',
         long = "exclude",
@@ -356,6 +359,22 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         }
     }
 
+    let crates_to_verify = if let Some(verify_from) = &opts.verify_from {
+        let mut crates_to_verify = HashSet::new();
+        let mut verify = false;
+        for krate in &publish_order {
+            if krate == verify_from {
+                verify = true;
+            }
+            if verify {
+                crates_to_verify.insert(krate);
+            }
+        }
+        Some(crates_to_verify)
+    } else {
+        None
+    };
+
     let mut processed_crates: HashSet<String> = HashSet::new();
     for sel_crate in selected_crates_order {
         let span = span!(Level::INFO, "_", crate = sel_crate);
@@ -421,7 +440,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                         details.maybe_bump_version(prev_versions)
                     })??;
                     let last_version = details.version.clone();
-                    crates.strip_dev_deps_and_publish(&krate)?;
+                    crates.strip_dev_deps_and_publish(&krate, crates_to_verify.as_ref())?;
                     last_version
                 } else {
                     info!("Crate {krate} does not need to be published");

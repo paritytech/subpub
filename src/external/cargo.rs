@@ -17,7 +17,7 @@
 use std::path::Path;
 use std::process::Command;
 
-pub fn publish_crate(root: &Path, package: &str) -> anyhow::Result<()> {
+pub fn publish_crate(root: &Path, package: &str, verify: bool) -> anyhow::Result<()> {
     let mut cmd = Command::new("cargo");
 
     cmd.current_dir(root).arg("publish");
@@ -28,6 +28,10 @@ pub fn publish_crate(root: &Path, package: &str) -> anyhow::Result<()> {
             .arg(registry)
             .arg("--token")
             .arg(std::env::var("SPUB_REGISTRY_TOKEN").unwrap());
+    }
+
+    if !verify {
+        cmd.arg("--no-verify");
     }
 
     if !cmd

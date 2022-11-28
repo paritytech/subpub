@@ -241,12 +241,12 @@ impl CrateDetails {
 
     /// Publish the current code for this crate as-is. You may want to run
     /// [`CrateDetails::strip_dev_deps()`] first.
-    pub fn publish(&self) -> anyhow::Result<()> {
+    pub fn publish(&self, verify: bool) -> anyhow::Result<()> {
         let parent = self
             .toml_path
             .parent()
             .with_context(|| format!("{:?} has no parent directory", self.toml_path))?;
-        external::cargo::publish_crate(parent, &self.name)
+        external::cargo::publish_crate(parent, &self.name, verify)
     }
 
     /// This checks whether we actually need to publish a new version of the crate. It'll return `false`
