@@ -232,6 +232,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         for excluded_crate in &opts.exclude {
             visit_crates(&crates, &mut crates_to_exclude, excluded_crate)?;
         }
+        crates_to_exclude
     };
 
     let input_crates = if opts.crates.is_empty() {
