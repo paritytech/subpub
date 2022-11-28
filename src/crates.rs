@@ -141,15 +141,15 @@ impl Crates {
                     }
                 }
                 info!("Polling $SPUB_CRATES_COMMITTED_FILE for crate {krate}");
-                thread::sleep(Duration::from_millis(3000));
+                thread::sleep(Duration::from_secs(3));
             }
         };
 
         let after_publish_delay = if let Some(after_publish_delay) = after_publish_delay {
             Duration::from_secs(*after_publish_delay)
         } else {
-            // Wait for the crate to be uploaded to the index after it is registered
-            // on crates.io's database
+            // Wait for the crate to be uploaded to the index after it is
+            // registered on crates.io's database
             Duration::from_millis(2500)
         };
         thread::sleep(after_publish_delay);
