@@ -359,9 +359,8 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     }
     for krate in &selected_crates {
         info!("Validating crate {krate}");
-        validate_crates(&crates, krate, None, krate, &crates_to_exclude, &[])?;
+        // validate_crates(&crates, krate, None, krate, &crates_to_exclude, &[])?;
     }
-    std::process::exit(0);
 
     if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
         for (_, details) in crates.details.iter() {
