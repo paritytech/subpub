@@ -230,6 +230,14 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         publish_order
             .iter()
             .filter_map(|krate| {
+                if opts
+                    .start_from
+                    .as_ref()
+                    .map(|start_from| start_from == krate)
+                    .unwrap_or(false)
+                {
+                    return Some(Ok(krate));
+                }
                 if crates_to_exclude
                     .iter()
                     .any(|excluded_crate| *excluded_crate == krate)
@@ -262,6 +270,12 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             .filter(|krate| {
                 if **krate == start_from {
                     keep = true;
+                    if crates_to_exclude
+                        .iter()
+                        .any(|excluded_crate| excluded_crate == krate)
+                    {
+                        return false;
+                    }
                 }
                 keep
             })
