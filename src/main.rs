@@ -74,6 +74,12 @@ struct PublishOpts {
     verify_from: Option<String>,
 
     #[clap(
+        long = "after-publish-delay",
+        help = "How many seconds to wait after publishing a crate. Useful to work around crates.io publishing rate limits in case you need to publish lots of crates."
+    )]
+    after_publish_delay: Option<u64>,
+
+    #[clap(
         short = 'e',
         long = "exclude",
         help = "Crates to be excluded from the publishing process."
@@ -442,7 +448,11 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                         details.maybe_bump_version(prev_versions)
                     })??;
                     let last_version = details.version.clone();
-                    crates.strip_dev_deps_and_publish(&krate, crates_to_verify.as_ref())?;
+                    crates.strip_dev_deps_and_publish(
+                        &krate,
+                        crates_to_verify.as_ref(),
+                        opts.after_publish_delay.as_ref(),
+                    )?;
                     last_version
                 } else {
                     info!("Crate {krate} does not need to be published");

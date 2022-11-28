@@ -28,6 +28,7 @@ use strum::IntoEnumIterator;
 
 use anyhow::anyhow;
 use std::collections::{HashMap, HashSet};
+use std::time::Duration;
 
 use std::path::PathBuf;
 use walkdir::WalkDir;
@@ -99,6 +100,7 @@ impl Crates {
         &self,
         krate: &str,
         crates_to_verify: Option<&HashSet<&String>>,
+        after_publish_delay: Option<&u64>,
     ) -> anyhow::Result<()> {
         let details = match self.details.get(krate) {
             Some(details) => details,
@@ -123,9 +125,13 @@ impl Crates {
             std::thread::sleep(std::time::Duration::from_millis(2500))
         }
 
-        // Wait for the crate to be uploaded to the index after it is registered
-        // on crates.io's database
-        std::thread::sleep(std::time::Duration::from_millis(2500));
+        let _after_publish_delay = if let Some(after_publish_delay) = after_publish_delay {
+            Duration::from_secs(*after_publish_delay)
+        } else {
+            // Wait for the crate to be uploaded to the index after it is registered
+            // on crates.io's database
+            Duration::from_millis(2500)
+        };
 
         Ok(())
     }
