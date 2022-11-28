@@ -62,11 +62,15 @@ struct PublishOpts {
     #[clap(
         short = 's',
         long = "start-from",
-        help = "Start publishing from this crate. Useful to resume the process in case it fails for some reason. This option does not take into account code changes between the stop of the first attempt and the resumption, so you might potentially miss some crates in case they're added and/or renamed within that gap."
+        help = "Start publishing from this crate. Useful to resume the process in case it fails for some reason. This option does not take into account crates which are ordered before the given crate, so you might potentially miiss added or renamed crates in case they are ordered before the given crate."
     )]
     start_from: Option<String>,
 
-    #[clap(short = 'v', long = "verify-from")]
+    #[clap(
+      short = 'v',
+      long = "verify-from",
+      help = "Only verify crates starting from a given crate when publishing. Useful to skip the process of verifying all crates up to the given crate, which can be time-consuming if the crate depends on lots of other crates which are expensive to verify."
+    )]
     verify_from: Option<String>,
 
     #[clap(
