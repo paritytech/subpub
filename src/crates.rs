@@ -157,16 +157,16 @@ impl Crates {
         Ok(())
     }
 
-    pub fn what_needs_publishing<Crate: AsRef<str>>(
+    pub fn what_needs_publishing<'a, Crate: AsRef<str>>(
         &self,
         krate: Crate,
-        publish_order: &[String],
-    ) -> anyhow::Result<Vec<String>> {
+        publish_order: &'a [String],
+    ) -> anyhow::Result<Vec<&'a String>> {
         let mut registered_crates: HashSet<&str> = HashSet::new();
-        fn register_crates<'a>(
-            crates: &'a Crates,
-            registered_crates: &mut HashSet<&'a str>,
-            krate: &'a str,
+        fn register_crates<'b>(
+            crates: &'b Crates,
+            registered_crates: &mut HashSet<&'b str>,
+            krate: &'b str,
         ) -> anyhow::Result<()> {
             if registered_crates.get(krate).is_none() {
                 registered_crates.insert(krate);
@@ -188,7 +188,7 @@ impl Crates {
             .iter()
             .filter_map(|krate| {
                 if registered_crates.iter().any(|reg_crate| reg_crate == krate) {
-                    Some(krate.into())
+                    Some(krate)
                 } else {
                     None
                 }

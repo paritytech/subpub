@@ -124,7 +124,7 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn publish(opts: PublishOpts) -> anyhow::Result<()> {
-    let mut crates = Crates::load_crates_in_workspace(opts.root.clone())?;
+    let crates = Crates::load_crates_in_workspace(opts.root.clone())?;
     crates.setup_crates()?;
 
     struct OrderedCrate {
@@ -199,23 +199,28 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     let crates_to_exclude = {
         let mut crates_to_exclude: HashSet<&str> = HashSet::new();
         for excluded_crate in &opts.exclude {
+            crates_to_exclude.insert(excluded_crate);
             for krate in &publish_order {
                 let details = crates
                     .details
                     .get(krate)
                     .with_context(|| format!("Crate not found: {krate}"))?;
-                if details.all_deps().any(|dep| dep == krate) {
+                if details.deps_to_publish().any(|dep| dep == excluded_crate) {
                     crates_to_exclude.insert(krate);
                 }
             }
-            crates_to_exclude.insert(excluded_crate);
         }
+
+        let mut visited_crates: HashSet<&str> = HashSet::new();
         fn visit_crates<'a>(
             crates: &'a Crates,
             crates_to_exclude: &mut HashSet<&'a str>,
+            visited_crates: &mut HashSet<&'a str>,
             krate: &'a str,
         ) -> anyhow::Result<()> {
-            if crates_to_exclude.get(krate).is_none() {
+            if visited_crates.get(krate).is_none() {
+                visited_crates.insert(krate);
+
                 crates_to_exclude.insert(krate);
 
                 let details = crates
@@ -224,30 +229,37 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                     .with_context(|| format!("Crate not found: {krate}"))?;
 
                 for dep in details.deps_to_publish() {
-                    visit_crates(crates, crates_to_exclude, dep)?;
+                    visit_crates(crates, crates_to_exclude, visited_crates, dep)?;
                 }
             }
             Ok(())
         }
-        for excluded_crate in &opts.exclude {
-            visit_crates(&crates, &mut crates_to_exclude, excluded_crate)?;
+        let excluded_crates = crates_to_exclude
+            .iter()
+            .map(|excluded_crate| excluded_crate.to_owned())
+            .collect::<Vec<_>>();
+        for excluded_crate in excluded_crates {
+            visit_crates(
+                &crates,
+                &mut crates_to_exclude,
+                &mut visited_crates,
+                excluded_crate,
+            )?;
         }
         crates_to_exclude
     };
 
     let input_crates = if opts.crates.is_empty() {
         publish_order
-            .clone()
-            .into_iter()
+            .iter()
             .filter_map(|krate| {
-                if opts
-                    .exclude
+                if crates_to_exclude
                     .iter()
                     .any(|excluded_crate| *excluded_crate == krate)
                 {
                     return None;
                 }
-                if let Some(details) = crates.details.get(&krate) {
+                if let Some(details) = crates.details.get(krate) {
                     if details.should_be_published {
                         Some(Ok(krate))
                     } else {
@@ -260,51 +272,35 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             })
             .collect::<anyhow::Result<Vec<_>>>()?
     } else {
-        opts.crates.clone()
+        opts.crates.iter().collect::<Vec<_>>()
     };
-    let (selected_crates, selected_crates_order) = if let Some(start_from) = opts.start_from {
-        let mut keep = false;
-        let selected_crates = input_crates
-            .into_iter()
-            .filter(|krate| {
-                if *krate == start_from {
-                    keep = true;
-                }
-                keep
-            })
-            .collect::<Vec<_>>();
 
+    let selected_crates = if let Some(start_from) = opts.start_from {
         let mut keep = false;
-        let selected_crates_order = publish_order
+        let selected_crates = publish_order
             .iter()
             .filter(|krate| {
                 if **krate == start_from {
                     keep = true;
                 }
-                keep && selected_crates.iter().any(|sel_crate| sel_crate == *krate)
+                keep && input_crates.iter().any(|input_crate| input_crate == krate)
             })
             .collect::<Vec<_>>();
-
-        (selected_crates, selected_crates_order)
+        selected_crates
     } else {
-        let selected_crates_order = publish_order
+        publish_order
             .iter()
-            .filter(|ord_crate| {
-                input_crates
-                    .iter()
-                    .any(|sel_crate| *sel_crate == **ord_crate)
-            })
-            .collect::<Vec<_>>();
-
-        (input_crates, selected_crates_order)
+            .filter(|krate| input_crates.iter().any(|input_crate| input_crate == krate))
+            .collect::<Vec<_>>()
     };
+
     if selected_crates.is_empty() {
         anyhow::bail!("No crates could be selected from the CLI options");
     }
 
     info!(
         "Selected the following crates to be published, in order: {}",
-        selected_crates_order
+        selected_crates
             .iter()
             .map(|krate| (*krate).into())
             .collect::<Vec<String>>()
@@ -314,9 +310,9 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     let unordered_selected_crates = selected_crates
         .iter()
         .filter(|sel_crate| {
-            !selected_crates_order
+            !selected_crates
                 .iter()
-                .any(|sel_crate_ordered| sel_crate_ordered == sel_crate)
+                .any(|sel_crate_ordered| sel_crate_ordered == *sel_crate)
         })
         .collect::<Vec<_>>();
     if !unordered_selected_crates.is_empty() {
@@ -324,7 +320,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             "Failed to determine publish order for the following selected crates: {}",
             unordered_selected_crates
                 .iter()
-                .map(|krate| (*krate).into())
+                .map(|krate| (**krate).into())
                 .collect::<Vec<String>>()
                 .join(", ")
         );
@@ -335,7 +331,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         initial_crate: &String,
         parent_crate: Option<&String>,
         krate: &String,
-        excluded_crates: &[String],
+        excluded_crates: &HashSet<&str>,
         visited_crates: &[&String],
     ) -> anyhow::Result<()> {
         if visited_crates
@@ -345,22 +341,15 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             return Ok(());
         }
 
-        if parent_crate.is_some() {
-            if excluded_crates
-                .iter()
-                .any(|excluded_crate| excluded_crate == krate)
-            {
-                if let Some(parent_crate) = parent_crate {
-                    anyhow::bail!("Crate {krate} was excluded from CLI options, but it is a dependency of {parent_crate}, and that is a dependency of {initial_crate}, which would be published.");
-                } else {
-                    anyhow::bail!("Crate {krate} was excluded from CLI options, but it is a dependency of {initial_crate}, which would be published.");
-                }
-            }
-        } else if excluded_crates
+        if excluded_crates
             .iter()
             .any(|excluded_crate| excluded_crate == krate)
         {
-            return Ok(());
+            if let Some(parent_crate) = parent_crate {
+                anyhow::bail!("Crate {krate} was excluded from CLI options, but it is a dependency of {parent_crate}, and that is a dependency of {initial_crate}, which would be published.");
+            } else {
+                anyhow::bail!("Crate {krate} was excluded from CLI options, but it is a dependency of  {initial_crate}, which would be published.");
+            }
         }
 
         let details = crates
@@ -375,7 +364,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             }
         }
 
-        for dep in &details.deps {
+        for dep in details.deps_to_publish() {
             let visited_crates = visited_crates
                 .iter()
                 .copied()
@@ -399,7 +388,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     }
     for krate in &selected_crates {
         info!("Validating crate {krate}");
-        validate_crates(&crates, krate, None, krate, &opts.exclude, &[])?;
+        validate_crates(&crates, krate, None, krate, &crates_to_exclude, &[])?;
     }
     std::process::exit(0);
 
@@ -423,8 +412,8 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         crates_to_verify
     });
 
-    let mut processed_crates: HashSet<String> = HashSet::new();
-    for sel_crate in selected_crates_order {
+    let mut processed_crates: HashSet<&String> = HashSet::new();
+    for sel_crate in selected_crates {
         let span = span!(Level::INFO, "_", crate = sel_crate);
         let _enter = span.enter();
 
@@ -465,7 +454,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 "Crates will be processed in the following order for publishing {sel_crate}: {}",
                 crates_to_publish
                     .iter()
-                    .map(|krate| (krate).into())
+                    .map(|krate| (*krate).into())
                     .collect::<Vec<String>>()
                     .join(", ")
             );
@@ -480,16 +469,16 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             let last_version = {
                 let details = crates
                     .details
-                    .get_mut(&krate)
+                    .get_mut(krate)
                     .with_context(|| format!("Crate not found: {krate}"))?;
-                let prev_versions = external::crates_io::crate_versions(&krate)?;
+                let prev_versions = external::crates_io::crate_versions(krate)?;
                 if details.needs_publishing(&opts.root, &prev_versions)? {
                     with_save_checkpoint(&opts.root, || {
                         details.maybe_bump_version(prev_versions)
                     })??;
                     let last_version = details.version.clone();
                     crates.strip_dev_deps_and_publish(
-                        &krate,
+                        krate,
                         crates_to_verify.as_ref(),
                         opts.after_publish_delay.as_ref(),
                     )?;
@@ -502,7 +491,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
             with_save_checkpoint(&opts.root, || -> anyhow::Result<()> {
                 for (_, details) in crates.details.iter() {
-                    details.write_dependency_version(&krate, &last_version)?;
+                    details.write_dependency_version(krate, &last_version)?;
                 }
                 Ok(())
             })??;
@@ -510,7 +499,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             processed_crates.insert(krate);
         }
 
-        processed_crates.insert(sel_crate.into());
+        processed_crates.insert(sel_crate);
     }
 
     if opts.post_check {
