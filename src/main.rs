@@ -196,6 +196,44 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         );
     }
 
+    let crates_to_exclude = {
+        let mut crates_to_exclude: HashSet<&str> = HashSet::new();
+        for excluded_crate in &opts.exclude {
+            for krate in &publish_order {
+                let details = crates
+                    .details
+                    .get(krate)
+                    .with_context(|| format!("Crate not found: {krate}"))?;
+                if details.all_deps().any(|dep| dep == krate) {
+                    crates_to_exclude.insert(krate);
+                }
+            }
+            crates_to_exclude.insert(excluded_crate);
+        }
+        fn visit_crates<'a>(
+            crates: &'a Crates,
+            crates_to_exclude: &mut HashSet<&'a str>,
+            krate: &'a str,
+        ) -> anyhow::Result<()> {
+            if crates_to_exclude.get(krate).is_none() {
+                crates_to_exclude.insert(krate);
+
+                let details = crates
+                    .details
+                    .get(krate)
+                    .with_context(|| format!("Crate not found: {krate}"))?;
+
+                for dep in details.deps_to_publish() {
+                    visit_crates(crates, crates_to_exclude, dep)?;
+                }
+            }
+            Ok(())
+        }
+        for excluded_crate in &opts.exclude {
+            visit_crates(&crates, &mut crates_to_exclude, excluded_crate)?;
+        }
+    };
+
     let input_crates = if opts.crates.is_empty() {
         publish_order
             .clone()
@@ -206,7 +244,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                     .iter()
                     .any(|excluded_crate| *excluded_crate == krate)
                 {
-                    return Some(Ok(krate));
+                    return None;
                 }
                 if let Some(details) = crates.details.get(&krate) {
                     if details.should_be_published {
@@ -360,8 +398,9 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     }
     for krate in &selected_crates {
         info!("Validating crate {krate}");
-        // validate_crates(&crates, krate, None, krate, &opts.exclude, &[])?;
+        validate_crates(&crates, krate, None, krate, &opts.exclude, &[])?;
     }
+    std::process::exit(0);
 
     if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
         for (_, details) in crates.details.iter() {
