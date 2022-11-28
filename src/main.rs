@@ -249,26 +249,26 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             })
             .collect::<anyhow::Result<Vec<_>>>()?
     } else {
-        opts.crates.iter().collect::<Vec<_>>()
+        publish_order
+            .iter()
+            .filter(|ordered_crate| opts.crates.iter().any(|krate| *ordered_crate == krate))
+            .collect::<Vec<_>>()
     };
 
     let selected_crates = if let Some(start_from) = opts.start_from {
         let mut keep = false;
-        let selected_crates = publish_order
-            .iter()
+        let selected_crates = input_crates
+            .into_iter()
             .filter(|krate| {
                 if **krate == start_from {
                     keep = true;
                 }
-                keep && input_crates.iter().any(|input_crate| input_crate == krate)
+                keep
             })
             .collect::<Vec<_>>();
         selected_crates
     } else {
-        publish_order
-            .iter()
-            .filter(|krate| input_crates.iter().any(|input_crate| input_crate == krate))
-            .collect::<Vec<_>>()
+        input_crates
     };
     if selected_crates.is_empty() {
         anyhow::bail!("No crates could be selected from the CLI options");
