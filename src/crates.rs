@@ -116,7 +116,10 @@ impl Crates {
             })
             .unwrap_or(true);
 
+        info!("Stripping dev-dependencies of crate {krate} before publishing");
         details.strip_dev_deps(&self.root)?;
+
+        info!("Publishing crate {krate}");
         if let Err(err) = details.publish(should_verify) {
             info!(
                 "

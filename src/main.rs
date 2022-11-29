@@ -453,7 +453,10 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             info!("Crate does not need to be published");
             continue;
         } else if crates_to_publish.len() == 1 {
-            info!("Publishing crate {}", crates_to_publish[0])
+            info!(
+                "Crate {} will be processed for publishing",
+                crates_to_publish[0]
+            )
         } else {
             info!(
                 "Crates will be processed in the following order for publishing {sel_crate}: {}",
