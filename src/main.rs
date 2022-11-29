@@ -302,23 +302,21 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     };
 
     let selected_crates = if let Some(start_from) = opts.start_from {
+        let mut input_crates = input_crates;
         let mut keep = false;
-
-        input_crates
-            .into_iter()
-            .filter(|krate| {
-                if **krate == start_from {
-                    keep = true;
-                    if crates_to_exclude
-                        .iter()
-                        .any(|excluded_crate| excluded_crate == krate)
-                    {
-                        return false;
-                    }
+        input_crates.retain_mut(|krate| {
+            if **krate == start_from {
+                keep = true;
+                if crates_to_exclude
+                    .iter()
+                    .any(|excluded_crate| excluded_crate == krate)
+                {
+                    return false;
                 }
-                keep
-            })
-            .collect::<Vec<_>>()
+            }
+            keep
+        });
+        input_crates
     } else {
         input_crates
     };
@@ -407,17 +405,16 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     }
 
     let crates_to_verify = opts.verify_from.as_ref().map(|verify_from| {
-        let mut crates_to_verify = HashSet::new();
         let mut verify = false;
-        for krate in &publish_order {
-            if krate == verify_from {
-                verify = true;
-            }
-            if verify {
-                crates_to_verify.insert(krate);
-            }
-        }
-        crates_to_verify
+        publish_order
+            .iter()
+            .filter(|krate| {
+                if *krate == verify_from {
+                    verify = true;
+                }
+                verify
+            })
+            .collect::<Vec<_>>()
     });
 
     let mut processed_crates: HashSet<&String> = HashSet::new();

@@ -99,8 +99,8 @@ impl Crates {
     /// Remove any dev-dependency sections in the TOML file and publish.
     pub fn strip_dev_deps_and_publish(
         &self,
-        krate: &str,
-        crates_to_verify: Option<&HashSet<&String>>,
+        krate: &String,
+        crates_to_verify: Option<&Vec<&String>>,
         after_publish_delay: Option<&u64>,
     ) -> anyhow::Result<()> {
         let details = match self.details.get(krate) {
@@ -108,16 +108,16 @@ impl Crates {
             None => anyhow::bail!("Crate not found: {krate}"),
         };
 
+        let should_verify = crates_to_verify
+            .map(|crates_to_verify| {
+                crates_to_verify
+                    .iter()
+                    .any(|crate_to_verify| *crate_to_verify == krate)
+            })
+            .unwrap_or(true);
+
         details.strip_dev_deps(&self.root)?;
-        if let Err(err) = details.publish(
-            crates_to_verify
-                .map(|crates_to_verify| {
-                    crates_to_verify
-                        .iter()
-                        .any(|crate_to_verify| krate == *crate_to_verify)
-                })
-                .unwrap_or(true),
-        ) {
+        if let Err(err) = details.publish(should_verify) {
             info!(
                 "
 Note: dev-dependencies are stripped before publishing. This might cause errors
