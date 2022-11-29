@@ -36,7 +36,6 @@ pub fn publish_crate(root: &Path, krate: &str, verify: bool) -> anyhow::Result<(
 
     if !cmd
         .arg("--allow-dirty")
-        .arg("--quiet")
         .arg("-p")
         .arg(krate)
         .status()?
