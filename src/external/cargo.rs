@@ -17,7 +17,7 @@
 use std::path::Path;
 use std::process::Command;
 
-pub fn publish_crate(root: &Path, package: &str, verify: bool) -> anyhow::Result<()> {
+pub fn publish_crate(root: &Path, krate: &str, verify: bool) -> anyhow::Result<()> {
     let mut cmd = Command::new("cargo");
 
     cmd.current_dir(root).arg("publish");
@@ -36,12 +36,13 @@ pub fn publish_crate(root: &Path, package: &str, verify: bool) -> anyhow::Result
 
     if !cmd
         .arg("--allow-dirty")
+        .arg("--quiet")
         .arg("-p")
-        .arg(package)
+        .arg(krate)
         .status()?
         .success()
     {
-        anyhow::bail!("Failed to publish crate {package}");
+        anyhow::bail!("Failed to publish crate {krate}");
     };
 
     Ok(())
