@@ -35,9 +35,7 @@ pub fn publish_crate(root: &Path, package: &str, verify: bool) -> anyhow::Result
     }
 
     if !cmd
-        .arg("--locked")
         .arg("--allow-dirty")
-        .arg("-vv")
         .arg("-p")
         .arg(package)
         .status()?

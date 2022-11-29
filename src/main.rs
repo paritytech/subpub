@@ -511,7 +511,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         let mut cmd = std::process::Command::new("cargo");
         let mut cmd = cmd.current_dir(&opts.root).arg("update").arg("-v");
         for krate in &processed_crates {
-            cmd = cmd.arg("-p").arg(krate);
+            cmd = cmd.arg("--quiet").arg("-p").arg(krate);
         }
         if !cmd.status()?.success() {
             anyhow::bail!("Command failed: {cmd:?}");
@@ -521,6 +521,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             let mut cmd = std::process::Command::new("cargo");
             cmd.current_dir(&opts.root)
                 .arg("check")
+                .arg("--quiet")
                 .arg("-p")
                 .arg(krate);
             if !cmd.status()?.success() {
