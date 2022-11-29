@@ -80,6 +80,12 @@ struct PublishOpts {
     after_publish_delay: Option<u64>,
 
     #[clap(
+        long = "include-crates-dependents",
+        help = "Also include dependents of crates which were passed through the CLI"
+    )]
+    include_crates_dependents: bool,
+
+    #[clap(
         short = 'e',
         long = "exclude",
         help = "Crates to be excluded from the publishing process."
@@ -200,25 +206,26 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         let mut crates_to_exclude: HashSet<&String> = HashSet::from_iter(opts.exclude.iter());
 
         loop {
+            let mut progressed = false;
+
+            // Exclude also crates which depend on crates to be excluded
             let excluded_crates = crates_to_exclude
                 .iter()
                 .map(|excluded_crate| excluded_crate.to_owned())
                 .collect::<Vec<_>>();
-
-            // Exclude also crates which depend on crates to be excluded
-            for excluded_crate in &excluded_crates {
+            for excluded_crate in excluded_crates {
                 for krate in &publish_order {
                     let details = crates
                         .details
                         .get(krate)
                         .with_context(|| format!("Crate not found: {krate}"))?;
-                    if details.deps_to_publish().any(|dep| dep == *excluded_crate) {
-                        crates_to_exclude.insert(krate);
+                    if details.deps_to_publish().any(|dep| dep == excluded_crate) {
+                        progressed = crates_to_exclude.insert(krate);
                     }
                 }
             }
 
-            if excluded_crates.len() == crates_to_exclude.len() {
+            if !progressed {
                 break;
             }
         }
@@ -257,9 +264,40 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             })
             .collect::<anyhow::Result<Vec<_>>>()?
     } else {
+        let mut crates_to_include: HashSet<&String> = HashSet::from_iter(opts.crates.iter());
+
+        if opts.include_crates_dependents {
+            loop {
+                let mut progressed = false;
+
+                let included_crates = crates_to_include
+                    .iter()
+                    .map(|krate| krate.to_owned())
+                    .collect::<Vec<_>>();
+                for included_crate in included_crates {
+                    for krate in &publish_order {
+                        if crates_to_exclude.get(krate).is_some() {
+                            continue;
+                        }
+                        let details = crates
+                            .details
+                            .get(krate)
+                            .with_context(|| format!("Crate not found: {krate}"))?;
+                        if details.deps_to_publish().any(|dep| dep == included_crate) {
+                            progressed = crates_to_include.insert(krate);
+                        }
+                    }
+                }
+
+                if !progressed {
+                    break;
+                }
+            }
+        }
+
         publish_order
             .iter()
-            .filter(|ordered_crate| opts.crates.iter().any(|krate| *ordered_crate == krate))
+            .filter(|ordered_crate| crates_to_include.get(ordered_crate).is_some())
             .collect::<Vec<_>>()
     };
 
@@ -482,12 +520,12 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             anyhow::bail!("Command failed: {cmd:?}");
         };
 
-        for (_, details) in crates.details.iter() {
+        for krate in &processed_crates {
             let mut cmd = std::process::Command::new("cargo");
             cmd.current_dir(&opts.root)
                 .arg("check")
                 .arg("-p")
-                .arg(&details.name);
+                .arg(krate);
             if !cmd.status()?.success() {
                 anyhow::bail!("Command failed: {cmd:?}");
             };

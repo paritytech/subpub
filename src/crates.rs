@@ -186,13 +186,7 @@ impl Crates {
 
         Ok(publish_order
             .iter()
-            .filter_map(|krate| {
-                if registered_crates.iter().any(|reg_crate| reg_crate == krate) {
-                    Some(krate)
-                } else {
-                    None
-                }
-            })
+            .filter(|krate| registered_crates.iter().any(|reg_crate| reg_crate == krate))
             .collect())
     }
 }
