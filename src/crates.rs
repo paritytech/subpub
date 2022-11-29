@@ -109,7 +109,7 @@ impl Crates {
         };
 
         details.strip_dev_deps(&self.root)?;
-        details.publish(
+        if let Err(err) = details.publish(
             crates_to_verify
                 .map(|crates_to_verify| {
                     crates_to_verify
@@ -117,7 +117,25 @@ impl Crates {
                         .any(|crate_to_verify| krate == *crate_to_verify)
                 })
                 .unwrap_or(true),
-        )?;
+        ) {
+            info!(
+                "
+Note: dev-dependencies are stripped before publishing. This might cause errors
+during pre-publish verification in case a dev-dependency is used for a cargo
+feature. If you run into errors such as:
+
+    error: failed to parse manifest at `/path/to/Cargo.toml`
+    Caused by:
+      feature `foo` includes `dep/benchmarks`, but `dep` is not a dependency
+
+Assuming that the crate works fine locally, the error occurs because `dep` is
+only a dev-dependency, which was stripped before publishing (as explained
+above). You can work around that by moving `dep` to the dependencies and
+removing it from dev-dependencies.
+"
+            );
+            return Err(err);
+        };
         git_checkpoint_revert(&self.root)?;
 
         // Don't return until the crate has finished being published; it won't
