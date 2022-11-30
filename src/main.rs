@@ -283,7 +283,9 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                             .details
                             .get(krate)
                             .with_context(|| format!("Crate not found: {krate}"))?;
-                        if details.deps_to_publish().any(|dep| dep == included_crate) {
+                        if details.should_be_published
+                            && details.deps_to_publish().any(|dep| dep == included_crate)
+                        {
                             progressed |= crates_to_include.insert(krate);
                         }
                     }
