@@ -220,7 +220,14 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                         .get(krate)
                         .with_context(|| format!("Crate not found: {krate}"))?;
                     if details.deps_to_publish().any(|dep| dep == excluded_crate) {
-                        progressed |= crates_to_exclude.insert(krate);
+                        let inserted = crates_to_exclude.insert(krate);
+                        if inserted {
+                            info!(
+                                "Excluding crate {} because it depends on {}",
+                                krate, excluded_crate
+                            );
+                        }
+                        progressed |= inserted;
                     }
                 }
             }
@@ -286,7 +293,14 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                         if details.should_be_published
                             && details.deps_to_publish().any(|dep| dep == included_crate)
                         {
-                            progressed |= crates_to_include.insert(krate);
+                            let inserted = crates_to_include.insert(krate);
+                            if inserted {
+                                info!(
+                                    "Including crate {} because it depends on {}",
+                                    krate, included_crate
+                                );
+                            }
+                            progressed |= inserted;
                         }
                     }
                 }
