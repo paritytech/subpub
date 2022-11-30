@@ -19,6 +19,7 @@ use crate::toml::{toml_read, toml_write};
 use crate::version::maybe_bump_for_breaking_change;
 use crate::{external, git::*};
 use anyhow::{anyhow, Context};
+use external::crates_io::CratesIoCrateVersion;
 use semver::Version;
 use strum::IntoEnumIterator;
 
@@ -251,11 +252,11 @@ impl CrateDetails {
     pub fn needs_publishing<P: AsRef<Path>>(
         &self,
         root: P,
-        prev_versions: &[semver::Version],
+        prev_versions: &[CratesIoCrateVersion],
     ) -> anyhow::Result<bool> {
         if prev_versions
             .iter()
-            .any(|prev_version| *prev_version == self.version)
+            .any(|prev_version| prev_version.version == self.version && !prev_version.yanked)
         {
             let result = self.needs_publishing_inner(&root, &self.version);
             git_checkpoint_revert(&root)?;
@@ -265,7 +266,7 @@ impl CrateDetails {
         }
     }
 
-    pub fn needs_publishing_inner<P: AsRef<Path>>(
+    fn needs_publishing_inner<P: AsRef<Path>>(
         &self,
         root: P,
         version: &semver::Version,

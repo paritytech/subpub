@@ -42,7 +42,12 @@ pub fn does_crate_exist(name: &str, version: &semver::Version) -> anyhow::Result
     Ok(true)
 }
 
-pub fn crate_versions<Name: AsRef<str>>(name: Name) -> anyhow::Result<Vec<semver::Version>> {
+pub struct CratesIoCrateVersion {
+    pub version: semver::Version,
+    pub yanked: bool,
+}
+
+pub fn crate_versions<Name: AsRef<str>>(name: Name) -> anyhow::Result<Vec<CratesIoCrateVersion>> {
     let client = reqwest::blocking::Client::new();
     let crates_api = std::env::var("SPUB_CRATES_API").unwrap();
     let url = format!("{crates_api}/crates/{}/versions", name.as_ref());
@@ -63,6 +68,7 @@ pub fn crate_versions<Name: AsRef<str>>(name: Name) -> anyhow::Result<Vec<semver
     #[derive(serde::Deserialize)]
     struct ResponseVersion {
         pub num: String,
+        pub yanked: bool,
     }
     #[derive(serde::Deserialize)]
     struct Response {
@@ -71,9 +77,16 @@ pub fn crate_versions<Name: AsRef<str>>(name: Name) -> anyhow::Result<Vec<semver
     res.json::<Response>()?
         .versions
         .into_iter()
-        .map(|version| -> anyhow::Result<semver::Version> {
-            semver::Version::parse(&version.num)
-                .with_context(|| format!("Failed to parse {} as semver::Version", version.num,))
+        .map(|response_version| -> anyhow::Result<CratesIoCrateVersion> {
+            Ok(CratesIoCrateVersion {
+                version: semver::Version::parse(&response_version.num).with_context(|| {
+                    format!(
+                        "Failed to parse {} as semver::Version",
+                        response_version.num,
+                    )
+                })?,
+                yanked: response_version.yanked,
+            })
         })
         .collect()
 }

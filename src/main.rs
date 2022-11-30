@@ -482,7 +482,12 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 let prev_versions = external::crates_io::crate_versions(krate)?;
                 if details.needs_publishing(&opts.root, &prev_versions)? {
                     with_save_checkpoint(&opts.root, || {
-                        details.maybe_bump_version(prev_versions)
+                        details.maybe_bump_version(
+                            prev_versions
+                                .into_iter()
+                                .map(|prev_version| prev_version.version)
+                                .collect(),
+                        )
                     })??;
                     let last_version = details.version.clone();
                     crates.strip_dev_deps_and_publish(
