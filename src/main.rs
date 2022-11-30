@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with subpub.  If not, see <http://www.gnu.org/licenses/>.
 
-mod checkpoint;
 mod crate_details;
 mod crates;
 mod external;
@@ -26,12 +25,13 @@ use anyhow::anyhow;
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use crates::Crates;
+use git::with_git_checkpoint;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use tracing::{info, span, Level};
 use tracing_subscriber::prelude::*;
 
-use crate::checkpoint::with_save_checkpoint;
+use crate::git::GitCheckpoint;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -429,7 +429,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
         info!("Processing crate");
 
-        with_save_checkpoint(&opts.root, || -> anyhow::Result<()> {
+        with_git_checkpoint(&opts.root, GitCheckpoint::Save, || -> anyhow::Result<()> {
             let details = crates
                 .details
                 .get(sel_crate)
@@ -454,12 +454,12 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             continue;
         } else if crates_to_publish.len() == 1 {
             info!(
-                "Crate {} will be processed for publishing",
+                "Crate {} will be taken into account for publishing",
                 crates_to_publish[0]
             )
         } else {
             info!(
-                "Crates will be processed in the following order for publishing {sel_crate}: {}",
+                "Crates will be taken into account in the following order for publishing {sel_crate}: {}",
                 crates_to_publish
                     .iter()
                     .map(|krate| (*krate).into())
@@ -468,12 +468,23 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             );
         }
 
-        for krate in crates_to_publish {
-            if processed_crates.get(&krate).is_some() {
-                info!("Crate {krate} was already processed",);
-                continue;
-            }
+        let (already_processed_crates, crates_to_publish): (Vec<&String>, Vec<&String>) =
+            crates_to_publish
+                .into_iter()
+                .partition(|krate| processed_crates.get(*krate).is_some());
 
+        if !already_processed_crates.is_empty() {
+            info!(
+                "The following crates have already been processed, so they'll be skipped: {}",
+                already_processed_crates
+                    .iter()
+                    .map(|krate| (*krate).into())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            );
+        }
+
+        for krate in crates_to_publish {
             let last_version = {
                 let details = crates
                     .details
@@ -481,7 +492,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                     .with_context(|| format!("Crate not found: {krate}"))?;
                 let prev_versions = external::crates_io::crate_versions(krate)?;
                 if details.needs_publishing(&opts.root, &prev_versions)? {
-                    with_save_checkpoint(&opts.root, || {
+                    with_git_checkpoint(&opts.root, GitCheckpoint::Save, || {
                         details.maybe_bump_version(
                             prev_versions
                                 .into_iter()
@@ -502,7 +513,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 }
             };
 
-            with_save_checkpoint(&opts.root, || -> anyhow::Result<()> {
+            with_git_checkpoint(&opts.root, GitCheckpoint::Save, || -> anyhow::Result<()> {
                 for (_, details) in crates.details.iter() {
                     details.write_dependency_version(krate, &last_version)?;
                 }

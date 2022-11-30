@@ -4,12 +4,12 @@ use std::process::Command;
 const CHECKPOINT_SAVE: &str = "[subpub] CHECKPOINT_SAVE";
 const CHECKPOINT_REVERT: &str = "[subpub] CHECKPOINT_REVERT";
 
-pub enum GCKP {
+pub enum GitCheckpoint {
     Save,
     RevertLater,
 }
 
-pub fn git_checkpoint<P: AsRef<Path>>(root: P, op: GCKP) -> anyhow::Result<()> {
+fn git_checkpoint<P: AsRef<Path>>(root: P, op: GitCheckpoint) -> anyhow::Result<()> {
     let mut cmd = Command::new("git");
     let git_status_output = cmd
         .current_dir(&root)
@@ -41,8 +41,8 @@ pub fn git_checkpoint<P: AsRef<Path>>(root: P, op: GCKP) -> anyhow::Result<()> {
         }
 
         let commit_msg = match op {
-            GCKP::Save => CHECKPOINT_SAVE,
-            GCKP::RevertLater => CHECKPOINT_REVERT,
+            GitCheckpoint::Save => CHECKPOINT_SAVE,
+            GitCheckpoint::RevertLater => CHECKPOINT_REVERT,
         };
         let mut cmd = Command::new("git");
         if !cmd
@@ -62,6 +62,17 @@ pub fn git_checkpoint<P: AsRef<Path>>(root: P, op: GCKP) -> anyhow::Result<()> {
     };
 
     Ok(())
+}
+
+pub fn with_git_checkpoint<T, P: AsRef<Path>, F: FnOnce() -> T>(
+    root: P,
+    op: GitCheckpoint,
+    func: F,
+) -> anyhow::Result<T> {
+    git_checkpoint(&root, GitCheckpoint::Save)?;
+    let result = func();
+    git_checkpoint(&root, op)?;
+    Ok(result)
 }
 
 pub fn git_checkpoint_revert<P: AsRef<Path>>(root: P) -> anyhow::Result<()> {

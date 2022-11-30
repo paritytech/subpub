@@ -226,11 +226,12 @@ impl CrateDetails {
                 t.remove("dev-dependencies").is_some() || is_removed
             });
 
-        // Only write the toml file back if we did remove something.
         if removed_top_level || removed_target_deps {
-            git_checkpoint(&root, GCKP::Save)?;
-            self.write_toml(&toml)?;
-            git_checkpoint(&root, GCKP::RevertLater)?;
+            with_git_checkpoint(
+                &root,
+                GitCheckpoint::RevertLater,
+                || -> anyhow::Result<()> { self.write_toml(&toml) },
+            )??;
         }
 
         Ok(())
