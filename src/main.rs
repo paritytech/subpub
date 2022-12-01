@@ -240,7 +240,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         crates_to_exclude
     };
 
-    let input_crates = if opts.crates.is_empty() {
+    let candidate_crates = if opts.crates.is_empty() {
         publish_order
             .iter()
             .filter_map(|krate| {
@@ -318,9 +318,9 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     };
 
     let selected_crates = if let Some(start_from) = opts.start_from {
-        let mut input_crates = input_crates;
+        let mut candidate_crates = candidate_crates;
         let mut keep = false;
-        input_crates.retain_mut(|krate| {
+        candidate_crates.retain_mut(|krate| {
             if **krate == start_from {
                 keep = true;
                 if crates_to_exclude
@@ -332,9 +332,9 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             }
             keep
         });
-        input_crates
+        candidate_crates
     } else {
-        input_crates
+        candidate_crates
     };
     if selected_crates.is_empty() {
         anyhow::bail!("No crates could be selected from the CLI options");
@@ -469,10 +469,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             info!("Crate does not need to be published");
             continue;
         } else if crates_to_publish.len() == 1 {
-            info!(
-                "Preparing to publish {}",
-                crates_to_publish[0]
-            )
+            info!("Preparing to publish {}", crates_to_publish[0])
         } else {
             info!(
                 "Crates will be taken into account in the following order for publishing {sel_crate}: {}",
@@ -543,11 +540,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     }
 
     if opts.post_check {
-        for krate in &publish_order {
-            if crates_to_exclude.get(krate).is_some() {
-                info!("Skipping the check of crate {krate} because it's excluded");
-                continue;
-            }
+        for krate in processed_crates {
             info!("Checking crate {krate}");
             let mut cmd = std::process::Command::new("cargo");
             cmd.current_dir(&opts.root)
