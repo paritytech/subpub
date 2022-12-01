@@ -295,6 +295,7 @@ pub fn write_dependency_version<P: AsRef<Path>>(
     toml_path: P,
     dependency: &str,
     version: &semver::Version,
+    remove_path_dependency: bool,
 ) -> anyhow::Result<()> {
     let mut toml = toml_read(&toml_path)?;
 
@@ -304,6 +305,7 @@ pub fn write_dependency_version<P: AsRef<Path>>(
         dep: &str,
         dep_type: &str,
         toml_path: P,
+        remove_path_dependency: bool,
     ) -> anyhow::Result<()> {
         let table = match item.as_table_like_mut() {
             Some(table) => table,
@@ -322,7 +324,9 @@ pub fn write_dependency_version<P: AsRef<Path>>(
                         )
                     })?;
                     item.insert("version", toml_edit::value(version.to_string()));
-                    item.remove("path");
+                    if remove_path_dependency {
+                        item.remove("path");
+                    }
                 }
             } else {
                 let item = if item.as_str().is_some() {
@@ -341,7 +345,9 @@ pub fn write_dependency_version<P: AsRef<Path>>(
                     .unwrap_or(false)
                 {
                     item.insert("version", toml_edit::value(version.to_string()));
-                    item.remove("path");
+                    if remove_path_dependency {
+                        item.remove("path");
+                    }
                 }
             }
         }
@@ -352,7 +358,14 @@ pub fn write_dependency_version<P: AsRef<Path>>(
     for dep_key in CrateDependencyKey::iter() {
         let key = &dep_key.to_string();
         edit_all_dependency_sections(&mut toml, key, |item| {
-            do_set(item, version, dependency, key, &toml_path)
+            do_set(
+                item,
+                version,
+                dependency,
+                key,
+                &toml_path,
+                remove_path_dependency,
+            )
         })?;
     }
 

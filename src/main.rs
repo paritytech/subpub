@@ -450,15 +450,15 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 .details
                 .get(sel_crate)
                 .with_context(|| format!("Crate not found: {sel_crate}"))?;
-            for krate in &publish_order {
-                if krate == sel_crate {
+            for prev_crate in &publish_order {
+                if prev_crate == sel_crate {
                     break;
                 }
-                let crate_details = crates
+                let prev_crate_details = crates
                     .details
-                    .get(krate)
-                    .with_context(|| format!("Crate details not found for crate: {krate}"))?;
-                details.write_dependency_version(krate, &crate_details.version)?;
+                    .get(prev_crate)
+                    .with_context(|| format!("Crate not found: {prev_crate}"))?;
+                details.write_dependency_version(prev_crate, &prev_crate_details.version, false)?;
             }
             Ok(())
         })??;
@@ -528,7 +528,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
             with_git_checkpoint(&opts.root, GitCheckpoint::Save, || -> anyhow::Result<()> {
                 for (_, details) in crates.details.iter() {
-                    details.write_dependency_version(krate, &latest_version)?;
+                    details.write_dependency_version(krate, &latest_version, true)?;
                 }
                 Ok(())
             })??;

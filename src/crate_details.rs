@@ -199,9 +199,10 @@ impl CrateDetails {
         &self,
         dependency: &str,
         version: &Version,
+        remove_path_dependency: bool,
     ) -> anyhow::Result<()> {
         if self.all_deps().any(|dep| dep == dependency) {
-            write_dependency_version(&self.toml_path, dependency, version)?;
+            write_dependency_version(&self.toml_path, dependency, version, remove_path_dependency)?;
         }
         Ok(())
     }
