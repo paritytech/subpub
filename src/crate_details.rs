@@ -241,11 +241,7 @@ impl CrateDetails {
     /// Publish the current code for this crate as-is. You may want to run
     /// [`CrateDetails::strip_dev_deps()`] first.
     pub fn publish(&self, verify: bool) -> anyhow::Result<()> {
-        let parent = self
-            .toml_path
-            .parent()
-            .with_context(|| format!("{:?} has no parent directory", self.toml_path))?;
-        external::cargo::publish_crate(parent, &self.name, verify)
+        external::cargo::publish_crate(&self.name, &self.toml_path, verify)
     }
 
     /// This checks whether we actually need to publish a new version of the crate. It'll return `false`
@@ -285,11 +281,6 @@ impl CrateDetails {
 
         self.strip_dev_deps(&root)?;
 
-        let crate_dir = self
-            .toml_path
-            .parent()
-            .with_context(|| format!("{:?} has no parent directory", self.toml_path))?;
-
         let tmp_dir = tempfile::tempdir()?;
         let target_dir = if let Ok(tmp_dir) = std::env::var("SPUB_TMP") {
             PathBuf::from(tmp_dir)
@@ -300,8 +291,9 @@ impl CrateDetails {
         info!("Generating .crate file");
         let mut cmd = Command::new("cargo");
         if !cmd
-            .current_dir(crate_dir)
             .arg("package")
+            .arg("--manifest-path")
+            .arg(&self.toml_path)
             .arg("--no-verify")
             .arg("--allow-dirty")
             .arg("--target-dir")

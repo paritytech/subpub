@@ -266,7 +266,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                         None
                     }
                 } else {
-                    Some(Err(anyhow!("Crate not found: {}", krate)))
+                    Some(Err(anyhow!("Crate not found: {krate}")))
                 }
             })
             .collect::<anyhow::Result<Vec<_>>>()?
@@ -542,11 +542,15 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     if opts.post_check {
         for krate in processed_crates {
             info!("Checking crate {krate}");
+            let details = crates
+                .details
+                .get(krate)
+                .with_context(|| format!("Crate not found: {krate}"))?;
             let mut cmd = std::process::Command::new("cargo");
-            cmd.current_dir(&opts.root)
-                .arg("check")
+            cmd.arg("check")
                 .arg("--quiet")
-                .arg("-p")
+                .arg("--manifest-path")
+                .arg(details.toml_path.as_path())
                 .arg(krate);
             if !cmd.status()?.success() {
                 anyhow::bail!("Command failed: {cmd:?}");
