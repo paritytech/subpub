@@ -550,8 +550,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             cmd.arg("check")
                 .arg("--quiet")
                 .arg("--manifest-path")
-                .arg(details.toml_path.as_path())
-                .arg(krate);
+                .arg(details.toml_path.as_path());
             if !cmd.status()?.success() {
                 anyhow::bail!("Command failed: {cmd:?}");
             };
