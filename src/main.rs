@@ -543,16 +543,6 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     }
 
     if opts.post_check {
-        let mut cmd = std::process::Command::new("cargo");
-        let mut cmd = cmd.current_dir(&opts.root).arg("update");
-        for krate in &processed_crates {
-            info!("Updating crate {krate}");
-            cmd = cmd.arg("--quiet").arg("-p").arg(krate);
-        }
-        if !cmd.status()?.success() {
-            anyhow::bail!("Command failed: {cmd:?}");
-        };
-
         for krate in &publish_order {
             if crates_to_exclude.get(krate).is_some() {
                 info!("Skipping the check of crate {krate} because it's excluded");
