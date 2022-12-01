@@ -131,10 +131,9 @@ feature. If you run into errors such as:
     Caused by:
       feature `foo` includes `dep/benchmarks`, but `dep` is not a dependency
 
-Assuming that the crate works fine locally, the error occurs because `dep` is
-only a dev-dependency, which was stripped before publishing (as explained
-above). You can work around that by putting `dep` as an optional dependency in
-[dependencies].
+Assuming that the crate works fine locally, the error occurs because `dep` is a
+dev-dependency, which was stripped before publishing. You can work around that
+by putting `dep` as an optional dependency in [dependencies].
 "
             );
             return Err(err);
