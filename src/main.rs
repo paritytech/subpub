@@ -553,9 +553,13 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             anyhow::bail!("Command failed: {cmd:?}");
         };
 
-        for krate in &processed_crates {
-            let mut cmd = std::process::Command::new("cargo");
+        for krate in &publish_order {
+            if crates_to_exclude.get(krate).is_some() {
+                info!("Skipping the check of crate {krate} because it's excluded");
+                continue;
+            }
             info!("Checking crate {krate}");
+            let mut cmd = std::process::Command::new("cargo");
             cmd.current_dir(&opts.root)
                 .arg("check")
                 .arg("--quiet")

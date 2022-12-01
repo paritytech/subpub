@@ -315,7 +315,14 @@ pub fn write_dependency_version<P: AsRef<Path>>(
                 if item.is_str() {
                     *item = toml_edit::value(version.to_string());
                 } else {
-                    item["version"] = toml_edit::value(version.to_string());
+                    let item = item.as_table_like_mut().with_context(|| {
+                        format!(
+                            "{dep_type} 's key {key} should be a string or table-like in {:?}",
+                            toml_path.as_ref().as_os_str()
+                        )
+                    })?;
+                    item.insert("version", toml_edit::value(version.to_string()));
+                    item.remove("path");
                 }
             } else {
                 let item = if item.as_str().is_some() {
@@ -334,6 +341,7 @@ pub fn write_dependency_version<P: AsRef<Path>>(
                     .unwrap_or(false)
                 {
                     item.insert("version", toml_edit::value(version.to_string()));
+                    item.remove("path");
                 }
             }
         }
