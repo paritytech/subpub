@@ -97,7 +97,7 @@ impl Crates {
     }
 
     /// Remove any dev-dependency sections in the TOML file and publish.
-    pub fn strip_dev_deps_and_publish(
+    pub fn publish(
         &self,
         krate: &String,
         crates_to_verify: Option<&Vec<&String>>,
@@ -133,8 +133,8 @@ feature. If you run into errors such as:
 
 Assuming that the crate works fine locally, the error occurs because `dep` is
 only a dev-dependency, which was stripped before publishing (as explained
-above). You can work around that by moving `dep` to the dependencies and
-removing it from dev-dependencies.
+above). You can work around that by putting `dep` as an optional dependency in
+[dependencies].
 "
             );
             return Err(err);
@@ -166,11 +166,13 @@ removing it from dev-dependencies.
             }
         };
 
+        // Wait for the crate to be uploaded to the index after it is registered
+        // on crates.io's database. When uploading many crates, a custom delay
+        // can be used for working around crates.io rate limits instead of the
+        // default short delay.
         let after_publish_delay = if let Some(after_publish_delay) = after_publish_delay {
             Duration::from_secs(*after_publish_delay)
         } else {
-            // Wait for the crate to be uploaded to the index after it is
-            // registered on crates.io's database
             Duration::from_millis(2500)
         };
         thread::sleep(after_publish_delay);

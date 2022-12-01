@@ -517,7 +517,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                         )
                     })??;
                     let last_version = details.version.clone();
-                    crates.strip_dev_deps_and_publish(
+                    crates.publish(
                         krate,
                         crates_to_verify.as_ref(),
                         opts.after_publish_delay.as_ref(),
