@@ -498,7 +498,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         }
 
         for krate in crates_to_publish {
-            let last_version = {
+            let latest_version = {
                 let details = crates
                     .details
                     .get_mut(krate)
@@ -528,7 +528,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
             with_git_checkpoint(&opts.root, GitCheckpoint::Save, || -> anyhow::Result<()> {
                 for (_, details) in crates.details.iter() {
-                    details.write_dependency_version(krate, &last_version)?;
+                    details.write_dependency_version(krate, &latest_version)?;
                 }
                 Ok(())
             })??;

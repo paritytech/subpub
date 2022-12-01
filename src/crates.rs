@@ -138,6 +138,7 @@ by putting `dep` as an optional dependency in [dependencies].
             );
             return Err(err);
         };
+
         git_checkpoint_revert(&self.root)?;
 
         // Don't return until the crate has finished being published; it won't
