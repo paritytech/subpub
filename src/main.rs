@@ -470,7 +470,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             continue;
         } else if crates_to_publish.len() == 1 {
             info!(
-                "Crate {} will be taken into account for publishing",
+                "Preparing to publish {}",
                 crates_to_publish[0]
             )
         } else {
@@ -491,7 +491,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
         if !already_processed_crates.is_empty() {
             info!(
-                "The following crates have already been processed, so they'll be skipped: {}",
+                "The following crates have already been processed: {}",
                 already_processed_crates
                     .iter()
                     .map(|krate| (*krate).into())
