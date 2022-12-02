@@ -49,7 +49,7 @@ enum Command {
 #[derive(Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]
 struct PublishOpts {
-    #[clap(long, help = "Path to the workspace root")]
+    #[clap(short = 'r', long, help = "Path to the workspace root")]
     root: PathBuf,
 
     #[clap(
