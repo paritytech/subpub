@@ -175,6 +175,10 @@ by putting `dep` as an optional dependency in [dependencies].
         } else {
             Duration::from_millis(2500)
         };
+        info!(
+            "Finished publishing crate {krate}, now waiting for {} seconds",
+            after_publish_delay.as_secs()
+        );
         thread::sleep(after_publish_delay);
 
         Ok(())

@@ -101,32 +101,52 @@ struct PublishOpts {
 }
 
 fn main() -> anyhow::Result<()> {
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::builder()
-                .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
-                .from_env_lossy(),
-        )
-        .with(
-            tracing_subscriber::fmt::layer()
-                .without_time()
-                .with_writer(std::io::stdout)
-                .with_target(false),
-        )
-        .with(
-            tracing_subscriber::fmt::layer()
-                .without_time()
-                .with_writer(std::io::stderr)
-                .with_target(false)
-                .with_filter(tracing_subscriber::filter::LevelFilter::ERROR),
-        )
-        .init();
+    setup_tracing();
 
     let args = Args::parse();
 
     match args.command {
         Command::Publish(opts) => publish(opts),
     }
+}
+
+fn setup_tracing() {
+    let subscriber = tracing_subscriber::registry().with(
+        tracing_subscriber::EnvFilter::builder()
+            .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
+            .from_env_lossy(),
+    );
+    if std::env::var("CI").is_ok() {
+        subscriber
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .with_writer(std::io::stdout)
+                    .with_target(false),
+            )
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .with_writer(std::io::stderr)
+                    .with_target(false)
+                    .with_filter(tracing_subscriber::filter::LevelFilter::ERROR),
+            )
+            .init();
+    } else {
+        subscriber
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .without_time()
+                    .with_writer(std::io::stdout)
+                    .with_target(false),
+            )
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .without_time()
+                    .with_writer(std::io::stderr)
+                    .with_target(false)
+                    .with_filter(tracing_subscriber::filter::LevelFilter::ERROR),
+            )
+            .init();
+    };
 }
 
 fn publish(opts: PublishOpts) -> anyhow::Result<()> {
@@ -546,7 +566,16 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     if opts.post_check {
         let ordered_processed_crates = publish_order
             .iter()
-            .filter(|krate| processed_crates.get(krate).is_some());
+            .filter(|krate| processed_crates.get(krate).is_some())
+            .collect::<Vec<_>>();
+        info!(
+            "Processed the following crates (ordered by publishing order): {}",
+            ordered_processed_crates
+                .iter()
+                .map(|krate| (*krate).into())
+                .collect::<Vec<String>>()
+                .join(", ")
+        );
         for krate in ordered_processed_crates {
             info!("Checking crate {krate}");
             let details = crates
