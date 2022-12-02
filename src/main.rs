@@ -544,7 +544,10 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     }
 
     if opts.post_check {
-        for krate in processed_crates {
+        let ordered_processed_crates = publish_order
+            .iter()
+            .filter(|krate| processed_crates.get(krate).is_some());
+        for krate in ordered_processed_crates {
             info!("Checking crate {krate}");
             let details = crates
                 .details
