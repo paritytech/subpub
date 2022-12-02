@@ -309,7 +309,6 @@ pub fn write_dependency_version<P: AsRef<Path>>(
         item: &mut toml_edit::Item,
         version: &semver::Version,
         dep: &str,
-        dep_key: &CrateDependencyKey,
         dep_key_display: &str,
         toml_path: P,
         remove_dependency_path: bool,
@@ -318,11 +317,6 @@ pub fn write_dependency_version<P: AsRef<Path>>(
             Some(table) => table,
             None => return Ok(()),
         };
-
-        // Only remove the dependency path from crates which should be
-        // published (see CrateDetails.deps_to_publish()).
-        let remove_dependency_path =
-            remove_dependency_path && *dep_key == CrateDependencyKey::Dependencies;
 
         for (key, item) in table.iter_mut() {
             if key == dep {
@@ -368,12 +362,11 @@ pub fn write_dependency_version<P: AsRef<Path>>(
     }
 
     for dep_key in CrateDependencyKey::iter() {
-        edit_all_dependency_sections(&mut toml, dep_key, |item, dep_key, dep_key_display| {
+        edit_all_dependency_sections(&mut toml, dep_key, |item, _, dep_key_display| {
             do_set(
                 item,
                 version,
                 dependency,
-                dep_key,
                 dep_key_display,
                 &toml_path,
                 remove_dependency_path,
