@@ -42,7 +42,7 @@ struct Args {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    #[clap(about = "Publish crates in order from least to most dependees")]
+    #[clap(about = "Publish crates in order from least to most dependents")]
     Publish(PublishOpts),
 }
 
