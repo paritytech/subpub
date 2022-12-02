@@ -498,13 +498,17 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         }
 
         for krate in crates_to_publish {
-            let latest_version = {
+            let crate_version = {
+                let prev_versions = external::crates_io::crate_versions(krate)?;
+
                 let details = crates
                     .details
                     .get_mut(krate)
                     .with_context(|| format!("Crate not found: {krate}"))?;
-                let prev_versions = external::crates_io::crate_versions(krate)?;
-                if details.needs_publishing(&opts.root, &prev_versions)? {
+
+                details.adjust_version(&prev_versions)?;
+
+                if details.needs_publishing(&opts.root)? {
                     with_git_checkpoint(&opts.root, GitCheckpoint::Save, || {
                         details.maybe_bump_version(
                             prev_versions
@@ -513,13 +517,13 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                                 .collect(),
                         )
                     })??;
-                    let last_version = details.version.clone();
+                    let version = details.version.clone();
                     crates.publish(
                         krate,
                         crates_to_verify.as_ref(),
                         opts.after_publish_delay.as_ref(),
                     )?;
-                    last_version
+                    version
                 } else {
                     info!("Crate {krate} does not need to be published");
                     details.version.clone()
@@ -528,7 +532,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
             with_git_checkpoint(&opts.root, GitCheckpoint::Save, || -> anyhow::Result<()> {
                 for (_, details) in crates.details.iter() {
-                    details.write_dependency_version(krate, &latest_version, true)?;
+                    details.write_dependency_version(krate, &crate_version, true)?;
                 }
                 Ok(())
             })??;

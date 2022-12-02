@@ -241,11 +241,7 @@ impl CrateDetails {
         external::cargo::publish_crate(&self.name, &self.toml_path, verify)
     }
 
-    pub fn needs_publishing<P: AsRef<Path>>(
-        &self,
-        root: P,
-        prev_versions: &[CratesIoCrateVersion],
-    ) -> anyhow::Result<bool> {
+    pub fn adjust_version(&mut self, prev_versions: &[CratesIoCrateVersion]) -> anyhow::Result<()> {
         let highest_version = prev_versions
             .iter()
             .filter_map(|prev_version| {
@@ -258,7 +254,14 @@ impl CrateDetails {
             .chain(vec![&self.version].into_iter())
             .max()
             .unwrap_or(&self.version);
-        let result = self.needs_publishing_inner(&root, highest_version);
+        if highest_version != &self.version {
+            self.write_own_version(highest_version.to_owned())?;
+        }
+        Ok(())
+    }
+
+    pub fn needs_publishing<P: AsRef<Path>>(&self, root: P) -> anyhow::Result<bool> {
+        let result = self.needs_publishing_inner(&root, &self.version);
         git_checkpoint_revert(&root)?;
         result
     }
