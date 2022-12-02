@@ -155,7 +155,7 @@ impl CrateDetails {
     }
 
     pub fn deps_to_publish(&self) -> impl Iterator<Item = &String> {
-        self.deps.iter().chain(self.build_deps.iter())
+        self.deps.iter()
     }
 
     pub fn set_registry<S: AsRef<str>>(&self, registry: S) -> anyhow::Result<()> {
@@ -184,9 +184,7 @@ impl CrateDetails {
         }
 
         for key in CrateDependencyKey::iter() {
-            edit_all_dependency_sections(&mut toml, &key.to_string(), |item| {
-                do_set(item, registry)
-            })?;
+            edit_all_dependency_sections(&mut toml, key, |item, _, _| do_set(item, registry))?;
         }
 
         self.write_toml(&toml)?;
@@ -199,10 +197,10 @@ impl CrateDetails {
         &self,
         dependency: &str,
         version: &Version,
-        remove_path_dependency: bool,
+        remove_dependency_path: bool,
     ) -> anyhow::Result<()> {
         if self.all_deps().any(|dep| dep == dependency) {
-            write_dependency_version(&self.toml_path, dependency, version, remove_path_dependency)?;
+            write_dependency_version(&self.toml_path, dependency, version, remove_dependency_path)?;
         }
         Ok(())
     }

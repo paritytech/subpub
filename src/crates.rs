@@ -251,7 +251,7 @@ fn crate_cargo_tomls(root: PathBuf) -> Vec<PathBuf> {
         .collect()
 }
 
-#[derive(EnumString, strum::Display, EnumIter)]
+#[derive(EnumString, strum::Display, EnumIter, PartialEq, Eq)]
 pub enum CrateDependencyKey {
     #[strum(to_string = "build-dependencies")]
     BuildDependencies,
@@ -277,16 +277,20 @@ fn get_target_dependency_sections_mut<'a>(
         })
 }
 
-pub fn edit_all_dependency_sections<T, F: FnMut(&mut toml_edit::Item) -> anyhow::Result<T>>(
+pub fn edit_all_dependency_sections<
+    T,
+    F: FnMut(&mut toml_edit::Item, &CrateDependencyKey, &str) -> anyhow::Result<T>,
+>(
     document: &mut toml_edit::Document,
-    label: &str,
+    dep_key: CrateDependencyKey,
     mut f: F,
 ) -> anyhow::Result<()> {
-    if let Some(item) = document.get_mut(label) {
-        f(item)?;
+    let dep_key_display = dep_key.to_string();
+    if let Some(item) = document.get_mut(&dep_key_display) {
+        f(item, &dep_key, &dep_key_display)?;
     }
-    for item in get_target_dependency_sections_mut(document, label) {
-        f(item)?;
+    for item in get_target_dependency_sections_mut(document, &dep_key_display) {
+        f(item, &dep_key, &dep_key_display)?;
     }
     Ok(())
 }
@@ -295,7 +299,9 @@ pub fn write_dependency_version<P: AsRef<Path>>(
     toml_path: P,
     dependency: &str,
     version: &semver::Version,
-    remove_path_dependency: bool,
+    // Removing the dependencies' paths is useful for verifying that they can be
+    // consumed from the registry after publishing.
+    remove_dependency_path: bool,
 ) -> anyhow::Result<()> {
     let mut toml = toml_read(&toml_path)?;
 
@@ -303,14 +309,20 @@ pub fn write_dependency_version<P: AsRef<Path>>(
         item: &mut toml_edit::Item,
         version: &semver::Version,
         dep: &str,
-        dep_type: &str,
+        dep_key: &CrateDependencyKey,
+        dep_key_display: &str,
         toml_path: P,
-        remove_path_dependency: bool,
+        remove_dependency_path: bool,
     ) -> anyhow::Result<()> {
         let table = match item.as_table_like_mut() {
             Some(table) => table,
             None => return Ok(()),
         };
+
+        // Only remove the dependency path from crates which should be
+        // published (see CrateDetails.deps_to_publish()).
+        let remove_dependency_path =
+            remove_dependency_path && *dep_key == CrateDependencyKey::Dependencies;
 
         for (key, item) in table.iter_mut() {
             if key == dep {
@@ -319,12 +331,12 @@ pub fn write_dependency_version<P: AsRef<Path>>(
                 } else {
                     let item = item.as_table_like_mut().with_context(|| {
                         format!(
-                            "{dep_type} 's key {key} should be a string or table-like in {:?}",
+                            "{dep_key_display} 's key {key} should be a string or table-like in {:?}",
                             toml_path.as_ref().as_os_str()
                         )
                     })?;
                     item.insert("version", toml_edit::value(version.to_string()));
-                    if remove_path_dependency {
+                    if remove_dependency_path {
                         item.remove("path");
                     }
                 }
@@ -334,7 +346,7 @@ pub fn write_dependency_version<P: AsRef<Path>>(
                 } else {
                     item.as_table_like_mut().with_context(|| {
                         format!(
-                            "{dep_type} 's key {key} should be a string or table-like in {:?}",
+                            "{dep_key_display} 's key {key} should be a string or table-like in {:?}",
                             toml_path.as_ref().as_os_str()
                         )
                     })?
@@ -345,7 +357,7 @@ pub fn write_dependency_version<P: AsRef<Path>>(
                     .unwrap_or(false)
                 {
                     item.insert("version", toml_edit::value(version.to_string()));
-                    if remove_path_dependency {
+                    if remove_dependency_path {
                         item.remove("path");
                     }
                 }
@@ -356,15 +368,15 @@ pub fn write_dependency_version<P: AsRef<Path>>(
     }
 
     for dep_key in CrateDependencyKey::iter() {
-        let key = &dep_key.to_string();
-        edit_all_dependency_sections(&mut toml, key, |item| {
+        edit_all_dependency_sections(&mut toml, dep_key, |item, dep_key, dep_key_display| {
             do_set(
                 item,
                 version,
                 dependency,
-                key,
+                dep_key,
+                dep_key_display,
                 &toml_path,
-                remove_path_dependency,
+                remove_dependency_path,
             )
         })?;
     }
