@@ -207,7 +207,6 @@ impl CrateDetails {
         Ok(())
     }
 
-    /// Strip dev dependencies.
     pub fn strip_dev_deps<P>(&self, root: P) -> anyhow::Result<()>
     where
         P: AsRef<Path>,
@@ -238,30 +237,30 @@ impl CrateDetails {
         Ok(())
     }
 
-    /// Publish the current code for this crate as-is. You may want to run
-    /// [`CrateDetails::strip_dev_deps()`] first.
     pub fn publish(&self, verify: bool) -> anyhow::Result<()> {
         external::cargo::publish_crate(&self.name, &self.toml_path, verify)
     }
 
-    /// This checks whether we actually need to publish a new version of the crate. It'll return `false`
-    /// only if, as far as we can see, the current version is published to crates.io, and there have been
-    /// no changes to it since.
     pub fn needs_publishing<P: AsRef<Path>>(
         &self,
         root: P,
         prev_versions: &[CratesIoCrateVersion],
     ) -> anyhow::Result<bool> {
-        if prev_versions
+        let highest_version = prev_versions
             .iter()
-            .any(|prev_version| prev_version.version == self.version && !prev_version.yanked)
-        {
-            let result = self.needs_publishing_inner(&root, &self.version);
-            git_checkpoint_revert(&root)?;
-            result
-        } else {
-            Ok(true)
-        }
+            .filter_map(|prev_version| {
+                if prev_version.yanked {
+                    None
+                } else {
+                    Some(&prev_version.version)
+                }
+            })
+            .chain(vec![&self.version].into_iter())
+            .max()
+            .unwrap_or(&self.version);
+        let result = self.needs_publishing_inner(&root, highest_version);
+        git_checkpoint_revert(&root)?;
+        result
     }
 
     fn needs_publishing_inner<P: AsRef<Path>>(
