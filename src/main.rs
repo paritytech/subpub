@@ -55,7 +55,7 @@ struct PublishOpts {
     #[clap(
         short = 'p',
         long = "publish-only",
-        help = "Select crates to be published. If this option is not used, all crates in the workspace of --root will be published."
+        help = "Only publish this crate. If this option is not used, all crates in the target workspace will be considered for publishing. Can be specified multiple times."
     )]
     publish_only: Vec<String>,
 
@@ -75,7 +75,7 @@ struct PublishOpts {
     #[clap(
         short = 'v',
         long = "verify-only",
-        help = "Only verify those crates before publishing. If this option is not used, all crates will be verified."
+        help = "Only verify this crate before publishing. If this option is not used, all crates will be verified before publishing. Can be specified multiple times."
     )]
     verify_only: Vec<String>,
 
@@ -87,21 +87,21 @@ struct PublishOpts {
 
     #[clap(
         long = "include-crates-dependents",
-        help = "Also include dependents of crates which were passed through the CLI"
+        help = "Also include dependents of crates which were selected through the CLI"
     )]
     include_crates_dependents: bool,
 
     #[clap(
         short = 'e',
         long = "exclude",
-        help = "Crates to be excluded from the publishing process."
+        help = "Crates to be excluded from the publishing process"
     )]
     exclude: Vec<String>,
 
     #[clap(
         short = 'k',
         long = "post-check",
-        help = "Run post checks, e.g. cargo check, after publishing."
+        help = "Run post checks, e.g. cargo check, after publishing"
     )]
     post_check: bool,
 }
