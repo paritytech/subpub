@@ -53,11 +53,11 @@ struct PublishOpts {
     root: PathBuf,
 
     #[clap(
-        short = 'c',
-        long = "crate",
-        help = "Select crates to be published. If empty, all crates in the workspace of --root will be published."
+        short = 'p',
+        long = "publish-only",
+        help = "Select crates to be published. If this option is not used, all crates in the workspace of --root will be published."
     )]
-    crates: Vec<String>,
+    publish_only: Vec<String>,
 
     #[clap(
         short = 's',
@@ -266,7 +266,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         crates_to_exclude
     };
 
-    let candidate_crates = if opts.crates.is_empty() {
+    let candidate_crates = if opts.publish_only.is_empty() {
         publish_order
             .iter()
             .filter_map(|krate| {
@@ -297,7 +297,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             })
             .collect::<anyhow::Result<Vec<_>>>()?
     } else {
-        let mut crates_to_include: HashSet<&String> = HashSet::from_iter(opts.crates.iter());
+        let mut crates_to_include: HashSet<&String> = HashSet::from_iter(opts.publish_only.iter());
 
         if opts.include_crates_dependents {
             loop {
