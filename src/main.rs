@@ -74,7 +74,7 @@ struct PublishOpts {
 
     #[clap(
         short = 'v',
-        long = "verify-crate",
+        long = "verify-only",
         help = "Only verify those crates before publishing. If this option is not used, all crates will be verified."
     )]
     verify: Vec<String>,
