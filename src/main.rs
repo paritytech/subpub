@@ -77,7 +77,7 @@ struct PublishOpts {
         long = "verify-only",
         help = "Only verify those crates before publishing. If this option is not used, all crates will be verified."
     )]
-    verify: Vec<String>,
+    verify_only: Vec<String>,
 
     #[clap(
         long = "after-publish-delay",
@@ -447,10 +447,10 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     }
 
     let crates_to_verify = {
-        let mut crates_to_verify = if opts.verify.is_empty() {
+        let mut crates_to_verify = if opts.verify_only.is_empty() {
             HashSet::from_iter(publish_order.iter())
         } else {
-            HashSet::from_iter(opts.verify.iter())
+            HashSet::from_iter(opts.verify_only.iter())
         };
         if let Some(verify_from) = opts.verify_from {
             let mut keep = false;
