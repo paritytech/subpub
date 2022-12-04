@@ -67,11 +67,17 @@ struct PublishOpts {
     start_from: Option<String>,
 
     #[clap(
-        short = 'v',
         long = "verify-from",
         help = "When publishing, only verify crates starting from this crate. Useful to skip the verification process of all crates up to the given crate, which can be time-consuming if the crate depends on lots of other crates that are expensive to verify."
     )]
     verify_from: Option<String>,
+
+    #[clap(
+        short = 'v',
+        long = "verify-crate",
+        help = "Only verify those crates before publishing"
+    )]
+    verify: Vec<String>,
 
     #[clap(
         long = "after-publish-delay",
@@ -440,18 +446,25 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         }
     }
 
-    let crates_to_verify = opts.verify_from.as_ref().map(|verify_from| {
-        let mut verify = false;
-        publish_order
-            .iter()
-            .filter(|krate| {
+    let crates_to_verify = {
+        let mut crates_to_verify = if opts.verify.is_empty() {
+            HashSet::from_iter(publish_order.iter())
+        } else {
+            HashSet::from_iter(opts.verify.iter())
+        };
+        if let Some(verify_from) = opts.verify_from {
+            let mut keep = false;
+            for krate in &publish_order {
                 if *krate == verify_from {
-                    verify = true;
+                    keep = true;
                 }
-                verify
-            })
-            .collect::<Vec<_>>()
-    });
+                if keep {
+                    crates_to_verify.insert(krate);
+                }
+            }
+        }
+        crates_to_verify
+    };
 
     let mut processed_crates: HashSet<&String> = HashSet::new();
     for sel_crate in selected_crates {
@@ -538,11 +551,7 @@ fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                         )
                     })??;
                     let version = details.version.clone();
-                    crates.publish(
-                        krate,
-                        crates_to_verify.as_ref(),
-                        opts.after_publish_delay.as_ref(),
-                    )?;
+                    crates.publish(krate, &crates_to_verify, opts.after_publish_delay.as_ref())?;
                     version
                 } else {
                     info!("Crate {krate} does not need to be published");

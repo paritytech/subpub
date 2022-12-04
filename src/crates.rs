@@ -100,7 +100,7 @@ impl Crates {
     pub fn publish(
         &self,
         krate: &String,
-        crates_to_verify: Option<&Vec<&String>>,
+        crates_to_verify: &HashSet<&String>,
         after_publish_delay: Option<&u64>,
     ) -> anyhow::Result<()> {
         let details = match self.details.get(krate) {
@@ -108,13 +108,7 @@ impl Crates {
             None => anyhow::bail!("Crate not found: {krate}"),
         };
 
-        let should_verify = crates_to_verify
-            .map(|crates_to_verify| {
-                crates_to_verify
-                    .iter()
-                    .any(|crate_to_verify| *crate_to_verify == krate)
-            })
-            .unwrap_or(true);
+        let should_verify = crates_to_verify.get(krate).is_some();
 
         info!("Stripping dev-dependencies of crate {krate} before publishing");
         details.strip_dev_deps(&self.root)?;
