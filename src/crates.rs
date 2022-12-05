@@ -127,7 +127,23 @@ feature. If you run into errors such as:
 
 Assuming that the crate works fine locally, the error occurs because `dep` is a
 dev-dependency, which was stripped before publishing. You can work around that
-by putting `dep` as an optional dependency in [dependencies].
+by putting `dep` as an optional dependency in [dependencies]. For example, if
+you have the following Cargo.toml:
+
+  [dev-dependencies]
+  foo = {{ path = \"../foo\" }}
+  
+  [features]
+  custom = [\"foo/bar\"]
+
+You should add foo as an optional dependency:
+
+  [dependencies]
+  foo = {{ default-features = false, optional = true, path = \"../foo\" }}
+
+You can keep foo as a dev-dependency as well in that case. Alternatively, you
+can promote foo to [dependencies] and remove it from [dev-dependencies] if that
+makes more sense for your scenario.
 "
             );
             return Err(err);
