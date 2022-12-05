@@ -46,20 +46,18 @@ impl CrateDetails {
     pub fn load(toml_path: PathBuf) -> anyhow::Result<CrateDetails> {
         let toml: toml_edit::Document = toml_read(&toml_path)?;
 
-        let name = toml
+        let pkg = toml
             .get("package")
-            .ok_or_else(|| anyhow!("Cannot read [package] section from {:?}", &toml_path))?
+            .ok_or_else(|| anyhow!("Cannot read [package] section from {:?}", &toml_path))?;
+
+        let name = pkg
             .get("name")
             .ok_or_else(|| anyhow!("Cannot read package.name from {:?}", &toml_path))?
             .as_str()
             .ok_or_else(|| anyhow!("Cannot read package.name as a string from {:?}", &toml_path))?
             .to_owned();
 
-        let readme = if let Some(readme) = toml
-            .get("package")
-            .ok_or_else(|| anyhow!("Cannot read [package] section from {:?}", &toml_path))?
-            .get("readme")
-        {
+        let readme = if let Some(readme) = pkg.get("readme") {
             if let Some(readme) = readme.as_str() {
                 Some(readme.to_owned())
             } else {
@@ -72,22 +70,29 @@ impl CrateDetails {
             None
         };
 
-        let version = toml
-            .get("package")
-            .ok_or_else(|| anyhow!("Cannot read [package] section from {:?}", &toml_path))?
-            .get("version")
-            .ok_or_else(|| anyhow!("Cannot read package.version from {:?}", &toml_path))?
-            .as_str()
-            .ok_or_else(|| anyhow!("Cannot read package.version from {:?}", &toml_path))?
-            .to_owned();
-
-        let version = Version::parse(&version)
-            .with_context(|| format!("Cannot parse SemVer compatible version from {name}"))?;
+        let version = {
+            let version = if let Some(version) = pkg.get("version") {
+                if let Some(version) = version.as_str() {
+                    version.to_owned()
+                } else {
+                    anyhow::bail!(
+                        "Cannot read package.version as a string from {:?}",
+                        &toml_path
+                    );
+                }
+            } else {
+                // Default to "0.1.0" for crates which don't have a particular
+                // version, for example if the version is set through workspace
+                // properties
+                "0.1.0".to_owned()
+            };
+            Version::parse(&version)
+                .with_context(|| format!("Cannot parse {version} as SemVer for {toml_path:?}"))?
+        };
 
         let mut build_deps = HashSet::new();
         let mut dev_deps = HashSet::new();
         let mut deps = HashSet::new();
-
         for key in CrateDependencyKey::iter() {
             match key {
                 CrateDependencyKey::BuildDependencies => {
@@ -108,11 +113,7 @@ impl CrateDetails {
             }
         }
 
-        let should_be_published = if let Some(value) = toml
-            .get("package")
-            .ok_or_else(|| anyhow!("Cannot read [package] section from {:?}", &toml_path))?
-            .get("publish")
-        {
+        let should_be_published = if let Some(value) = pkg.get("publish") {
             if let Some(value) = value.as_bool() {
                 value
             } else {
