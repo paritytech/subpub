@@ -20,6 +20,7 @@ use crate::git::*;
 use crate::toml::toml_read;
 use crate::toml::toml_write;
 use anyhow::Context;
+
 use std::path::Path;
 use std::{fs, thread};
 use strum::EnumIter;
@@ -32,7 +33,6 @@ use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use std::path::PathBuf;
-use walkdir::WalkDir;
 
 pub type CrateName = String;
 #[derive(Debug, Clone)]
@@ -43,7 +43,7 @@ pub struct Crates {
 
 impl Crates {
     pub fn load_workspace_crates(root: PathBuf) -> anyhow::Result<Crates> {
-        let details = crate_cargo_tomls(root.clone())
+        let details = workspace_cargo_tomls(&root)?
             .into_iter()
             .map(|path| {
                 let details = CrateDetails::load(path)?;
@@ -225,41 +225,23 @@ makes more sense for your scenario.
     }
 }
 
-// TODO: use cargo_metadata instead
-/// find all of the crates, returning paths to their Cargo.toml files.
-fn crate_cargo_tomls(root: PathBuf) -> Vec<PathBuf> {
-    let root_toml = {
+fn workspace_cargo_tomls(root: &PathBuf) -> anyhow::Result<Vec<PathBuf>> {
+    let _root_toml = {
         let mut p = root.clone();
         p.push("Cargo.toml");
         p
     };
 
-    WalkDir::new(root)
+    let metadata = cargo_metadata::MetadataCommand::new()
+        .current_dir(root)
+        .exec()
+        .with_context(|| format!("Failed to get cargo metadata for workspace {root:?}"))?;
+
+    Ok(metadata
+        .workspace_packages()
         .into_iter()
-        // Ignore hidden files and folders, and anything in "target" folders
-        .filter_entry(|entry| {
-            entry
-                .file_name()
-                .to_str()
-                .map(|s| !s.starts_with('.') && s != "target")
-                .unwrap_or(false)
-        })
-        // Ignore errors
-        .filter_map(|entry| entry.ok())
-        // Keep files
-        .filter(|entry| entry.file_type().is_file())
-        // Keep files named Cargo.toml
-        .filter(|entry| {
-            entry
-                .file_name()
-                .to_str()
-                .map(|s| s == "Cargo.toml")
-                .unwrap_or(false)
-        })
-        // Filter the root Cargo.toml file
-        .filter(|entry| entry.path() != root_toml)
-        .map(|entry| entry.into_path())
-        .collect()
+        .map(|pkg| pkg.manifest_path.as_std_path().to_path_buf())
+        .collect())
 }
 
 #[derive(EnumString, strum::Display, EnumIter, PartialEq, Eq)]
