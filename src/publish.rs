@@ -1,13 +1,12 @@
 use crate::crates::Crates;
+use crate::external::crates_io;
 use crate::git::with_git_checkpoint;
-use crate::*;
 use anyhow::anyhow;
 use anyhow::Context;
 use clap::Parser;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use tracing::{info, span, Level};
-use tracing_subscriber::prelude::*;
 
 use crate::git::GitCheckpoint;
 
@@ -448,7 +447,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
         for krate in crates_to_publish {
             let crate_version = {
-                let prev_versions = external::crates_io::crate_versions(krate)?;
+                let prev_versions = crates_io::crate_versions(krate)?;
 
                 let details = crates
                     .details

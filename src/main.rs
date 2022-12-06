@@ -25,6 +25,17 @@ mod version;
 use clap::{Parser, Subcommand};
 
 use publish::*;
+use tracing_subscriber::prelude::*;
+
+fn main() -> anyhow::Result<()> {
+    setup_tracing();
+
+    let args = Args::parse();
+
+    match args.command {
+        Command::Publish(opts) => publish(opts),
+    }
+}
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -37,16 +48,6 @@ struct Args {
 enum Command {
     #[clap(about = "Publish crates in order from least to most dependents")]
     Publish(PublishOpts),
-}
-
-fn main() -> anyhow::Result<()> {
-    setup_tracing();
-
-    let args = Args::parse();
-
-    match args.command {
-        Command::Publish(opts) => publish(opts),
-    }
 }
 
 fn setup_tracing() {
