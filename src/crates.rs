@@ -42,9 +42,7 @@ pub struct Crates {
 }
 
 impl Crates {
-    /// Return a map of all substrate crates, in the form `crate_name => ( path, details )`.
-    pub fn load_crates_in_workspace(root: PathBuf) -> anyhow::Result<Crates> {
-        // Load details:
+    pub fn load_workspace_crates(root: PathBuf) -> anyhow::Result<Crates> {
         let details = crate_cargo_tomls(root.clone())
             .into_iter()
             .map(|path| {
@@ -53,7 +51,6 @@ impl Crates {
             })
             .collect::<anyhow::Result<HashMap<_, _>>>()?;
 
-        // Sanity check the details; make sure all listed dependencies exist.
         for crate_details in details.values() {
             for dep in &crate_details.deps {
                 if !details.contains_key(dep) {
@@ -68,14 +65,14 @@ impl Crates {
         Ok(Crates { root, details })
     }
 
-    pub fn setup_crates(&self) -> anyhow::Result<()> {
+    pub fn setup(&self) -> anyhow::Result<()> {
         for details in self.details.values() {
-            // In case a crate does NOT define a "readme" field in its
-            // Cargo.toml, "cargo publish" ASSUMES, WITHOUT FIRST CHECKING, that
-            // a README.md file exists beside the Cargo.toml. Publishing will
-            // fail in case the crate doesn't comply with that assumption. To
-            // work around that we'll crate a sample README.md file for crates
-            // which don't specify or have one.
+            // In case a crate does NOT define a `readme` field in its
+            // `Cargo.toml`, `cargo publish` assumes, without first checking,
+            // that a `README.md` file exists beside `Cargo.toml`. Publishing
+            // will fail in case the crate doesn't comply with that assumption.
+            // To work around that we'll crate a sample `README.md` file for
+            // crates which don't specify or have one.
             if details.readme.is_none() {
                 let crate_readme = details
                     .toml_path

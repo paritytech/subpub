@@ -184,7 +184,7 @@ fn test_get_publish_order() {
     assert_eq!(
         get_publish_order(&HashMap::from_iter(
             [
-                (crate_a_name.into(), crate_a.clone()),
+                (crate_a_name.into(), crate_a),
                 (crate_ba_name.into(), crate_ba.clone()),
                 (crate_bb_name.into(), crate_bb.clone()),
                 (crate_c_name.into(), crate_c.clone()),
@@ -201,9 +201,9 @@ fn test_get_publish_order() {
 }
 
 pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
-    let mut crates = Crates::load_crates_in_workspace(opts.root.clone())?;
+    let mut crates = Crates::load_workspace_crates(opts.root.clone())?;
 
-    crates.setup_crates()?;
+    crates.setup()?;
 
     let publish_order = get_publish_order(&crates.details);
     info!(
