@@ -120,13 +120,14 @@ impl Crates {
         if let Err(err) = details.publish(should_verify) {
             info!(
                 "
+
 Note: dev-dependencies are stripped before publishing. This might cause errors
 during pre-publish verification in case a dev-dependency is used for a cargo
 feature. If you run into errors such as:
 
     error: failed to parse manifest at `/path/to/Cargo.toml`
     Caused by:
-      feature `foo` includes `dep/benchmarks`, but `dep` is not a dependency
+      feature `bar` includes `foo/benchmarks`, but `foo` is not a dependency
 
 Assuming that the crate works fine locally, the error occurs because `dep` is a
 dev-dependency, which was stripped before publishing. You can work around that
@@ -135,7 +136,6 @@ you have the following Cargo.toml:
 
   [dev-dependencies]
   foo = {{ path = \"../foo\" }}
-  
   [features]
   custom = [\"foo/bar\"]
 
@@ -147,6 +147,7 @@ You should add foo as an optional dependency:
 You can keep foo as a dev-dependency as well in that case. Alternatively, you
 can promote foo to [dependencies] and remove it from [dev-dependencies] if that
 makes more sense for your scenario.
+
 "
             );
             return Err(err);
