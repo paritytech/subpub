@@ -105,8 +105,8 @@ fn test_maybe_bump_for_breaking_change() {
     // Picks the highest version among (previous versions + the current version)
     // when the current version is the highest version
     assert_eq!(
-        maybe_bump_for_breaking_change(vec![Version::new(0, 2, 0)], Version::new(0, 3, 0)),
-        Some(Version::new(0, 4, 0))
+        maybe_bump_for_breaking_change(vec![Version::new(0, 1, 0)], Version::new(0, 2, 0)),
+        Some(Version::new(0, 3, 0))
     );
 
     // Avoids producing a new version if there's no previous version and the
