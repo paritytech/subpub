@@ -1,13 +1,16 @@
+use crate::crate_details::CrateDetails;
 use crate::crates::Crates;
 use crate::external::crates_io;
 use crate::git::with_git_checkpoint;
 use anyhow::anyhow;
 use anyhow::Context;
 use clap::Parser;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use tracing::{info, span, Level};
 
+use crate::crates::CrateName;
 use crate::git::GitCheckpoint;
 
 #[derive(Parser, Debug, Clone)]
@@ -70,18 +73,17 @@ pub struct PublishOpts {
     post_check: bool,
 }
 
-pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
-    let mut crates = Crates::load_crates_in_workspace(opts.root.clone())?;
-    crates.setup_crates()?;
+/// Defines the crates publishing order from least to most dependents
+fn get_publish_order(details: &HashMap<CrateName, CrateDetails>) -> Vec<String> {
+    let mut publish_order: Vec<OrderedCrate> = vec![];
 
     struct OrderedCrate {
         name: String,
         rank: usize,
     }
-    let mut publish_order: Vec<OrderedCrate> = vec![];
     loop {
         let mut progressed = false;
-        for (krate, details) in &crates.details {
+        for (krate, details) in details {
             if publish_order
                 .iter()
                 .any(|ord_crate| ord_crate.name == *krate)
@@ -107,6 +109,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             break;
         }
     }
+
     publish_order.sort_by(|a, b| {
         use std::cmp::Ordering;
         match a.rank.cmp(&b.rank) {
@@ -114,10 +117,94 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             other => other,
         }
     });
-    let publish_order: Vec<String> = publish_order
+
+    publish_order
         .into_iter()
         .map(|ord_crate| ord_crate.name)
-        .collect();
+        .collect()
+}
+
+#[test]
+fn test_get_publish_order() {
+    use crate::crate_details::CrateDetails;
+    use std::collections::HashMap;
+
+    /*
+       Case: BA depends on A, thus the order becomes A -> BA
+    */
+    let crate_a_name = "A";
+    let crate_a = CrateDetails::new_for_testing(crate_a_name.into());
+
+    let crate_ba_name = "BA";
+    let mut crate_ba = CrateDetails::new_for_testing(crate_ba_name.into());
+    crate_ba.deps.insert(crate_a_name.to_owned());
+
+    assert_eq!(
+        get_publish_order(&HashMap::from_iter(
+            [
+                (crate_a_name.into(), crate_a.clone()),
+                (crate_ba_name.into(), crate_ba.clone()),
+            ]
+            .into_iter(),
+        )),
+        vec![crate_a_name.to_owned(), crate_ba_name.to_owned()]
+    );
+
+    /*
+       Case: BB and BA both depend on A; tiebreak between BB and BA by name,
+       thus the order becomes A -> BA -> BB
+    */
+    let crate_bb_name = "BB";
+    let mut crate_bb = CrateDetails::new_for_testing(crate_bb_name.into());
+    crate_bb.deps.insert(crate_a_name.to_owned());
+
+    assert_eq!(
+        get_publish_order(&HashMap::from_iter(
+            [
+                (crate_a_name.into(), crate_a.clone()),
+                (crate_ba_name.into(), crate_ba.clone()),
+                (crate_bb_name.into(), crate_bb.clone()),
+            ]
+            .into_iter(),
+        )),
+        vec![
+            crate_a_name.to_owned(),
+            crate_ba_name.to_owned(),
+            crate_bb_name.to_owned()
+        ]
+    );
+
+    /*
+       Case: C depends on BA, thus the order becomes A -> BA -> BB -> C
+    */
+    let crate_c_name = "C";
+    let mut crate_c = CrateDetails::new_for_testing(crate_c_name.into());
+    crate_c.deps.insert(crate_ba_name.to_owned());
+
+    assert_eq!(
+        get_publish_order(&HashMap::from_iter(
+            [
+                (crate_a_name.into(), crate_a.clone()),
+                (crate_ba_name.into(), crate_ba.clone()),
+                (crate_bb_name.into(), crate_bb.clone()),
+                (crate_c_name.into(), crate_c.clone()),
+            ]
+            .into_iter(),
+        )),
+        vec![
+            crate_a_name.to_owned(),
+            crate_ba_name.to_owned(),
+            crate_bb_name.to_owned(),
+            crate_c_name.to_owned()
+        ]
+    );
+}
+
+pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
+    let mut crates = Crates::load_crates_in_workspace(opts.root.clone())?;
+    crates.setup_crates()?;
+
+    let publish_order = get_publish_order(&crates.details);
     info!(
         "If we were to publish all crates, it would happen in this order: {}",
         publish_order

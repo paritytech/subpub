@@ -34,11 +34,11 @@ use std::time::Duration;
 use std::path::PathBuf;
 use walkdir::WalkDir;
 
+pub type CrateName = String;
 #[derive(Debug, Clone)]
 pub struct Crates {
-    root: PathBuf,
-    // Details for a given crate, including dependencies.
-    pub details: HashMap<String, CrateDetails>,
+    pub root: PathBuf,
+    pub details: HashMap<CrateName, CrateDetails>,
 }
 
 impl Crates {

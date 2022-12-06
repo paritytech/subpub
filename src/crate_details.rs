@@ -38,10 +38,22 @@ pub struct CrateDetails {
     pub should_be_published: bool,
     pub toml_path: PathBuf,
     pub readme: Option<String>,
-    pub modified: bool,
 }
 
 impl CrateDetails {
+    pub fn new_for_testing(name: String) -> Self {
+        Self {
+            name,
+            version: Version::new(0, 1, 0),
+            deps: HashSet::new(),
+            build_deps: HashSet::new(),
+            dev_deps: HashSet::new(),
+            should_be_published: true,
+            toml_path: PathBuf::new(),
+            readme: None,
+        }
+    }
+
     /// Read a Cargo.toml file, pulling out the information we care about.
     pub fn load(toml_path: PathBuf) -> anyhow::Result<CrateDetails> {
         let toml: toml_edit::Document = toml_read(&toml_path)?;
@@ -132,7 +144,6 @@ impl CrateDetails {
             toml_path,
             should_be_published,
             readme,
-            modified: false,
         })
     }
 
