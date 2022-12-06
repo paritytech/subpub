@@ -60,16 +60,6 @@ fn test_bump_for_breaking_change() {
     );
 }
 
-/// Bump the version for a breaking change and to release. Examples of bumps carried out:
-///
-/// ```text
-/// 0.15.0 -> 0.16.0 (bump minor if 0.x.x)
-/// 4.0.0 -> 5.0.0 (bump major if >1.0.0)
-/// 4.0.0-dev -> 4.0.0 (remove prerelease label)
-/// 4.0.0+buildmetadata -> 5.0.0+buildmetadata (preserve build metadata regardless)
-/// ```
-///
-/// Return the new version.
 pub fn maybe_bump_for_breaking_change(
     prev_versions: Vec<Version>,
     mut current_version: Version,
