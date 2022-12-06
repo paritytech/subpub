@@ -31,6 +31,35 @@ fn bump_for_breaking_change(mut version: Version) -> Version {
     version
 }
 
+#[test]
+fn test_bump_for_breaking_change() {
+    use semver::Prerelease;
+
+    assert_eq!(
+        bump_for_breaking_change(Version::new(0, 0, 1)),
+        Version::new(0, 1, 0)
+    );
+
+    assert_eq!(
+        bump_for_breaking_change(Version::new(0, 1, 0)),
+        Version::new(0, 2, 0)
+    );
+
+    assert_eq!(
+        bump_for_breaking_change(Version::new(1, 0, 0)),
+        Version::new(2, 0, 0)
+    );
+
+    assert_eq!(
+        bump_for_breaking_change({
+            let mut version = Version::new(0, 0, 1);
+            version.pre = Prerelease::new("dev").unwrap();
+            version
+        }),
+        Version::new(0, 0, 1)
+    );
+}
+
 /// Bump the version for a breaking change and to release. Examples of bumps carried out:
 ///
 /// ```text
