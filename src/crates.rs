@@ -30,7 +30,6 @@ use strum::EnumString;
 use strum::IntoEnumIterator;
 use tracing::info;
 
-use anyhow::anyhow;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
@@ -54,12 +53,17 @@ impl Crates {
             .collect::<anyhow::Result<HashMap<_, _>>>()?;
 
         for crate_details in details.values() {
-            for dep in &crate_details.deps {
+            for dep in crate_details.deps_to_publish() {
                 if !details.contains_key(dep) {
-                    let crate_name = &crate_details.name;
-                    return Err(anyhow!(
-                        "{crate_name} contains workspace dependency {dep} which cannot be found"
-                    ));
+                    let krate = &crate_details.name;
+                    anyhow::bail!(
+                      "Crate {} refers to path dependency {}, which could not be detected for the workspace at {:?}. You might need to add {} as a workspace member in {:?}.",
+                      krate,
+                      root.display(),
+                      dep,
+                      dep,
+                      root.display()
+                    );
                 }
             }
         }
@@ -250,7 +254,7 @@ fn workspace_cargo_tomls(root: &PathBuf) -> anyhow::Result<Vec<PathBuf>> {
         .arg("**/Cargo.toml")
         .output()?;
     if !cargo_tomls_output.status.success() {
-        anyhow::bail!("Failed to run git ls-files for {root:?}",);
+        anyhow::bail!("Failed to run `git ls-files` for {root:?}",);
     }
     Ok(String::from_utf8(cargo_tomls_output.stdout.clone())
         .with_context(|| {
