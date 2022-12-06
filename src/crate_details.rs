@@ -41,6 +41,7 @@ pub struct CrateDetails {
 }
 
 impl CrateDetails {
+    #[cfg(test)]
     pub fn new_for_testing(name: String) -> Self {
         Self {
             name,

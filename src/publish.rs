@@ -202,6 +202,7 @@ fn test_get_publish_order() {
 
 pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     let mut crates = Crates::load_crates_in_workspace(opts.root.clone())?;
+
     crates.setup_crates()?;
 
     let publish_order = get_publish_order(&crates.details);

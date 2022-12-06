@@ -70,12 +70,12 @@ impl Crates {
 
     pub fn setup_crates(&self) -> anyhow::Result<()> {
         for details in self.details.values() {
-            // In case a crate doesn't define a "readme" field in its
-            // Cargo.toml, "cargo publish" *assumes*, without first checking,
-            // that a README.md file exists beside Cargo.toml. Publishing will
+            // In case a crate does NOT define a "readme" field in its
+            // Cargo.toml, "cargo publish" ASSUMES, WITHOUT FIRST CHECKING, that
+            // a README.md file exists beside the Cargo.toml. Publishing will
             // fail in case the crate doesn't comply with that assumption. To
-            // counteract that we'll a sample README.md file for crates which
-            // don't specify or have one.
+            // work around that we'll crate a sample README.md file for crates
+            // which don't specify or have one.
             if details.readme.is_none() {
                 let crate_readme = details
                     .toml_path
