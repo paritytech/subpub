@@ -59,8 +59,8 @@ impl Crates {
                     anyhow::bail!(
                       "Crate {} refers to path dependency {}, which could not be detected for the workspace at {:?}. You might need to add {} as a workspace member in {:?}.",
                       krate,
-                      root.display(),
                       dep,
+                      root.display(),
                       dep,
                       root.display()
                     );
