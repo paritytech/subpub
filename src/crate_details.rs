@@ -107,20 +107,22 @@ impl CrateDetails {
         let mut dev_deps = HashSet::new();
         let mut deps = HashSet::new();
         for key in CrateDependencyKey::iter() {
+            let key_name = &key.to_string();
             match key {
-                CrateDependencyKey::BuildDependencies => {
-                    for item in get_all_dependency_sections(&toml, &key.to_string()) {
-                        build_deps.extend(filter_workspace_dependencies(item)?)
-                    }
-                }
                 CrateDependencyKey::Dependencies => {
-                    for item in get_all_dependency_sections(&toml, &key.to_string()) {
-                        deps.extend(filter_workspace_dependencies(item)?)
+                    for item in get_all_dependency_sections(&toml, key_name) {
+                        deps.extend(filter_workspace_dependencies(&toml_path, key_name, item)?)
                     }
                 }
                 CrateDependencyKey::DevDependencies => {
-                    for item in get_all_dependency_sections(&toml, &key.to_string()) {
-                        dev_deps.extend(filter_workspace_dependencies(item)?)
+                    for item in get_all_dependency_sections(&toml, key_name) {
+                        dev_deps.extend(filter_workspace_dependencies(&toml_path, key_name, item)?)
+                    }
+                }
+                CrateDependencyKey::BuildDependencies => {
+                    for item in get_all_dependency_sections(&toml, key_name) {
+                        build_deps
+                            .extend(filter_workspace_dependencies(&toml_path, key_name, item)?)
                     }
                 }
             }
@@ -386,46 +388,67 @@ fn get_all_dependency_sections<'a>(
     document.get(label).into_iter().chain(target)
 }
 
-// TODO: use cargo_metadata instead
 /// Given a path to some dependencies in a TOML file, pull out the package names
 /// for any path based dependencies (ie dependencies in the same workspace).
-fn filter_workspace_dependencies(val: &toml_edit::Item) -> anyhow::Result<HashSet<String>> {
-    let arr = match val.as_table() {
-        Some(arr) => arr,
+fn filter_workspace_dependencies<P: AsRef<Path>>(
+    toml_path: P,
+    key_name: &str,
+    item: &toml_edit::Item,
+) -> anyhow::Result<HashSet<String>> {
+    let item = match item.as_table() {
+        Some(item) => item,
         None => return Err(anyhow!("dependencies should be a TOML table.")),
     };
 
     let mut deps = HashSet::new();
-    for (name, props) in arr {
-        // If props arent a table eg { path = "/foo" }, this is
-        // not a workspace dependency (since it needs a "path" prop)
-        // so skip over it.
-        let props = match props.as_table_like() {
-            Some(props) => props,
-            None => continue,
+    for (key, val) in item {
+        let val = match val.as_table_like() {
+            Some(val) => val,
+            None => {
+                if val.is_str() {
+                    continue;
+                } else {
+                    anyhow::bail!(
+                        "{} {} in {:?} should be specified as a string or table",
+                        key_name,
+                        key,
+                        toml_path.as_ref(),
+                    );
+                }
+            }
         };
 
         // Ignore any dependency without a "path" (not a workspace dep
         // if it doesn't point to another crate via a path).
-        let path = match props.get("path") {
+        let path = match val.get("path") {
             Some(path) => path,
             None => continue,
         };
 
         // Expect path to be a string. Error if it's not.
-        path.as_str()
-            .ok_or_else(|| anyhow!("{}.path is not a string.", name))?;
+        path.as_str().ok_or_else(|| {
+            anyhow!(
+                ".path field of {} {} in {:?} is not a string",
+                key_name,
+                key,
+                toml_path.as_ref()
+            )
+        })?;
 
         // What is the actual package name?
-        let package_name = props
+        let package_name = val
             .get("package")
             .map(|package| {
-                package
-                    .as_str()
-                    .map(|s| s.to_string())
-                    .ok_or_else(|| anyhow!("{}.package is not a string.", name))
+                package.as_str().map(|s| s.to_string()).ok_or_else(|| {
+                    anyhow!(
+                        ".package field of {} {} in {:?} is not a string",
+                        key_name,
+                        key,
+                        toml_path.as_ref()
+                    )
+                })
             })
-            .unwrap_or_else(|| Ok(name.to_string()))?;
+            .unwrap_or_else(|| Ok(key.to_string()))?;
 
         deps.insert(package_name);
     }

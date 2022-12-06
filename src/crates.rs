@@ -20,6 +20,8 @@ use crate::git::*;
 use crate::toml::toml_read;
 use crate::toml::toml_write;
 use anyhow::Context;
+use std::process::Command;
+use tracing::warn;
 
 use std::path::Path;
 use std::{fs, thread};
@@ -226,21 +228,48 @@ makes more sense for your scenario.
 }
 
 fn workspace_cargo_tomls(root: &PathBuf) -> anyhow::Result<Vec<PathBuf>> {
-    let _root_toml = {
-        let mut p = root.clone();
-        p.push("Cargo.toml");
-        p
-    };
-
-    let metadata = cargo_metadata::MetadataCommand::new()
+    if let Ok(metadata) = cargo_metadata::MetadataCommand::new()
         .current_dir(root)
         .exec()
-        .with_context(|| format!("Failed to get cargo metadata for workspace {root:?}"))?;
+    {
+        return Ok(metadata
+            .workspace_packages()
+            .into_iter()
+            .map(|pkg| pkg.manifest_path.as_std_path().to_path_buf())
+            .collect());
+    } else {
+        warn!("cargo_metadata failed for workspace {root:?}; falling back to Git detection");
+    }
 
-    Ok(metadata
-        .workspace_packages()
-        .into_iter()
-        .map(|pkg| pkg.manifest_path.as_std_path().to_path_buf())
+    let mut cmd = Command::new("git");
+    let cargo_tomls_output = cmd
+        .current_dir(root)
+        .arg("ls-files")
+        .arg("--full-name")
+        .arg("--exclude-standard")
+        .arg("**/Cargo.toml")
+        .output()?;
+    if !cargo_tomls_output.status.success() {
+        anyhow::bail!("Failed to run git ls-files for {root:?}",);
+    }
+    Ok(String::from_utf8(cargo_tomls_output.stdout.clone())
+        .with_context(|| {
+            format!(
+                "Failed to parse output as UTF-8: {:?}\nBytes: {:?}",
+                String::from_utf8_lossy(&cargo_tomls_output.stdout[..]),
+                &cargo_tomls_output.stdout
+            )
+        })?
+        .lines()
+        .filter_map(|file_path| {
+            if file_path.is_empty() {
+                None
+            } else {
+                let mut root = root.clone();
+                root.push(file_path);
+                Some(root)
+            }
+        })
         .collect())
 }
 
