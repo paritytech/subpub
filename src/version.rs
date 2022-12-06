@@ -17,6 +17,7 @@
 pub use semver::Version;
 use std::cmp::Ordering;
 
+/// Bumps a version for the purpose of signifying a breaking change
 fn bump_for_breaking_change(mut version: Version) -> Version {
     if version.pre != semver::Prerelease::EMPTY {
         version.pre = semver::Prerelease::EMPTY;
@@ -35,21 +36,27 @@ fn bump_for_breaking_change(mut version: Version) -> Version {
 fn test_bump_for_breaking_change() {
     use semver::Prerelease;
 
+    // Reference: https://semver.org
+
+    // Patch version is bumped to minor
     assert_eq!(
         bump_for_breaking_change(Version::new(0, 0, 1)),
         Version::new(0, 1, 0)
     );
 
+    // Minor version is bumped by its minor version component
     assert_eq!(
         bump_for_breaking_change(Version::new(0, 1, 0)),
         Version::new(0, 2, 0)
     );
 
+    // Major version is bumped by its major version component
     assert_eq!(
         bump_for_breaking_change(Version::new(1, 0, 0)),
         Version::new(2, 0, 0)
     );
 
+    // Major version is bumped by its major version component
     assert_eq!(
         bump_for_breaking_change({
             let mut version = Version::new(0, 0, 1);
@@ -82,4 +89,41 @@ pub fn maybe_bump_for_breaking_change(
                 Some(current_version)
             }
         })
+}
+
+#[test]
+fn test_maybe_bump_for_breaking_change() {
+    use semver::Prerelease;
+
+    // Picks the highest version among (previous versions + the current version)
+    // when previous versions have the highest version
+    assert_eq!(
+        maybe_bump_for_breaking_change(vec![Version::new(0, 2, 0)], Version::new(0, 1, 0)),
+        Some(Version::new(0, 3, 0))
+    );
+
+    // Picks the highest version among (previous versions + the current version)
+    // when the current version is the highest version
+    assert_eq!(
+        maybe_bump_for_breaking_change(vec![Version::new(0, 2, 0)], Version::new(0, 3, 0)),
+        Some(Version::new(0, 4, 0))
+    );
+
+    // Avoids producing a new version if there's no previous version and the
+    // current version doesn't have a pre-release component
+    assert_eq!(
+        maybe_bump_for_breaking_change(vec![], Version::new(0, 1, 0)),
+        None
+    );
+
+    // Produces a new version if there's no previous version and the current
+    // version has a pre-release component
+    assert_eq!(
+        maybe_bump_for_breaking_change(vec![], {
+            let mut version = Version::new(0, 0, 1);
+            version.pre = Prerelease::new("dev").unwrap();
+            version
+        }),
+        Some(Version::new(0, 0, 1))
+    );
 }
