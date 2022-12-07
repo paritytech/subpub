@@ -14,13 +14,33 @@
 // You should have received a copy of the GNU General Public License
 // along with subpub.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{env, path::Path, process::Command};
+use std::{env, io, path::Path, process::Command};
+
+use anyhow::anyhow;
+
+pub enum PublishError {
+    RateLimited(String),
+    Any(anyhow::Error),
+}
+
+impl From<io::Error> for PublishError {
+    fn from(err: io::Error) -> Self {
+        Self::Any(anyhow!(err))
+    }
+}
+
+fn detect_rate_limit_error(err_msg: &str) -> Option<String> {
+    err_msg
+        .match_indices("You have published too many crates")
+        .next()
+        .map(|(idx, _)| err_msg.chars().skip(idx).collect())
+}
 
 pub fn publish_crate<P: AsRef<Path>>(
     krate: &str,
     manifest_path: P,
     verify: bool,
-) -> anyhow::Result<()> {
+) -> Result<(), PublishError> {
     let mut cmd = Command::new("cargo");
 
     cmd.arg("publish");
@@ -37,15 +57,42 @@ pub fn publish_crate<P: AsRef<Path>>(
         cmd.arg("--no-verify");
     }
 
-    if !cmd
+    let output = cmd
         .arg("--allow-dirty")
         .arg("--manifest-path")
         .arg(manifest_path.as_ref())
-        .status()?
-        .success()
-    {
-        anyhow::bail!("Failed to publish crate {krate}");
-    };
+        .output()?;
+    if !output.status.success() {
+        // Ideally we'd detect rate limiting problems by the exit code, but
+        // cargo's exit code isn't fine-grained, so do it by the error message
+        // instead.
+        // https://github.com/rust-lang/crates.io/blob/d240463e8c807b3c29248dec6bd31779f49dd424/src/util/errors/json.rs#L139-L146
+        let err_msg = String::from_utf8_lossy(&output.stderr[..]);
+        let rate_limit_error = detect_rate_limit_error(&err_msg);
+        if let Some(rate_limit_error) = rate_limit_error {
+            return Err(PublishError::RateLimited(rate_limit_error));
+        } else {
+            return Err(PublishError::Any(anyhow!(
+                "Failed to publish crate {krate}"
+            )));
+        }
+    }
 
     Ok(())
+}
+
+#[test]
+fn test_detect_rate_limit_error() {
+    let full_error_msg = "
+Updating `local` index
+Packaging sc-rpc-api v0.10.0 (/builds/parity/mirrors/substrate/client/rpc-api)
+Uploading sc-rpc-api v0.10.0 (/builds/parity/mirrors/substrate/client/rpc-api)
+You have published too many crates in a short period of time. Please try again after {retry_after} or email help@crates.io to have your limit increased.";
+
+    let expected_error_msg_part = "You have published too many crates in a short period of time. Please try again after {retry_after} or email help@crates.io to have your limit increased.";
+
+    assert_eq!(
+        detect_rate_limit_error(full_error_msg),
+        Some(expected_error_msg_part.to_owned())
+    );
 }

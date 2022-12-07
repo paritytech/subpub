@@ -29,7 +29,7 @@ use tracing::{info, span, Level};
 
 use crate::{
     crates::{edit_all_dependency_sections, write_dependency_version, CrateDependencyKey},
-    external,
+    external::{self, cargo::PublishError},
     git::*,
     toml::{toml_read, toml_write},
     version::maybe_bump_for_breaking_change,
@@ -257,7 +257,7 @@ impl CrateDetails {
         Ok(())
     }
 
-    pub fn publish(&self, verify: bool) -> anyhow::Result<()> {
+    pub fn publish(&self, verify: bool) -> Result<(), PublishError> {
         external::cargo::publish_crate(&self.name, &self.toml_path, verify)
     }
 
