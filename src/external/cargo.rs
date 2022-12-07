@@ -29,6 +29,7 @@ impl From<io::Error> for PublishError {
     }
 }
 
+// See https://github.com/rust-lang/crates.io/blob/d240463e8c807b3c29248dec6bd31779f49dd424/src/util/errors/json.rs#L139-L146
 fn detect_rate_limit_error(err_msg: &str) -> Option<String> {
     err_msg
         .match_indices("You have published too many crates")
@@ -66,7 +67,6 @@ pub fn publish_crate<P: AsRef<Path>>(
         // Ideally we'd detect rate limiting problems by the exit code, but
         // cargo's exit code isn't fine-grained, so do it by the error message
         // instead.
-        // https://github.com/rust-lang/crates.io/blob/d240463e8c807b3c29248dec6bd31779f49dd424/src/util/errors/json.rs#L139-L146
         let err_msg = String::from_utf8_lossy(&output.stderr[..]);
         let rate_limit_error = detect_rate_limit_error(&err_msg);
         if let Some(rate_limit_error) = rate_limit_error {
@@ -83,8 +83,6 @@ pub fn publish_crate<P: AsRef<Path>>(
 
 #[test]
 fn test_detect_rate_limit_error() {
-    // https://github.com/rust-lang/crates.io/blob/d240463e8c807b3c29248dec6bd31779f49dd424/src/util/errors/json.rs#L139-L146
-
     let full_error_msg = "
 Updating crates.io index
 Packaging sc-rpc-api v0.10.0 (/substrate/client/rpc-api)
