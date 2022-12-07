@@ -402,7 +402,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     };
 
     let mut processed_crates: HashSet<&String> = HashSet::new();
-    let mut last_publish_time: Option<Instant> = None;
+    let mut last_publish_instant: Option<Instant> = None;
     for sel_crate in selected_crates {
         let span = span!(Level::INFO, "_", crate = sel_crate);
         let _enter = span.enter();
@@ -491,7 +491,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                         krate,
                         &crates_to_verify,
                         opts.after_publish_delay.as_ref(),
-                        &mut last_publish_time,
+                        &mut last_publish_instant,
                     )?;
                     version
                 } else {

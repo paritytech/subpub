@@ -104,7 +104,7 @@ impl Crates {
         krate: &String,
         crates_to_verify: &HashSet<&String>,
         after_publish_delay: Option<&u64>,
-        last_publish_time: &mut Option<Instant>,
+        last_publish_instant: &mut Option<Instant>,
     ) -> anyhow::Result<()> {
         let details = match self.details.get(krate) {
             Some(details) => details,
@@ -116,10 +116,10 @@ impl Crates {
         info!("Stripping dev-dependencies of crate {krate} before publishing");
         details.strip_dev_deps(&self.root)?;
 
-        if let Some(last_publish_time) = last_publish_time {
+        if let Some(last_publish_instant) = last_publish_instant {
             if let Some(after_publish_delay) = after_publish_delay {
                 let after_publish_delay = Duration::from_secs(*after_publish_delay);
-                let now = last_publish_time.elapsed();
+                let now = last_publish_instant.elapsed();
                 if now < after_publish_delay {
                     let sleep_duration = after_publish_delay - now;
                     info!(
@@ -176,7 +176,7 @@ makes more sense for your scenario.
             thread::sleep(Duration::from_millis(2500))
         }
 
-        *last_publish_time = Some(Instant::now());
+        *last_publish_instant = Some(Instant::now());
 
         if let Ok(crates_committed_file) = env::var("SPUB_CRATES_COMMITTED_FILE") {
             loop {
