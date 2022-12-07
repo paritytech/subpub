@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::Context;
 
-pub fn toml_read<P: AsRef<Path>>(path: P) -> anyhow::Result<toml_edit::Document> {
+pub fn read_toml<P: AsRef<Path>>(path: P) -> anyhow::Result<toml_edit::Document> {
     let toml_string = read_to_string(&path).with_context(|| {
         format!(
             "Cannot read the Cargo.toml at {:?}",
@@ -23,7 +23,7 @@ pub fn toml_read<P: AsRef<Path>>(path: P) -> anyhow::Result<toml_edit::Document>
     Ok(toml)
 }
 
-pub fn toml_write<P: AsRef<Path>>(path: P, toml: &toml_edit::Document) -> anyhow::Result<()> {
+pub fn write_toml<P: AsRef<Path>>(path: P, toml: &toml_edit::Document) -> anyhow::Result<()> {
     fs::write(&path, toml.to_string()).with_context(|| {
         format!(
             "Cannot save the updated Cargo.toml at {:?}",

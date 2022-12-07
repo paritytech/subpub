@@ -22,8 +22,12 @@ pub fn does_crate_exist(name: &str, version: &semver::Version) -> anyhow::Result
     let client = reqwest::blocking::Client::new();
     let crates_api = env::var("SPUB_CRATES_API").unwrap();
     let url = format!("{crates_api}/crates/{name}/{version}");
-    let res = client.get(&url)
-        .header("User-Agent", "https://github.com/paritytech/subpub / latest : requested for checking if the crate exists")
+    let res = client
+        .get(&url)
+        .header(
+            "User-Agent",
+            "https://github.com/paritytech/subpub / ? : checking if the crate exists",
+        )
         .send()
         .with_context(|| format!("Cannot download {name}"))?;
 
@@ -53,8 +57,12 @@ pub fn crate_versions<Name: AsRef<str>>(name: Name) -> anyhow::Result<Vec<Crates
     let client = reqwest::blocking::Client::new();
     let crates_api = env::var("SPUB_CRATES_API").unwrap();
     let url = format!("{crates_api}/crates/{}/versions", name.as_ref());
-    let res = client.get(&url)
-        .header("User-Agent", "https://github.com/paritytech/subpub / latest : requested for checking previous versions the crate")
+    let res = client
+        .get(&url)
+        .header(
+            "User-Agent",
+            "https://github.com/paritytech/subpub / ? : checking previous crate versions",
+        )
         .send()
         .with_context(|| format!("Cannot download {}", name.as_ref()))?;
 
@@ -93,27 +101,26 @@ pub fn crate_versions<Name: AsRef<str>>(name: Name) -> anyhow::Result<Vec<Crates
         .collect()
 }
 
-/// Download a crate from crates.io.
-pub fn try_download_crate(
-    name: &str,
-    version: &semver::Version,
-) -> anyhow::Result<Option<Vec<u8>>> {
+pub fn download_crate(name: &str, version: &semver::Version) -> anyhow::Result<Option<Vec<u8>>> {
     let client = reqwest::blocking::Client::new();
     let version = version.to_string();
     let crates_api = env::var("SPUB_CRATES_API").unwrap();
 
     let req_url = format!("{crates_api}/crates/{name}/{version}/download");
     let res = client.get(&req_url)
-        .header("User-Agent", "https://github.com/paritytech/subpub / latest : requested for comparing local crate against the published crate")
+        .header("User-Agent", "https://github.com/paritytech/subpub / ? : comparing local crate against the published crate")
         .send()
-        .with_context(|| format!("Cannot download {name}"))?;
+        .with_context(|| format!("Failed to download {name} from {req_url}"))?;
 
     let res_status = res.status();
-    if res_status == reqwest::StatusCode::NOT_FOUND {
-        return Ok(None);
-    } else if !res.status().is_success() {
-        anyhow::bail!("Request to {req_url} failed with HTTP status code {res_status}");
+    match res_status {
+        reqwest::StatusCode::NOT_FOUND => Ok(None),
+        _ => {
+            if res.status().is_success() {
+                Ok(Some(res.bytes()?.to_vec()))
+            } else {
+                anyhow::bail!("Request to {req_url} failed with HTTP status code {res_status}");
+            }
+        }
     }
-
-    Ok(Some(res.bytes()?.to_vec()))
 }

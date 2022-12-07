@@ -31,7 +31,7 @@ use crate::{
     crates::{edit_all_dependency_sections, write_dependency_version, CrateDependencyKey},
     external::{self, cargo::PublishError},
     git::*,
-    toml::{toml_read, toml_write},
+    toml::{read_toml, write_toml},
     version::maybe_bump_for_breaking_change,
 };
 
@@ -64,7 +64,7 @@ impl CrateDetails {
 
     /// Read a Cargo.toml file, pulling out the information we care about.
     pub fn load(toml_path: PathBuf) -> anyhow::Result<CrateDetails> {
-        let toml: toml_edit::Document = toml_read(&toml_path)?;
+        let toml: toml_edit::Document = read_toml(&toml_path)?;
 
         let pkg = toml
             .get("package")
@@ -291,17 +291,13 @@ impl CrateDetails {
         root: P,
         version: &semver::Version,
     ) -> anyhow::Result<bool> {
-        let name = &self.name;
-
-        let span = span!(Level::INFO, "__", crate = self.name);
-        let _enter = span.enter();
-
         info!(
             "Comparing crate {} against crates.io to see if it needs to be published",
             self.name
         );
 
-        self.strip_dev_deps(&root)?;
+        let span = span!(Level::INFO, "__", crate = self.name);
+        let _enter = span.enter();
 
         let tmp_dir = tempfile::tempdir()?;
         let target_dir = if let Ok(tmp_dir) = env::var("SPUB_TMP") {
@@ -311,6 +307,7 @@ impl CrateDetails {
         };
 
         info!("Generating .crate file");
+        self.strip_dev_deps(&root)?;
         let mut cmd = Command::new("cargo");
         if !cmd
             .arg("package")
@@ -323,29 +320,35 @@ impl CrateDetails {
             .status()?
             .success()
         {
-            anyhow::bail!("Failed to package crate {name}");
+            anyhow::bail!("Failed to package crate {}", &self.name);
         };
+
+        let crates_io_bytes =
+            if let Some(bytes) = external::crates_io::download_crate(&self.name, &self.version)? {
+                bytes
+            } else {
+                info!("The crate is not published to crates.io");
+                return Ok(true);
+            };
+
         let pkg_path = target_dir
             .join("package")
-            .join(format!("{name}-{}.crate", version));
+            .join(format!("{}-{}.crate", &self.name, version));
         let pkg_bytes = fs::read(&pkg_path)?;
 
-        info!("Checking generated .crate file against crates.io");
-        let crates_io_bytes = if let Some(bytes) =
-            external::crates_io::try_download_crate(&self.name, &self.version)?
-        {
-            bytes
+        if crates_io_bytes == pkg_bytes {
+            info!(
+                "{:?} is identical to the version {} from crates.io",
+                pkg_path, version
+            );
+            Ok(false)
         } else {
-            return Ok(true);
-        };
-
-        if crates_io_bytes != pkg_bytes {
-            info!("The file at {pkg_path:?} is different from the published version");
-            return Ok(true);
+            info!(
+                "{:?} is different from the version {} from crates.io",
+                pkg_path, version
+            );
+            Ok(true)
         }
-
-        info!("The crate is identical to the version from crates.io");
-        Ok(false)
     }
 
     pub fn maybe_bump_version(
@@ -367,11 +370,11 @@ impl CrateDetails {
     }
 
     fn read_toml(&self) -> anyhow::Result<toml_edit::Document> {
-        toml_read(&self.toml_path)
+        read_toml(&self.toml_path)
     }
 
     fn write_toml(&self, toml: &toml_edit::Document) -> anyhow::Result<()> {
-        toml_write(&self.toml_path, toml)
+        write_toml(&self.toml_path, toml)
     }
 }
 

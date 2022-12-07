@@ -31,7 +31,7 @@ use crate::{
     crate_details::CrateDetails,
     external::{self, cargo::PublishError},
     git::*,
-    toml::{toml_read, toml_write},
+    toml::{read_toml, write_toml},
 };
 
 pub type CrateName = String;
@@ -318,7 +318,7 @@ pub fn write_dependency_version<P: AsRef<Path>>(
     // consumed from the registry after publishing.
     remove_dependency_path: bool,
 ) -> anyhow::Result<()> {
-    let mut toml = toml_read(&toml_path)?;
+    let mut toml = read_toml(&toml_path)?;
 
     fn do_set<P: AsRef<Path>>(
         item: &mut toml_edit::Item,
@@ -389,7 +389,7 @@ pub fn write_dependency_version<P: AsRef<Path>>(
         })?;
     }
 
-    toml_write(toml_path, &toml)?;
+    write_toml(toml_path, &toml)?;
 
     Ok(())
 }
