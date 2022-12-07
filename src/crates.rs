@@ -132,28 +132,26 @@ impl Crates {
         }
 
         info!("Publishing crate {krate}");
-        loop {
-            if let Err(err) = details.publish(should_verify) {
-                match err {
-                    PublishError::RateLimited(err) => {
-                        info!("`cargo publish` failed to rate limiting: {err}");
-                        // crates.io should give a new token every 1 minute, so
-                        // sleep by that much and try again
-                        let rate_limit_delay = Duration::from_secs(64);
-                        info!(
-                            "Sleeping for {:?} before trying to publish again",
-                            rate_limit_delay
-                        );
-                        thread::sleep(rate_limit_delay);
-                    }
-                    PublishError::Any(err) => {
-                        info!(DEV_DEPS_TROUBLESHOOT_HINT);
-                        return Err(err);
-                    }
+        while let Err(err) = details.publish(should_verify) {
+            match err {
+                PublishError::RateLimited(err) => {
+                    info!("`cargo publish` failed due to rate limiting: {err}");
+                    // crates.io should give a new token every 1 minute, so
+                    // sleep by that much and try again
+                    let rate_limit_delay = Duration::from_secs(64);
+                    info!(
+                        "Sleeping for {:?} before trying to publish again",
+                        rate_limit_delay
+                    );
+                    thread::sleep(rate_limit_delay);
                 }
-            } else {
-                break;
-            };
+                PublishError::Any(err) => {
+                    if err.to_string().contains("error: failed to parse manifest") {
+                        info!(DEV_DEPS_TROUBLESHOOT_HINT);
+                    }
+                    return Err(err);
+                }
+            }
         }
 
         git_checkpoint_revert(&self.root)?;
@@ -396,8 +394,7 @@ pub fn write_dependency_version<P: AsRef<Path>>(
     Ok(())
 }
 
-const DEV_DEPS_TROUBLESHOOT_HINT: &'static str = "
-
+const DEV_DEPS_TROUBLESHOOT_HINT: &str = "
 Note: dev-dependencies are stripped before publishing. This might cause errors
 during pre-publish verification in case a dev-dependency is used for a cargo
 feature. If you run into errors such as:
@@ -406,23 +403,23 @@ feature. If you run into errors such as:
     Caused by:
       feature `bar` includes `foo/benchmarks`, but `foo` is not a dependency
 
-Assuming that the crate works fine locally, the error occurs because `dep` is a
+Assuming that the crate works fine locally, the error occurs because `foo` is a
 dev-dependency, which was stripped before publishing. You can work around that
-by putting `dep` as an optional dependency in [dependencies]. For example, if
+by putting `foo` as an optional dependency in [dependencies]. For example, if
 you have the following Cargo.toml:
 
-  [dev-dependencies]
-  foo = {{ path = \"../foo\" }}
-  [features]
-  custom = [\"foo/bar\"]
+    [dev-dependencies]
+    foo = {{ path = \"../foo\" }}
 
-You should add foo as an optional dependency:
+    [features]
+    full = [\"foo/bar\"]
 
-  [dependencies]
-  foo = {{ default-features = false, optional = true, path = \"../foo\" }}
+You should add `foo` as an optional dependency:
 
-You can keep foo as a dev-dependency as well in that case. Alternatively, you
-can promote foo to [dependencies] and remove it from [dev-dependencies] if that
-makes more sense for your scenario.
+    [dependencies]
+    foo = {{ default-features = false, optional = true, path = \"../foo\" }}
 
+You should keep `foo` as a dev-dependency as well in that case. Alternatively,
+you can promote `foo` to [dependencies] and remove it from [dev-dependencies] if
+that makes more sense for your scenario.
 ";

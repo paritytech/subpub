@@ -83,13 +83,16 @@ pub fn publish_crate<P: AsRef<Path>>(
 
 #[test]
 fn test_detect_rate_limit_error() {
-    let full_error_msg = "
-Updating `local` index
-Packaging sc-rpc-api v0.10.0 (/builds/parity/mirrors/substrate/client/rpc-api)
-Uploading sc-rpc-api v0.10.0 (/builds/parity/mirrors/substrate/client/rpc-api)
-You have published too many crates in a short period of time. Please try again after {retry_after} or email help@crates.io to have your limit increased.";
+    // https://github.com/rust-lang/crates.io/blob/d240463e8c807b3c29248dec6bd31779f49dd424/src/util/errors/json.rs#L139-L146
 
-    let expected_error_msg_part = "You have published too many crates in a short period of time. Please try again after {retry_after} or email help@crates.io to have your limit increased.";
+    let full_error_msg = "
+Updating crates.io index
+Packaging sc-rpc-api v0.10.0 (/substrate/client/rpc-api)
+Uploading sc-rpc-api v0.10.0 (/substrate/client/rpc-api)
+You have published too many crates in a short period of time. Please try again after {PLACEHOLDER} or email help@crates.io to have your limit increased.
+";
+
+    let expected_error_msg_part = "You have published too many crates in a short period of time. Please try again after {PLACEHOLDER} or email help@crates.io to have your limit increased.\n";
 
     assert_eq!(
         detect_rate_limit_error(full_error_msg),
