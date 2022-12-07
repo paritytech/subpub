@@ -281,16 +281,12 @@ impl CrateDetails {
     }
 
     pub fn needs_publishing<P: AsRef<Path>>(&self, root: P) -> anyhow::Result<bool> {
-        let result = self.needs_publishing_inner(&root, &self.version);
+        let result = self.needs_publishing_inner(&root);
         git_checkpoint_revert(&root)?;
         result
     }
 
-    fn needs_publishing_inner<P: AsRef<Path>>(
-        &self,
-        root: P,
-        version: &semver::Version,
-    ) -> anyhow::Result<bool> {
+    fn needs_publishing_inner<P: AsRef<Path>>(&self, root: P) -> anyhow::Result<bool> {
         info!(
             "Comparing crate {} against crates.io to see if it needs to be published",
             self.name
@@ -333,19 +329,19 @@ impl CrateDetails {
 
         let pkg_path = target_dir
             .join("package")
-            .join(format!("{}-{}.crate", &self.name, version));
+            .join(format!("{}-{}.crate", &self.name, &self.version));
         let pkg_bytes = fs::read(&pkg_path)?;
 
         if crates_io_bytes == pkg_bytes {
             info!(
                 "{:?} is identical to the version {} from crates.io",
-                pkg_path, version
+                pkg_path, &self.version
             );
             Ok(false)
         } else {
             info!(
                 "{:?} is different from the version {} from crates.io",
-                pkg_path, version
+                pkg_path, &self.version
             );
             Ok(true)
         }
