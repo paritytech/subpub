@@ -320,7 +320,7 @@ pub fn write_dependency_version<P: AsRef<Path>>(
 ) -> anyhow::Result<()> {
     let mut toml = read_toml(&toml_path)?;
 
-    fn do_set<P: AsRef<Path>>(
+    fn visit<P: AsRef<Path>>(
         item: &mut toml_edit::Item,
         version: &semver::Version,
         dep: &str,
@@ -340,7 +340,9 @@ pub fn write_dependency_version<P: AsRef<Path>>(
                 } else {
                     let item = item.as_table_like_mut().with_context(|| {
                         format!(
-                            "{dep_key_display} 's key {key} should be a string or table-like in {:?}",
+                            "{}.{} should be a string or table-like in {:?}",
+                            dep_key_display,
+                            key,
                             toml_path.as_ref().as_os_str()
                         )
                     })?;
@@ -355,20 +357,32 @@ pub fn write_dependency_version<P: AsRef<Path>>(
                 } else {
                     item.as_table_like_mut().with_context(|| {
                         format!(
-                            "{dep_key_display} 's key {key} should be a string or table-like in {:?}",
+                            "{}.{} should be a string or table-like in {:?}",
+                            dep_key_display,
+                            key,
                             toml_path.as_ref().as_os_str()
                         )
                     })?
                 };
-                if item
-                    .get("package")
-                    .map(|pkg| pkg.as_str() == Some(dep))
-                    .unwrap_or(false)
-                {
-                    item.insert("version", toml_edit::value(version.to_string()));
-                    if remove_dependency_path {
-                        item.remove("path");
+                let pkg = if let Some(pkg) = item.get("package") {
+                    pkg
+                } else {
+                    continue;
+                };
+                if let Some(pkg) = pkg.as_str() {
+                    if pkg == dep {
+                        item.insert("version", toml_edit::value(version.to_string()));
+                        if remove_dependency_path {
+                            item.remove("path");
+                        }
                     }
+                } else {
+                    anyhow::bail!(
+                        "{}.{}.package should be a string in {:?}",
+                        dep_key_display,
+                        key,
+                        toml_path.as_ref().as_os_str()
+                    );
                 }
             }
         }
@@ -378,7 +392,7 @@ pub fn write_dependency_version<P: AsRef<Path>>(
 
     for dep_key in CrateDependencyKey::iter() {
         edit_all_dependency_sections(&mut toml, dep_key, |item, _, dep_key_display| {
-            do_set(
+            visit(
                 item,
                 version,
                 dependency,

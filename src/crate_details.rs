@@ -185,7 +185,7 @@ impl CrateDetails {
 
         let mut toml = self.read_toml()?;
 
-        fn do_set(item: &mut toml_edit::Item, registry: &str) -> anyhow::Result<()> {
+        fn visit(item: &mut toml_edit::Item, registry: &str) -> anyhow::Result<()> {
             let table = match item.as_table_like_mut() {
                 Some(table) => table,
                 None => return Ok(()),
@@ -206,7 +206,7 @@ impl CrateDetails {
         }
 
         for key in CrateDependencyKey::iter() {
-            edit_all_dependency_sections(&mut toml, key, |item, _, _| do_set(item, registry))?;
+            edit_all_dependency_sections(&mut toml, key, |item, _, _| visit(item, registry))?;
         }
 
         self.write_toml(&toml)?;
