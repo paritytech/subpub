@@ -14,20 +14,26 @@
 // You should have received a copy of the GNU General Public License
 // along with subpub.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::crates::{edit_all_dependency_sections, write_dependency_version, CrateDependencyKey};
-use crate::toml::{toml_read, toml_write};
-use crate::version::maybe_bump_for_breaking_change;
-use crate::{external, git::*};
+use std::{
+    collections::HashSet,
+    env, fs,
+    path::{Path, PathBuf},
+    process::Command,
+};
+
 use anyhow::{anyhow, Context};
 use external::crates_io::CratesIoCrateVersion;
 use semver::Version;
 use strum::IntoEnumIterator;
-
-use std::collections::HashSet;
-use std::{env, fs};
-use std::path::{Path, PathBuf};
-use std::process::Command;
 use tracing::{info, span, Level};
+
+use crate::{
+    crates::{edit_all_dependency_sections, write_dependency_version, CrateDependencyKey},
+    external,
+    git::*,
+    toml::{toml_read, toml_write},
+    version::maybe_bump_for_breaking_change,
+};
 
 #[derive(Debug, Clone)]
 pub struct CrateDetails {

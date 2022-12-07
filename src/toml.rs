@@ -1,6 +1,9 @@
+use std::{
+    fs::{self, read_to_string},
+    path::Path,
+};
+
 use anyhow::Context;
-use std::fs::{self, read_to_string};
-use std::path::Path;
 
 pub fn toml_read<P: AsRef<Path>>(path: P) -> anyhow::Result<toml_edit::Document> {
     let toml_string = read_to_string(&path).with_context(|| {

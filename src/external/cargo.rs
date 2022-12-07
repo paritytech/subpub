@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with subpub.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::env;
-use std::path::Path;
-use std::process::Command;
+use std::{env, path::Path, process::Command};
 
 pub fn publish_crate<P: AsRef<Path>>(
     krate: &str,

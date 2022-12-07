@@ -1,20 +1,21 @@
-use crate::crate_details::CrateDetails;
-use crate::crates::Crates;
-use crate::external::crates_io;
-use crate::git::with_git_checkpoint;
-use anyhow::anyhow;
-use anyhow::Context;
+use std::{
+    collections::{HashMap, HashSet},
+    env,
+    path::PathBuf,
+    process,
+    time::Instant,
+};
+
+use anyhow::{anyhow, Context};
 use clap::Parser;
-use std::collections::HashMap;
-use std::collections::HashSet;
-use std::env;
-use std::path::PathBuf;
-use std::process;
-use std::time::Instant;
 use tracing::{info, span, Level};
 
-use crate::crates::CrateName;
-use crate::git::GitCheckpoint;
+use crate::{
+    crate_details::CrateDetails,
+    crates::{CrateName, Crates},
+    external::crates_io,
+    git::{with_git_checkpoint, GitCheckpoint},
+};
 
 #[derive(Parser, Debug, Clone)]
 #[clap(author, version, about, long_about = None)]
@@ -547,8 +548,9 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
 #[test]
 fn test_get_publish_order() {
-    use crate::crate_details::CrateDetails;
     use std::collections::HashMap;
+
+    use crate::crate_details::CrateDetails;
 
     /*
        Case: BA depends on A, thus the order becomes A -> BA

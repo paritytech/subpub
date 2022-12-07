@@ -1,5 +1,4 @@
-use std::path::Path;
-use std::process::Command;
+use std::{path::Path, process::Command};
 
 const CHECKPOINT_SAVE: &str = "[subpub] CHECKPOINT_SAVE";
 const CHECKPOINT_REVERT: &str = "[subpub] CHECKPOINT_REVERT";

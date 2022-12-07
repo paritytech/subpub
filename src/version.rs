@@ -14,8 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with subpub.  If not, see <http://www.gnu.org/licenses/>.
 
-pub use semver::Version;
 use std::cmp::Ordering;
+
+pub use semver::Version;
 
 /// Bumps a version for the purpose of signifying a breaking change
 fn bump_for_breaking_change(mut version: Version) -> Version {

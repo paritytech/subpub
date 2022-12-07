@@ -14,27 +14,25 @@
 // You should have received a copy of the GNU General Public License
 // along with subpub.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::crate_details::CrateDetails;
-use crate::external;
-use crate::git::*;
-use crate::toml::toml_read;
-use crate::toml::toml_write;
+use std::{
+    collections::{HashMap, HashSet},
+    env, fs,
+    path::{Path, PathBuf},
+    process::Command,
+    thread,
+    time::{Duration, Instant},
+};
+
 use anyhow::Context;
-use std::env;
-use std::process::Command;
-use std::time::{Duration, Instant};
-use tracing::warn;
+use strum::{EnumIter, EnumString, IntoEnumIterator};
+use tracing::{info, warn};
 
-use std::path::Path;
-use std::{fs, thread};
-use strum::EnumIter;
-use strum::EnumString;
-use strum::IntoEnumIterator;
-use tracing::info;
-
-use std::collections::{HashMap, HashSet};
-
-use std::path::PathBuf;
+use crate::{
+    crate_details::CrateDetails,
+    external,
+    git::*,
+    toml::{toml_read, toml_write},
+};
 
 pub type CrateName = String;
 #[derive(Debug, Clone)]

@@ -25,9 +25,8 @@ mod version;
 use std::{env, io};
 
 use clap::{Parser, Subcommand};
-use tracing_subscriber::prelude::*;
-
 use publish::*;
+use tracing_subscriber::prelude::*;
 
 fn main() -> anyhow::Result<()> {
     setup_tracing();
