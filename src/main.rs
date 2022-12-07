@@ -60,11 +60,15 @@ fn setup_tracing() {
         subscriber
             .with(
                 tracing_subscriber::fmt::layer()
+                    .with_file(true)
+                    .with_line_number(true)
                     .with_writer(std::io::stdout)
                     .with_target(false),
             )
             .with(
                 tracing_subscriber::fmt::layer()
+                    .with_file(true)
+                    .with_line_number(true)
                     .with_writer(std::io::stderr)
                     .with_target(false)
                     .with_filter(tracing_subscriber::filter::LevelFilter::ERROR),
