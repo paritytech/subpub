@@ -43,7 +43,6 @@ pub fn publish_crate<P: AsRef<Path>>(
     verify: bool,
 ) -> Result<(), PublishError> {
     let mut cmd = Command::new("cargo");
-
     cmd.arg("publish");
 
     if let Ok(registry) = env::var("SPUB_REGISTRY") {
@@ -68,12 +67,11 @@ pub fn publish_crate<P: AsRef<Path>>(
         // cargo's exit code isn't fine-grained, so do it by the error message
         // instead.
         let err_msg = String::from_utf8_lossy(&output.stderr[..]);
-        let rate_limit_error = detect_rate_limit_error(&err_msg);
-        if let Some(rate_limit_error) = rate_limit_error {
-            return Err(PublishError::RateLimited(rate_limit_error));
+        if let Some(rate_limit_err) = detect_rate_limit_error(&err_msg) {
+            return Err(PublishError::RateLimited(rate_limit_err));
         } else {
             return Err(PublishError::Any(anyhow!(
-                "Failed to publish crate {krate}"
+                "Failed to publish crate {krate}. Command failed: {cmd:?}"
             )));
         }
     }
