@@ -176,7 +176,7 @@ makes more sense for your scenario.
                     }
                 }
                 info!("Polling $SPUB_CRATES_COMMITTED_FILE for crate {krate}");
-                thread::sleep(Duration::from_secs(3));
+                thread::sleep(Duration::from_secs(2));
             }
         };
 
