@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with subpub.  If not, see <http://www.gnu.org/licenses/>.
 
+use std::env;
 use std::path::Path;
 use std::process::Command;
 
@@ -26,12 +27,12 @@ pub fn publish_crate<P: AsRef<Path>>(
 
     cmd.arg("publish");
 
-    if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
+    if let Ok(registry) = env::var("SPUB_REGISTRY") {
         cmd.env("CARGO_REGISTRY_DEFAULT", &registry)
             .arg("--registry")
             .arg(registry)
             .arg("--token")
-            .arg(std::env::var("SPUB_REGISTRY_TOKEN").unwrap());
+            .arg(env::var("SPUB_REGISTRY_TOKEN").unwrap());
     }
 
     if !verify {

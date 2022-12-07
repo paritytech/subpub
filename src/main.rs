@@ -22,6 +22,8 @@ mod publish;
 mod toml;
 mod version;
 
+use std::{env, io};
+
 use clap::{Parser, Subcommand};
 use tracing_subscriber::prelude::*;
 
@@ -56,20 +58,20 @@ fn setup_tracing() {
             .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
             .from_env_lossy(),
     );
-    if std::env::var("CI").is_ok() {
+    if env::var("CI").is_ok() {
         subscriber
             .with(
                 tracing_subscriber::fmt::layer()
                     .with_file(true)
                     .with_line_number(true)
-                    .with_writer(std::io::stdout)
+                    .with_writer(io::stdout)
                     .with_target(false),
             )
             .with(
                 tracing_subscriber::fmt::layer()
                     .with_file(true)
                     .with_line_number(true)
-                    .with_writer(std::io::stderr)
+                    .with_writer(io::stderr)
                     .with_target(false)
                     .with_filter(tracing_subscriber::filter::LevelFilter::ERROR),
             )
@@ -79,13 +81,13 @@ fn setup_tracing() {
             .with(
                 tracing_subscriber::fmt::layer()
                     .without_time()
-                    .with_writer(std::io::stdout)
+                    .with_writer(io::stdout)
                     .with_target(false),
             )
             .with(
                 tracing_subscriber::fmt::layer()
                     .without_time()
-                    .with_writer(std::io::stderr)
+                    .with_writer(io::stderr)
                     .with_target(false)
                     .with_filter(tracing_subscriber::filter::LevelFilter::ERROR),
             )

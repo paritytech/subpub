@@ -20,7 +20,9 @@ use crate::git::*;
 use crate::toml::toml_read;
 use crate::toml::toml_write;
 use anyhow::Context;
+use std::env;
 use std::process::Command;
+use std::time::{Duration, Instant};
 use tracing::warn;
 
 use std::path::Path;
@@ -31,7 +33,6 @@ use strum::IntoEnumIterator;
 use tracing::info;
 
 use std::collections::{HashMap, HashSet};
-use std::time::Duration;
 
 use std::path::PathBuf;
 
@@ -105,6 +106,7 @@ impl Crates {
         krate: &String,
         crates_to_verify: &HashSet<&String>,
         after_publish_delay: Option<&u64>,
+        last_publish_time: &mut Option<Instant>,
     ) -> anyhow::Result<()> {
         let details = match self.details.get(krate) {
             Some(details) => details,
@@ -115,6 +117,21 @@ impl Crates {
 
         info!("Stripping dev-dependencies of crate {krate} before publishing");
         details.strip_dev_deps(&self.root)?;
+
+        if let Some(last_publish_time) = last_publish_time {
+            if let Some(after_publish_delay) = after_publish_delay {
+                let after_publish_delay = Duration::from_secs(*after_publish_delay);
+                let now = last_publish_time.elapsed();
+                if now < after_publish_delay {
+                    let sleep_duration = after_publish_delay - now;
+                    info!(
+                        "Waiting for {:?} before publishing crate {krate}",
+                        sleep_duration
+                    );
+                    thread::sleep(sleep_duration);
+                }
+            };
+        }
 
         info!("Publishing crate {krate}");
         if let Err(err) = details.publish(should_verify) {
@@ -158,10 +175,12 @@ makes more sense for your scenario.
         // Don't return until the crate has finished being published; it won't
         // be immediately visible on crates.io, so wait until it shows up.
         while !external::crates_io::does_crate_exist(krate, &details.version)? {
-            thread::sleep(std::time::Duration::from_millis(2500))
+            thread::sleep(Duration::from_millis(2500))
         }
 
-        if let Ok(crates_committed_file) = std::env::var("SPUB_CRATES_COMMITTED_FILE") {
+        *last_publish_time = Some(Instant::now());
+
+        if let Ok(crates_committed_file) = env::var("SPUB_CRATES_COMMITTED_FILE") {
             loop {
                 let crates_committed =
                     fs::read_to_string(&crates_committed_file).with_context(|| {
@@ -179,21 +198,6 @@ makes more sense for your scenario.
                 thread::sleep(Duration::from_secs(2));
             }
         };
-
-        // Wait for the crate to be uploaded to the index after it is registered
-        // on crates.io's database. When uploading many crates, a custom delay
-        // can be used for working around crates.io rate limits instead of the
-        // default short delay.
-        let after_publish_delay = if let Some(after_publish_delay) = after_publish_delay {
-            Duration::from_secs(*after_publish_delay)
-        } else {
-            Duration::from_millis(2500)
-        };
-        info!(
-            "Finished publishing crate {krate}, now waiting for {} seconds",
-            after_publish_delay.as_secs()
-        );
-        thread::sleep(after_publish_delay);
 
         Ok(())
     }

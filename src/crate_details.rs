@@ -24,6 +24,7 @@ use semver::Version;
 use strum::IntoEnumIterator;
 
 use std::collections::HashSet;
+use std::{env, fs};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tracing::{info, span, Level};
@@ -297,7 +298,7 @@ impl CrateDetails {
         self.strip_dev_deps(&root)?;
 
         let tmp_dir = tempfile::tempdir()?;
-        let target_dir = if let Ok(tmp_dir) = std::env::var("SPUB_TMP") {
+        let target_dir = if let Ok(tmp_dir) = env::var("SPUB_TMP") {
             PathBuf::from(tmp_dir)
         } else {
             tmp_dir.path().to_path_buf()
@@ -321,7 +322,7 @@ impl CrateDetails {
         let pkg_path = target_dir
             .join("package")
             .join(format!("{name}-{}.crate", version));
-        let pkg_bytes = std::fs::read(&pkg_path)?;
+        let pkg_bytes = fs::read(&pkg_path)?;
 
         info!("Checking generated .crate file against crates.io");
         let crates_io_bytes = if let Some(bytes) =

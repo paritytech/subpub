@@ -14,11 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with subpub.  If not, see <http://www.gnu.org/licenses/>.
 
+use std::env;
+
 use anyhow::Context;
 
 pub fn does_crate_exist(name: &str, version: &semver::Version) -> anyhow::Result<bool> {
     let client = reqwest::blocking::Client::new();
-    let crates_api = std::env::var("SPUB_CRATES_API").unwrap();
+    let crates_api = env::var("SPUB_CRATES_API").unwrap();
     let url = format!("{crates_api}/crates/{name}/{version}");
     let res = client.get(&url)
         .header("User-Agent", "https://github.com/paritytech/subpub / latest : requested for checking if the crate exists")
@@ -49,7 +51,7 @@ pub struct CratesIoCrateVersion {
 
 pub fn crate_versions<Name: AsRef<str>>(name: Name) -> anyhow::Result<Vec<CratesIoCrateVersion>> {
     let client = reqwest::blocking::Client::new();
-    let crates_api = std::env::var("SPUB_CRATES_API").unwrap();
+    let crates_api = env::var("SPUB_CRATES_API").unwrap();
     let url = format!("{crates_api}/crates/{}/versions", name.as_ref());
     let res = client.get(&url)
         .header("User-Agent", "https://github.com/paritytech/subpub / latest : requested for checking previous versions the crate")
@@ -98,7 +100,7 @@ pub fn try_download_crate(
 ) -> anyhow::Result<Option<Vec<u8>>> {
     let client = reqwest::blocking::Client::new();
     let version = version.to_string();
-    let crates_api = std::env::var("SPUB_CRATES_API").unwrap();
+    let crates_api = env::var("SPUB_CRATES_API").unwrap();
 
     let req_url = format!("{crates_api}/crates/{name}/{version}/download");
     let res = client.get(&req_url)

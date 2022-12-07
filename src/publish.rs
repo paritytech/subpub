@@ -7,7 +7,10 @@ use anyhow::Context;
 use clap::Parser;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::env;
 use std::path::PathBuf;
+use std::process;
+use std::time::Instant;
 use tracing::{info, span, Level};
 
 use crate::crates::CrateName;
@@ -124,84 +127,8 @@ fn get_publish_order(details: &HashMap<CrateName, CrateDetails>) -> Vec<String> 
         .collect()
 }
 
-#[test]
-fn test_get_publish_order() {
-    use crate::crate_details::CrateDetails;
-    use std::collections::HashMap;
-
-    /*
-       Case: BA depends on A, thus the order becomes A -> BA
-    */
-    let crate_a_name = "A";
-    let crate_a = CrateDetails::new_for_testing(crate_a_name.into());
-
-    let crate_ba_name = "BA";
-    let mut crate_ba = CrateDetails::new_for_testing(crate_ba_name.into());
-    crate_ba.deps.insert(crate_a_name.to_owned());
-
-    assert_eq!(
-        get_publish_order(&HashMap::from_iter(
-            [
-                (crate_a_name.into(), crate_a.clone()),
-                (crate_ba_name.into(), crate_ba.clone()),
-            ]
-            .into_iter(),
-        )),
-        vec![crate_a_name.to_owned(), crate_ba_name.to_owned()]
-    );
-
-    /*
-       Case: BB and BA both depend on A; tiebreak between BB and BA by name,
-       thus the order becomes A -> BA -> BB
-    */
-    let crate_bb_name = "BB";
-    let mut crate_bb = CrateDetails::new_for_testing(crate_bb_name.into());
-    crate_bb.deps.insert(crate_a_name.to_owned());
-
-    assert_eq!(
-        get_publish_order(&HashMap::from_iter(
-            [
-                (crate_a_name.into(), crate_a.clone()),
-                (crate_ba_name.into(), crate_ba.clone()),
-                (crate_bb_name.into(), crate_bb.clone()),
-            ]
-            .into_iter(),
-        )),
-        vec![
-            crate_a_name.to_owned(),
-            crate_ba_name.to_owned(),
-            crate_bb_name.to_owned()
-        ]
-    );
-
-    /*
-       Case: C depends on BA, thus the order becomes A -> BA -> BB -> C
-    */
-    let crate_c_name = "C";
-    let mut crate_c = CrateDetails::new_for_testing(crate_c_name.into());
-    crate_c.deps.insert(crate_ba_name.to_owned());
-
-    assert_eq!(
-        get_publish_order(&HashMap::from_iter(
-            [
-                (crate_a_name.into(), crate_a),
-                (crate_ba_name.into(), crate_ba.clone()),
-                (crate_bb_name.into(), crate_bb.clone()),
-                (crate_c_name.into(), crate_c.clone()),
-            ]
-            .into_iter(),
-        )),
-        vec![
-            crate_a_name.to_owned(),
-            crate_ba_name.to_owned(),
-            crate_bb_name.to_owned(),
-            crate_c_name.to_owned()
-        ]
-    );
-}
-
 pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
-    if std::env::var("CI").is_ok() {
+    if env::var("CI").is_ok() {
         info!("Publishing has started");
     }
 
@@ -447,7 +374,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         validate_crates(&crates, krate, None, krate, &crates_to_exclude, &[])?;
     }
 
-    if let Ok(registry) = std::env::var("SPUB_REGISTRY") {
+    if let Ok(registry) = env::var("SPUB_REGISTRY") {
         for (_, details) in crates.details.iter() {
             details.set_registry(&registry)?
         }
@@ -474,6 +401,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     };
 
     let mut processed_crates: HashSet<&String> = HashSet::new();
+    let mut last_publish_time: Option<Instant> = None;
     for sel_crate in selected_crates {
         let span = span!(Level::INFO, "_", crate = sel_crate);
         let _enter = span.enter();
@@ -558,7 +486,12 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                         )
                     })??;
                     let version = details.version.clone();
-                    crates.publish(krate, &crates_to_verify, opts.after_publish_delay.as_ref())?;
+                    crates.publish(
+                        krate,
+                        &crates_to_verify,
+                        opts.after_publish_delay.as_ref(),
+                        &mut last_publish_time,
+                    )?;
                     version
                 } else {
                     info!("Crate {krate} does not need to be published");
@@ -598,7 +531,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 .details
                 .get(krate)
                 .with_context(|| format!("Crate not found: {krate}"))?;
-            let mut cmd = std::process::Command::new("cargo");
+            let mut cmd = process::Command::new("cargo");
             cmd.arg("check")
                 .arg("--quiet")
                 .arg("--manifest-path")
@@ -610,4 +543,80 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+#[test]
+fn test_get_publish_order() {
+    use crate::crate_details::CrateDetails;
+    use std::collections::HashMap;
+
+    /*
+       Case: BA depends on A, thus the order becomes A -> BA
+    */
+    let crate_a_name = "A";
+    let crate_a = CrateDetails::new_for_testing(crate_a_name.into());
+
+    let crate_ba_name = "BA";
+    let mut crate_ba = CrateDetails::new_for_testing(crate_ba_name.into());
+    crate_ba.deps.insert(crate_a_name.to_owned());
+
+    assert_eq!(
+        get_publish_order(&HashMap::from_iter(
+            [
+                (crate_a_name.into(), crate_a.clone()),
+                (crate_ba_name.into(), crate_ba.clone()),
+            ]
+            .into_iter(),
+        )),
+        vec![crate_a_name.to_owned(), crate_ba_name.to_owned()]
+    );
+
+    /*
+       Case: BB and BA both depend on A; tiebreak between BB and BA by name,
+       thus the order becomes A -> BA -> BB
+    */
+    let crate_bb_name = "BB";
+    let mut crate_bb = CrateDetails::new_for_testing(crate_bb_name.into());
+    crate_bb.deps.insert(crate_a_name.to_owned());
+
+    assert_eq!(
+        get_publish_order(&HashMap::from_iter(
+            [
+                (crate_a_name.into(), crate_a.clone()),
+                (crate_ba_name.into(), crate_ba.clone()),
+                (crate_bb_name.into(), crate_bb.clone()),
+            ]
+            .into_iter(),
+        )),
+        vec![
+            crate_a_name.to_owned(),
+            crate_ba_name.to_owned(),
+            crate_bb_name.to_owned()
+        ]
+    );
+
+    /*
+       Case: C depends on BA, thus the order becomes A -> BA -> BB -> C
+    */
+    let crate_c_name = "C";
+    let mut crate_c = CrateDetails::new_for_testing(crate_c_name.into());
+    crate_c.deps.insert(crate_ba_name.to_owned());
+
+    assert_eq!(
+        get_publish_order(&HashMap::from_iter(
+            [
+                (crate_a_name.into(), crate_a),
+                (crate_ba_name.into(), crate_ba.clone()),
+                (crate_bb_name.into(), crate_bb.clone()),
+                (crate_c_name.into(), crate_c.clone()),
+            ]
+            .into_iter(),
+        )),
+        vec![
+            crate_a_name.to_owned(),
+            crate_ba_name.to_owned(),
+            crate_bb_name.to_owned(),
+            crate_c_name.to_owned()
+        ]
+    );
 }
