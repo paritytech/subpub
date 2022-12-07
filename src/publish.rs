@@ -201,6 +201,10 @@ fn test_get_publish_order() {
 }
 
 pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
+    if std::env::var("CI").is_ok() {
+        info!("Publishing has started");
+    }
+
     let mut crates = Crates::load_workspace_crates(opts.root.clone())?;
 
     crates.setup()?;
