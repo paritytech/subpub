@@ -57,10 +57,6 @@ pub fn publish_crate<P: AsRef<Path>>(
         cmd.arg("--no-verify");
     }
 
-    if let Ok(target_dir) = env::var("SPUB_TMP") {
-        cmd.arg("--target-dir").arg(target_dir);
-    }
-
     let output = cmd
         .arg("--allow-dirty")
         .arg("--manifest-path")
