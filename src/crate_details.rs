@@ -233,11 +233,11 @@ impl CrateDetails {
         let mut toml = self.read_toml()?;
 
         /*
-           Strip the .version field from all dev-dependencies before publishing
-           Since 1.40 (rust-lang/cargo#7333), cargo will strip dev-dependencies
-           that don't have a version. This removes the need to manually strip
-           dev-dependencies when publishing a crate that has circular
-           dev-dependencies. (i.e., this works as a workaround of
+           Strip the .version field from all workspace dev-dependencies before
+           publishing. Reasoning: Since 1.40 (rust-lang/cargo#7333), cargo will
+           strip dev-dependencies that don't have a version. This removes the
+           need to manually strip dev-dependencies when publishing a crate that
+           has circular dev-dependencies. (i.e., this works as a workaround of
            rust-lang/cargo#4242).
            Taken from https://github.com/rust-lang/futures-rs/pull/2305.
         */
