@@ -43,7 +43,7 @@ pub fn publish_crate<P: AsRef<Path>>(
     verify: bool,
 ) -> Result<(), PublishError> {
     let mut cmd = Command::new("cargo");
-    cmd.arg("publish");
+    cmd.arg("publish").arg("-v");
 
     if let Ok(registry) = env::var("SPUB_REGISTRY") {
         cmd.env("CARGO_REGISTRY_DEFAULT", &registry)
@@ -55,6 +55,10 @@ pub fn publish_crate<P: AsRef<Path>>(
 
     if !verify {
         cmd.arg("--no-verify");
+    }
+
+    if let Ok(target_dir) = env::var("SPUB_TMP") {
+        cmd.arg("--target-dir").arg(target_dir);
     }
 
     let output = cmd
@@ -70,6 +74,8 @@ pub fn publish_crate<P: AsRef<Path>>(
         if let Some(rate_limit_err) = detect_rate_limit_error(&err_msg) {
             return Err(PublishError::RateLimited(rate_limit_err));
         } else {
+            if krate == "pallet-assets" {
+            }
             return Err(PublishError::Any(anyhow!(
                 "Failed to publish crate {krate}. Command failed: {cmd:?}. Output:\n{}",
                 err_msg
