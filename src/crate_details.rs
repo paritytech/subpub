@@ -226,11 +226,11 @@ impl CrateDetails {
         Ok(())
     }
 
-    pub fn prepare_for_publish<P: AsRef<Path>>(&self, root: P) -> anyhow::Result<()> {
+    pub fn tweak_deps_for_publishing<P: AsRef<Path>>(&self, root: P) -> anyhow::Result<()> {
         let mut toml = self.read_toml()?;
 
         /*
-           Visit dev-dependencies and strip their .version field before
+           Visit dev-dependencies and strip their `version` field before
            publishing. Reasoning: Since 1.40 (rust-lang/cargo#7333), cargo will
            strip dev-dependencies that don't have a version. This removes the
            need to manually strip dev-dependencies when publishing a crate that
@@ -361,6 +361,10 @@ impl CrateDetails {
             )??;
         }
 
+        Ok(())
+    }
+
+    pub fn tweak_readme_for_publishing<P: AsRef<Path>>(&self, root: P) -> anyhow::Result<()> {
         // In case a crate does NOT define a `readme` field in its `Cargo.toml`,
         // `cargo publish` assumes, without first checking, that a `README.md`
         // file exists beside `Cargo.toml`. Publishing will fail in case the
@@ -392,7 +396,12 @@ impl CrateDetails {
                 )??;
             }
         }
+        Ok(())
+    }
 
+    pub fn prepare_for_publish<P: AsRef<Path>>(&self, root: P) -> anyhow::Result<()> {
+        self.tweak_deps_for_publishing(&root)?;
+        self.tweak_readme_for_publishing(&root)?;
         Ok(())
     }
 
