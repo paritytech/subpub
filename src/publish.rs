@@ -137,7 +137,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
     crates.setup()?;
 
-    let publish_order = get_publish_order(&crates.details);
+    let publish_order = get_publish_order(&crates.crates_map);
     info!(
         "If we were to publish all crates, it would happen in this order: {}",
         publish_order
@@ -148,7 +148,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     );
 
     let unordered_crates = crates
-        .details
+        .crates_map
         .keys()
         .filter(|krate| !publish_order.iter().any(|ord_crate| ord_crate == *krate))
         .collect::<Vec<_>>();
@@ -177,7 +177,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             for excluded_crate in excluded_crates {
                 for krate in &publish_order {
                     let details = crates
-                        .details
+                        .crates_map
                         .get(krate)
                         .with_context(|| format!("Crate not found: {krate}"))?;
                     if details.deps_to_publish().any(|dep| dep == excluded_crate) {
@@ -219,7 +219,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 {
                     return None;
                 }
-                if let Some(details) = crates.details.get(krate) {
+                if let Some(details) = crates.crates_map.get(krate) {
                     if details.should_be_published {
                         Some(Ok(krate))
                     } else {
@@ -248,7 +248,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                             continue;
                         }
                         let details = crates
-                            .details
+                            .crates_map
                             .get(krate)
                             .with_context(|| format!("Crate not found: {krate}"))?;
                         if details.should_be_published
@@ -337,7 +337,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         }
 
         let details = crates
-            .details
+            .crates_map
             .get(krate)
             .with_context(|| format!("Crate not found: {krate}"))?;
         if !details.should_be_published {
@@ -376,7 +376,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     }
 
     if let Ok(registry) = env::var("SPUB_REGISTRY") {
-        for (_, details) in crates.details.iter() {
+        for (_, details) in crates.crates_map.iter() {
             details.set_registry(&registry)?
         }
     }
@@ -416,7 +416,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
         with_git_checkpoint(&opts.root, GitCheckpoint::Save, || -> anyhow::Result<()> {
             let details = crates
-                .details
+                .crates_map
                 .get(sel_crate)
                 .with_context(|| format!("Crate not found: {sel_crate}"))?;
             for prev_crate in &publish_order {
@@ -424,7 +424,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                     break;
                 }
                 let prev_crate_details = crates
-                    .details
+                    .crates_map
                     .get(prev_crate)
                     .with_context(|| format!("Crate not found: {prev_crate}"))?;
                 details.write_dependency_version(prev_crate, &prev_crate_details.version, false)?;
@@ -471,7 +471,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 let prev_versions = crates_io::crate_versions(krate)?;
 
                 let details = crates
-                    .details
+                    .crates_map
                     .get_mut(krate)
                     .with_context(|| format!("Crate not found: {krate}"))?;
 
@@ -501,7 +501,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             };
 
             with_git_checkpoint(&opts.root, GitCheckpoint::Save, || -> anyhow::Result<()> {
-                for (_, details) in crates.details.iter() {
+                for (_, details) in crates.crates_map.iter() {
                     details.write_dependency_version(krate, &crate_version, true)?;
                 }
                 Ok(())
@@ -529,7 +529,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         for krate in ordered_processed_crates {
             info!("Checking crate {krate}");
             let details = crates
-                .details
+                .crates_map
                 .get(krate)
                 .with_context(|| format!("Crate not found: {krate}"))?;
             let mut cmd = process::Command::new("cargo");

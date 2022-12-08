@@ -38,26 +38,36 @@ pub type CrateName = String;
 #[derive(Debug, Clone)]
 pub struct Crates {
     pub root: PathBuf,
-    pub details: HashMap<CrateName, CrateDetails>,
+    pub crates_map: HashMap<CrateName, CrateDetails>,
 }
 
 impl Crates {
     pub fn load_workspace_crates(root: PathBuf) -> anyhow::Result<Crates> {
-        let details = workspace_cargo_tomls(&root)?
-            .into_iter()
-            .map(|path| {
-                let details = CrateDetails::load(path)?;
-                Ok((details.name.clone(), details))
-            })
-            .collect::<anyhow::Result<HashMap<_, _>>>()?;
-
-        for crate_details in details.values() {
-            for dep in crate_details.deps_to_publish() {
-                if !details.contains_key(dep) {
-                    let krate = &crate_details.name;
+        let crates_map = {
+            let cargo_tomls = workspace_cargo_tomls(&root)?;
+            let mut crates_map: HashMap<String, CrateDetails> = HashMap::new();
+            for cargo_toml in cargo_tomls {
+                let details = CrateDetails::load(cargo_toml)?;
+                if let Some(other_details) = crates_map.get(&details.name) {
                     anyhow::bail!(
-                      "Crate {} refers to path dependency {}, which could not be detected for the workspace at {:?}. You might need to add {} as a workspace member in {:?}.",
-                      krate,
+                        "Crate parsed for {:?} has the same name of another crate parsed for {:?}",
+                        details.toml_path,
+                        other_details.toml_path,
+                    );
+                }
+                crates_map.insert(details.name.clone(), details);
+            }
+            crates_map
+        };
+
+        // All path dependencies should be members of the root workspace so that
+        // they can be verified and checked in tandem.
+        for details in crates_map.values() {
+            for dep in details.deps_to_publish() {
+                if !crates_map.contains_key(dep) {
+                    anyhow::bail!(
+                      "Crate {} refers to path dependency {}, which could not be detected for the workspace of {:?}. You might need to add {} as a workspace member in {:?}.",
+                      &details.name,
                       dep,
                       root.display(),
                       dep,
@@ -67,11 +77,11 @@ impl Crates {
             }
         }
 
-        Ok(Crates { root, details })
+        Ok(Crates { root, crates_map })
     }
 
     pub fn setup(&self) -> anyhow::Result<()> {
-        for details in self.details.values() {
+        for details in self.crates_map.values() {
             // In case a crate does NOT define a `readme` field in its
             // `Cargo.toml`, `cargo publish` assumes, without first checking,
             // that a `README.md` file exists beside `Cargo.toml`. Publishing
@@ -106,7 +116,7 @@ impl Crates {
         after_publish_delay: Option<&u64>,
         last_publish_instant: &mut Option<Instant>,
     ) -> anyhow::Result<()> {
-        let details = match self.details.get(krate) {
+        let details = match self.crates_map.get(krate) {
             Some(details) => details,
             None => anyhow::bail!("Crate not found: {krate}"),
         };
@@ -201,7 +211,7 @@ impl Crates {
                 registered_crates.insert(krate);
 
                 let details = crates
-                    .details
+                    .crates_map
                     .get(krate)
                     .with_context(|| format!("Crate not found: {krate}"))?;
 

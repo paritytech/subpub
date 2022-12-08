@@ -118,18 +118,17 @@ impl CrateDetails {
             match key {
                 CrateDependencyKey::Dependencies => {
                     for item in get_all_dependency_sections(&toml, key_name) {
-                        deps.extend(filter_workspace_dependencies(&toml_path, key_name, item)?)
+                        deps.extend(filter_path_dependencies(&toml_path, key_name, item)?)
                     }
                 }
                 CrateDependencyKey::DevDependencies => {
                     for item in get_all_dependency_sections(&toml, key_name) {
-                        dev_deps.extend(filter_workspace_dependencies(&toml_path, key_name, item)?)
+                        dev_deps.extend(filter_path_dependencies(&toml_path, key_name, item)?)
                     }
                 }
                 CrateDependencyKey::BuildDependencies => {
                     for item in get_all_dependency_sections(&toml, key_name) {
-                        build_deps
-                            .extend(filter_workspace_dependencies(&toml_path, key_name, item)?)
+                        build_deps.extend(filter_path_dependencies(&toml_path, key_name, item)?)
                     }
                 }
             }
@@ -396,7 +395,7 @@ fn get_all_dependency_sections<'a>(
 
 /// Given a path to some dependencies in a TOML file, pull out the package names
 /// for any path based dependencies (ie dependencies in the same workspace).
-fn filter_workspace_dependencies<P: AsRef<Path>>(
+fn filter_path_dependencies<P: AsRef<Path>>(
     toml_path: P,
     key_name: &str,
     item: &toml_edit::Item,
