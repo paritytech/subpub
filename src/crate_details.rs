@@ -226,14 +226,11 @@ impl CrateDetails {
         Ok(())
     }
 
-    pub fn strip_dev_deps<P>(&self, root: P) -> anyhow::Result<()>
-    where
-        P: AsRef<Path>,
-    {
+    pub fn prepare_for_publish<P: AsRef<Path>>(&self, root: P) -> anyhow::Result<()> {
         let mut toml = self.read_toml()?;
 
         /*
-           Strip the .version field from all workspace dev-dependencies before
+           Visit dev-dependencies and strip their .version field before
            publishing. Reasoning: Since 1.40 (rust-lang/cargo#7333), cargo will
            strip dev-dependencies that don't have a version. This removes the
            need to manually strip dev-dependencies when publishing a crate that
@@ -300,8 +297,7 @@ impl CrateDetails {
             Ok(false)
         }
 
-        let mut needs_write = false;
-
+        let mut needs_toml_write = false;
         let dev_deps_key = CrateDependencyKey::DevDependencies.to_string();
 
         // Visit [dev-dependencies]
@@ -315,7 +311,7 @@ impl CrateDetails {
             })?;
             for dev_dep in &self.dev_deps {
                 if !self.deps_to_publish().any(|dep| dep == dev_dep) {
-                    needs_write |= visit(item, &dev_deps_key, dev_dep, &self.toml_path)?;
+                    needs_toml_write |= visit(item, &dev_deps_key, dev_dep, &self.toml_path)?;
                 }
             }
         }
@@ -348,7 +344,7 @@ impl CrateDetails {
                     })?;
                     for dev_dep in &self.dev_deps {
                         if !self.deps_to_publish().any(|dep| dep == dev_dep) {
-                            needs_write |=
+                            needs_toml_write |=
                                 visit(dev_deps_tbl, &parent_key, dev_dep, &self.toml_path)?;
                         }
                     }
@@ -356,12 +352,44 @@ impl CrateDetails {
             }
         }
 
-        if needs_write {
+        if needs_toml_write {
             with_git_checkpoint(
                 &root,
                 GitCheckpoint::RevertLater,
                 || -> anyhow::Result<()> { self.write_toml(&toml) },
             )??;
+        }
+
+        // In case a crate does NOT define a `readme` field in its `Cargo.toml`,
+        // `cargo publish` assumes, without first checking, that a `README.md`
+        // file exists beside `Cargo.toml`. Publishing will fail in case the
+        // crate doesn't comply with that assumption. To work around that we'll
+        // crate a sample `README.md` file for crates which don't specify or
+        // have one.
+        if self.readme.is_none() {
+            let crate_readme = &self
+                .toml_path
+                .parent()
+                .with_context(|| format!("Failed to find parent of {:?}", &self.toml_path))?
+                .join("README.md");
+            if fs::metadata(&crate_readme).is_err() {
+                with_git_checkpoint(
+                    &root,
+                    GitCheckpoint::RevertLater,
+                    || -> anyhow::Result<()> {
+                        fs::write(
+                            &crate_readme,
+                            format!(
+                                "# {}\n\nAuto-generated README.md for publishing to crates.io",
+                                &self.name
+                            ),
+                        )
+                        .with_context(|| {
+                            format!("Failed to generate sample README at {:?}", crate_readme)
+                        })
+                    },
+                )??;
+            }
         }
 
         Ok(())
@@ -413,7 +441,7 @@ impl CrateDetails {
         };
 
         info!("Generating .crate file");
-        self.strip_dev_deps(&root)?;
+        self.prepare_for_publish(&root)?;
         let mut cmd = Command::new("cargo");
         if !cmd
             .arg("package")

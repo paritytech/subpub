@@ -80,35 +80,6 @@ impl Crates {
         Ok(Crates { root, crates_map })
     }
 
-    pub fn setup(&self) -> anyhow::Result<()> {
-        for details in self.crates_map.values() {
-            // In case a crate does NOT define a `readme` field in its
-            // `Cargo.toml`, `cargo publish` assumes, without first checking,
-            // that a `README.md` file exists beside `Cargo.toml`. Publishing
-            // will fail in case the crate doesn't comply with that assumption.
-            // To work around that we'll crate a sample `README.md` file for
-            // crates which don't specify or have one.
-            if details.readme.is_none() {
-                let crate_readme = details
-                    .toml_path
-                    .parent()
-                    .with_context(|| format!("Failed to find parent of {:?}", details.toml_path))?
-                    .join("README.md");
-                if fs::metadata(&crate_readme).is_err() {
-                    fs::write(
-                        &crate_readme,
-                        format!(
-                            "# {}\n\nAuto-generated README.md for publishing to crates.io",
-                            details.name
-                        ),
-                    )?;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// Remove any dev-dependency sections in the TOML file and publish.
     pub fn publish(
         &self,
         krate: &String,
@@ -123,8 +94,8 @@ impl Crates {
 
         let should_verify = crates_to_verify.get(krate).is_some();
 
-        info!("Stripping dev-dependencies of crate {krate} before publishing");
-        details.strip_dev_deps(&self.root)?;
+        info!("Preparing crate {krate} for publishing");
+        details.prepare_for_publish(&self.root)?;
 
         if let Some(last_publish_instant) = last_publish_instant {
             if let Some(after_publish_delay) = after_publish_delay {

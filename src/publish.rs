@@ -135,8 +135,6 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
     let mut crates = Crates::load_workspace_crates(opts.root.clone())?;
 
-    crates.setup()?;
-
     let publish_order = get_publish_order(&crates.crates_map);
     info!(
         "If we were to publish all crates, it would happen in this order: {}",
