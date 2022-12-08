@@ -370,7 +370,7 @@ impl CrateDetails {
             let crate_readme = &self
                 .toml_path
                 .parent()
-                .with_context(|| format!("Failed to find parent of {:?}", &self.toml_path))?
+                .with_context(|| format!("Failed to find parent dir of {:?}", &self.toml_path))?
                 .join("README.md");
             if fs::metadata(&crate_readme).is_err() {
                 with_git_checkpoint(

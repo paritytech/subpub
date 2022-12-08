@@ -318,7 +318,7 @@ pub fn write_dependency_version<P: AsRef<Path>>(
                 } else {
                     let item = item.as_table_like_mut().with_context(|| {
                         format!(
-                            "{}.{} should be a string or table-like in {:?}",
+                            ".{}.{} should be a string or table-like in {:?}",
                             dep_key_display,
                             key,
                             toml_path.as_ref().as_os_str()
@@ -335,7 +335,7 @@ pub fn write_dependency_version<P: AsRef<Path>>(
                 } else {
                     item.as_table_like_mut().with_context(|| {
                         format!(
-                            "{}.{} should be a string or table-like in {:?}",
+                            ".{}.{} should be a string or table-like in {:?}",
                             dep_key_display,
                             key,
                             toml_path.as_ref().as_os_str()
