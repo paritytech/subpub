@@ -240,7 +240,7 @@ impl CrateDetails {
         */
         fn visit<P: AsRef<Path>>(
             dev_deps_tbl: &mut dyn toml_edit::TableLike,
-            dep_key_display: &str,
+            dev_deps_tbl_path: &str,
             dep: &str,
             toml_path: P,
         ) -> anyhow::Result<bool> {
@@ -252,7 +252,7 @@ impl CrateDetails {
                         val.as_table_like_mut().with_context(|| {
                             format!(
                                 ".{}.{} should be a string or table-like in {:?}",
-                                dep_key_display,
+                                dev_deps_tbl_path,
                                 key,
                                 toml_path.as_ref().as_os_str()
                             )
@@ -268,7 +268,7 @@ impl CrateDetails {
                         val.as_table_like_mut().with_context(|| {
                             format!(
                                 ".{}.{} should be a string or table-like in {:?}",
-                                dep_key_display,
+                                dev_deps_tbl_path,
                                 key,
                                 toml_path.as_ref().as_os_str()
                             )
@@ -286,7 +286,7 @@ impl CrateDetails {
                     } else {
                         anyhow::bail!(
                             ".{}.{}.package should be a string in {:?}",
-                            dep_key_display,
+                            dev_deps_tbl_path,
                             key,
                             toml_path.as_ref().as_os_str()
                         );
@@ -317,35 +317,36 @@ impl CrateDetails {
         }
 
         // Visit [target.X.dev-dependencies]
-        if let Some(target_tbl) = toml.get_mut("target") {
-            let target_tbl = target_tbl.as_table_like_mut().with_context(|| {
+        let targets_key = "target";
+        if let Some(targets_tbl) = toml.get_mut(targets_key) {
+            let targets_tbl = targets_tbl.as_table_like_mut().with_context(|| {
                 format!(
                     ".target should be table-like in {:?}",
                     self.toml_path.as_os_str()
                 )
             })?;
-            for (key, val) in target_tbl.iter_mut() {
-                let val = val.as_table_like_mut().with_context(|| {
+            for (target, target_tbl) in targets_tbl.iter_mut() {
+                let target_path = format!("{}.{}", targets_key, target);
+                let target_tbl = target_tbl.as_table_like_mut().with_context(|| {
                     format!(
-                        ".target.{} should be table-like in {:?}",
-                        key,
+                        ".{} should be table-like in {:?}",
+                        target_path,
                         self.toml_path.as_os_str()
                     )
                 })?;
-                let parent_key = format!("target.{key}");
-                if let Some(dev_deps_tbl) = val.get_mut(&dev_deps_key) {
+                if let Some(dev_deps_tbl) = target_tbl.get_mut(&dev_deps_key) {
+                    let dev_deps_tbl_path = format!("{}.{}", target_path, dev_deps_key);
                     let dev_deps_tbl = dev_deps_tbl.as_table_like_mut().with_context(|| {
                         format!(
-                            ".{}.{} should be table-like in {:?}",
-                            parent_key,
-                            dev_deps_key,
+                            ".{} should be table-like in {:?}",
+                            dev_deps_tbl_path,
                             self.toml_path.as_os_str()
                         )
                     })?;
                     for dev_dep in &self.dev_deps {
                         if !self.deps_to_publish().any(|dep| dep == dev_dep) {
                             needs_toml_write |=
-                                visit(dev_deps_tbl, &parent_key, dev_dep, &self.toml_path)?;
+                                visit(dev_deps_tbl, &dev_deps_tbl_path, dev_dep, &self.toml_path)?;
                         }
                     }
                 }
@@ -372,13 +373,13 @@ impl CrateDetails {
                 .parent()
                 .with_context(|| format!("Failed to find parent dir of {:?}", &self.toml_path))?
                 .join("README.md");
-            if fs::metadata(&crate_readme).is_err() {
+            if fs::metadata(crate_readme).is_err() {
                 with_git_checkpoint(
                     &root,
                     GitCheckpoint::RevertLater,
                     || -> anyhow::Result<()> {
                         fs::write(
-                            &crate_readme,
+                            crate_readme,
                             format!(
                                 "# {}\n\nAuto-generated README.md for publishing to crates.io",
                                 &self.name
