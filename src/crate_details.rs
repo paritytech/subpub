@@ -256,9 +256,7 @@ impl CrateDetails {
                             )
                         })?
                     };
-                    if item.remove("version").is_some() {
-                        return Ok(true);
-                    }
+                    return Ok(item.get("path").is_some() && item.remove("version").is_some());
                 } else {
                     let item = if val.as_str().is_some() {
                         continue;
@@ -278,8 +276,10 @@ impl CrateDetails {
                         continue;
                     };
                     if let Some(pkg) = pkg.as_str() {
-                        if pkg == dep && item.remove("version").is_some() {
-                            return Ok(true);
+                        if pkg == dep {
+                            return Ok(
+                                item.get("path").is_some() && item.remove("version").is_some()
+                            );
                         }
                     } else {
                         anyhow::bail!(
