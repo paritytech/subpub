@@ -232,20 +232,131 @@ impl CrateDetails {
     {
         let mut toml = self.read_toml()?;
 
-        // Remove [dev-dependencies]
-        let removed_top_level = toml.remove("dev-dependencies").is_some();
-        // Remove [target.X.dev-dependencies]
-        let removed_target_deps = toml
-            .get_mut("target")
-            .and_then(|item| item.as_table_like_mut())
-            .into_iter()
-            .flat_map(|table| table.iter_mut())
-            .flat_map(|(_, item)| item.as_table_like_mut())
-            .fold(false, |is_removed, t| {
-                t.remove("dev-dependencies").is_some() || is_removed
-            });
+        /*
+           Strip the .version field from all dev-dependencies before publishing
+           Since 1.40 (rust-lang/cargo#7333), cargo will strip dev-dependencies
+           that don't have a version. This removes the need to manually strip
+           dev-dependencies when publishing a crate that has circular
+           dev-dependencies. (i.e., this works as a workaround of
+           rust-lang/cargo#4242).
+           Taken from https://github.com/rust-lang/futures-rs/pull/2305.
+        */
+        fn visit<P: AsRef<Path>>(
+            dev_deps_tbl: &mut dyn toml_edit::TableLike,
+            dep_key_display: &str,
+            dep: &str,
+            toml_path: P,
+        ) -> anyhow::Result<bool> {
+            for (key, val) in dev_deps_tbl.iter_mut() {
+                if key == dep {
+                    let item = if val.as_str().is_some() {
+                        continue;
+                    } else {
+                        val.as_table_like_mut().with_context(|| {
+                            format!(
+                                ".{}.{} should be a string or table-like in {:?}",
+                                dep_key_display,
+                                key,
+                                toml_path.as_ref().as_os_str()
+                            )
+                        })?
+                    };
+                    if item.remove("version").is_some() {
+                        return Ok(true);
+                    }
+                } else {
+                    let item = if val.as_str().is_some() {
+                        continue;
+                    } else {
+                        val.as_table_like_mut().with_context(|| {
+                            format!(
+                                ".{}.{} should be a string or table-like in {:?}",
+                                dep_key_display,
+                                key,
+                                toml_path.as_ref().as_os_str()
+                            )
+                        })?
+                    };
+                    let pkg = if let Some(pkg) = item.get("package") {
+                        pkg
+                    } else {
+                        continue;
+                    };
+                    if let Some(pkg) = pkg.as_str() {
+                        if pkg == dep && item.remove("version").is_some() {
+                            return Ok(true);
+                        }
+                    } else {
+                        anyhow::bail!(
+                            ".{}.{}.package should be a string in {:?}",
+                            dep_key_display,
+                            key,
+                            toml_path.as_ref().as_os_str()
+                        );
+                    }
+                }
+            }
 
-        if removed_top_level || removed_target_deps {
+            Ok(false)
+        }
+
+        let mut needs_write = false;
+
+        let dev_deps_key = CrateDependencyKey::DevDependencies.to_string();
+
+        // Visit [dev-dependencies]
+        if let Some(item) = toml.get_mut(&dev_deps_key) {
+            let item = item.as_table_like_mut().with_context(|| {
+                format!(
+                    ".{} should be table-like in {:?}",
+                    dev_deps_key,
+                    self.toml_path.as_os_str()
+                )
+            })?;
+            for dev_dep in &self.dev_deps {
+                if !self.deps_to_publish().any(|dep| dep == dev_dep) {
+                    needs_write |= visit(item, &dev_deps_key, dev_dep, &self.toml_path)?;
+                }
+            }
+        }
+
+        // Visit [target.X.dev-dependencies]
+        if let Some(target_tbl) = toml.get_mut("target") {
+            let target_tbl = target_tbl.as_table_like_mut().with_context(|| {
+                format!(
+                    ".target should be table-like in {:?}",
+                    self.toml_path.as_os_str()
+                )
+            })?;
+            for (key, val) in target_tbl.iter_mut() {
+                let val = val.as_table_like_mut().with_context(|| {
+                    format!(
+                        ".target.{} should be table-like in {:?}",
+                        key,
+                        self.toml_path.as_os_str()
+                    )
+                })?;
+                let parent_key = format!("target.{key}");
+                if let Some(dev_deps_tbl) = val.get_mut(&dev_deps_key) {
+                    let dev_deps_tbl = dev_deps_tbl.as_table_like_mut().with_context(|| {
+                        format!(
+                            ".{}.{} should be table-like in {:?}",
+                            parent_key,
+                            dev_deps_key,
+                            self.toml_path.as_os_str()
+                        )
+                    })?;
+                    for dev_dep in &self.dev_deps {
+                        if !self.deps_to_publish().any(|dep| dep == dev_dep) {
+                            needs_write |=
+                                visit(dev_deps_tbl, &parent_key, dev_dep, &self.toml_path)?;
+                        }
+                    }
+                }
+            }
+        }
+
+        if needs_write {
             with_git_checkpoint(
                 &root,
                 GitCheckpoint::RevertLater,
