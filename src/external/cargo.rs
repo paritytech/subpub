@@ -70,8 +70,6 @@ pub fn publish_crate<P: AsRef<Path>>(
         if let Some(rate_limit_err) = detect_rate_limit_error(&err_msg) {
             return Err(PublishError::RateLimited(rate_limit_err));
         } else {
-            if krate == "pallet-assets" {
-            }
             return Err(PublishError::Any(anyhow!(
                 "Failed to publish crate {krate}. Command failed: {cmd:?}. Output:\n{}",
                 err_msg
