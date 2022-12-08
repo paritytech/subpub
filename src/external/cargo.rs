@@ -71,7 +71,8 @@ pub fn publish_crate<P: AsRef<Path>>(
             return Err(PublishError::RateLimited(rate_limit_err));
         } else {
             return Err(PublishError::Any(anyhow!(
-                "Failed to publish crate {krate}. Command failed: {cmd:?}"
+                "Failed to publish crate {krate}. Command failed: {cmd:?}.Output:\n{}",
+                err_msg
             )));
         }
     }
