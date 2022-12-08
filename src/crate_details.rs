@@ -227,8 +227,6 @@ impl CrateDetails {
     }
 
     pub fn tweak_deps_for_publishing<P: AsRef<Path>>(&self, root: P) -> anyhow::Result<()> {
-        let mut toml = self.read_toml()?;
-
         /*
            Visit dev-dependencies and strip their `version` field before
            publishing. Reasoning: Since 1.40 (rust-lang/cargo#7333), cargo will
@@ -297,7 +295,9 @@ impl CrateDetails {
             Ok(false)
         }
 
+        let mut toml = self.read_toml()?;
         let mut needs_toml_write = false;
+
         let dev_deps_key = CrateDependencyKey::DevDependencies.to_string();
 
         // Visit [dev-dependencies]
