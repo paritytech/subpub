@@ -156,7 +156,11 @@ impl Crates {
                     thread::sleep(rate_limit_delay);
                 }
                 PublishError::Any(err) => {
-                    if err.to_string().contains("error: failed to parse manifest") {
+                    let err_msg = err.to_string();
+                    if err_msg.contains("failed to parse manifest at `")
+                        || err_msg.contains(": unresolved imports `")
+                        || err_msg.contains(": unresolved import `")
+                    {
                         info!(DEV_DEPS_TROUBLESHOOT_HINT);
                     }
                     return Err(err);
@@ -426,6 +430,10 @@ feature. If you run into errors such as:
     error: failed to parse manifest at `/path/to/Cargo.toml`
     Caused by:
       feature `bar` includes `foo/benchmarks`, but `foo` is not a dependency
+
+Or:
+
+    error[E0432]: unresolved import `foo::bar`
 
 Assuming that the crate works fine locally, the error occurs because `foo` is a
 dev-dependency, which was stripped before publishing. You can work around that
