@@ -127,7 +127,6 @@ impl Crates {
                     thread::sleep(rate_limit_delay);
                 }
                 PublishError::Any(err) => {
-                    info!("{}", DEV_DEPS_TROUBLESHOOT_HINT);
                     return Err(err);
                 }
             }
@@ -386,37 +385,3 @@ pub fn write_dependency_version<P: AsRef<Path>>(
 
     Ok(())
 }
-
-const DEV_DEPS_TROUBLESHOOT_HINT: &str = "
-Note: dev-dependencies are stripped before publishing. This might cause errors
-during pre-publish verification in case a dev-dependency is used for a cargo
-feature. If you run into errors such as:
-
-    error: failed to parse manifest at `/path/to/Cargo.toml`
-    Caused by:
-      feature `bar` includes `foo/benchmarks`, but `foo` is not a dependency
-
-Or:
-
-    error[E0432]: unresolved import `foo::bar`
-
-Assuming that the crate works fine locally, the error occurs because `foo` is a
-dev-dependency, which was stripped before publishing. You can work around that
-by putting `foo` as an optional dependency in [dependencies]. For example, if
-you have the following Cargo.toml:
-
-    [dev-dependencies]
-    foo = {{ path = \"../foo\" }}
-
-    [features]
-    full = [\"foo/bar\"]
-
-You should add `foo` as an optional dependency:
-
-    [dependencies]
-    foo = {{ default-features = false, optional = true, path = \"../foo\" }}
-
-You should keep `foo` as a dev-dependency as well in that case. Alternatively,
-you can promote `foo` to [dependencies] and remove it from [dev-dependencies] if
-that makes more sense for your scenario.
-";

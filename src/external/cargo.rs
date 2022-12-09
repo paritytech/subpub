@@ -71,8 +71,9 @@ pub fn publish_crate<P: AsRef<Path>>(
             return Err(PublishError::RateLimited(rate_limit_err));
         } else {
             return Err(PublishError::Any(anyhow!(
-                "Failed to publish crate {krate}. Command failed: {cmd:?}. Output:\n{}",
-                err_msg
+                "Failed to publish crate {krate}. Command failed: {cmd:?}. Output:\n{}\n{}",
+                err_msg,
+                DEV_DEPS_TROUBLESHOOT_HINT,
             )));
         }
     }
@@ -96,3 +97,37 @@ You have published too many crates in a short period of time. Please try again a
         Some(expected_error_msg_part.to_owned())
     );
 }
+
+const DEV_DEPS_TROUBLESHOOT_HINT: &str = "
+Note: dev-dependencies are stripped before publishing. This might cause errors
+during pre-publish verification in case a dev-dependency is used for a cargo
+feature. If you run into errors such as:
+
+    error: failed to parse manifest at `/path/to/Cargo.toml`
+    Caused by:
+      feature `bar` includes `foo/benchmarks`, but `foo` is not a dependency
+
+Or:
+
+    error[E0432]: unresolved import `foo::bar`
+
+Assuming that the crate works fine locally, the error occurs because `foo` is a
+dev-dependency, which was stripped before publishing. You can work around that
+by putting `foo` as an optional dependency in [dependencies]. For example, if
+you have the following Cargo.toml:
+
+    [dev-dependencies]
+    foo = {{ path = \"../foo\" }}
+
+    [features]
+    full = [\"foo/bar\"]
+
+You should add `foo` as an optional dependency:
+
+    [dependencies]
+    foo = {{ default-features = false, optional = true, path = \"../foo\" }}
+
+You should keep `foo` as a dev-dependency as well in that case. Alternatively,
+you can promote `foo` to [dependencies] and remove it from [dev-dependencies] if
+that makes more sense for your scenario.
+";
