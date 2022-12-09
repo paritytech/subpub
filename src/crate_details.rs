@@ -91,20 +91,40 @@ impl CrateDetails {
         };
 
         let version = {
-            let version = if let Some(version) = pkg.get("version") {
-                if let Some(version) = version.as_str() {
-                    version.to_owned()
-                } else {
-                    anyhow::bail!(
-                        "Cannot read package.version as a string from {:?}",
-                        &toml_path
-                    );
-                }
+            let version = pkg.get("version").with_context(|| {
+                format!(".package.version couldn't be parsed for {:?}", &toml_path)
+            })?;
+            let version = if let Some(version) = version.as_str() {
+                version.to_owned()
             } else {
-                // Default to "0.1.0" for crates which don't have a particular
-                // version, for example if the version is set through workspace
-                // properties
-                "0.1.0".to_owned()
+                let version = version.as_table_like().with_context(|| {
+                    format!(
+                        ".package.version should be a string or table-like in {:?}",
+                        &toml_path
+                    )
+                })?;
+                if let Some(workspace) = version.get("workspace") {
+                    if let Some(workspace) = workspace.as_bool() {
+                        if workspace {
+                            // Default to "0.1.0" for crates which have their
+                            // version set by workspace properties (i.e.
+                            // disregard the workspace's version)
+                            "0.1.0".to_owned()
+                        } else {
+                            anyhow::bail!(
+                                "Expected .package.version.workspace of {:?} to be true",
+                                &toml_path
+                            );
+                        }
+                    } else {
+                        anyhow::bail!(
+                            "Expected .package.version.workspace of {:?} to be a boolean value",
+                            &toml_path
+                        );
+                    }
+                } else {
+                    anyhow::bail!("Expected .package.version.workspace for {:?}", &toml_path);
+                }
             };
             Version::parse(&version)
                 .with_context(|| format!("Cannot parse {version} as SemVer for {toml_path:?}"))?
