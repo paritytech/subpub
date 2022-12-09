@@ -112,13 +112,13 @@ impl CrateDetails {
                             "0.1.0".to_owned()
                         } else {
                             anyhow::bail!(
-                                "Expected .package.version.workspace of {:?} to be true",
+                                "Expected .package.version.workspace to be true in {:?}",
                                 &toml_path
                             );
                         }
                     } else {
                         anyhow::bail!(
-                            "Expected .package.version.workspace of {:?} to be a boolean value",
+                            "Expected .package.version.workspace to be a boolean value in {:?}",
                             &toml_path
                         );
                     }
