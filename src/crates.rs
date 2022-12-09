@@ -127,7 +127,7 @@ impl Crates {
                     thread::sleep(rate_limit_delay);
                 }
                 PublishError::Any(err) => {
-                    info!(DEV_DEPS_TROUBLESHOOT_HINT);
+                    info!("{}", DEV_DEPS_TROUBLESHOOT_HINT);
                     return Err(err);
                 }
             }
