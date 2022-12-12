@@ -94,8 +94,10 @@ impl CrateDetails {
             let version = pkg.get("version").with_context(|| {
                 format!(".package.version couldn't be parsed for {:?}", &toml_path)
             })?;
-            let version = if let Some(version) = version.as_str() {
-                version.to_owned()
+            if let Some(version) = version.as_str() {
+                Version::parse(version).with_context(|| {
+                    format!("Cannot parse .version ({version}) as SemVer for {toml_path:?}")
+                })?
             } else {
                 let version = version.as_table_like().with_context(|| {
                     format!(
@@ -109,7 +111,7 @@ impl CrateDetails {
                             // Default to "0.1.0" for crates which have their
                             // version set by workspace properties (i.e.
                             // disregard the workspace's version)
-                            "0.1.0".to_owned()
+                            Version::new(0, 1, 0)
                         } else {
                             anyhow::bail!(
                                 "Expected .package.version.workspace to be true in {:?}",
@@ -125,9 +127,7 @@ impl CrateDetails {
                 } else {
                     anyhow::bail!("Expected .package.version.workspace for {:?}", &toml_path);
                 }
-            };
-            Version::parse(&version)
-                .with_context(|| format!("Cannot parse {version} as SemVer for {toml_path:?}"))?
+            }
         };
 
         let mut build_deps = HashSet::new();
