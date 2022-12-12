@@ -34,6 +34,7 @@ fn bump_for_breaking_change(mut version: Version) -> Version {
 }
 
 #[test]
+#[cfg(feature = "test-0")]
 fn test_bump_for_breaking_change() {
     use semver::Prerelease;
 
@@ -93,6 +94,7 @@ pub fn maybe_bump_for_breaking_change(
 }
 
 #[test]
+#[cfg(feature = "test-0")]
 fn test_maybe_bump_for_breaking_change() {
     use semver::Prerelease;
 

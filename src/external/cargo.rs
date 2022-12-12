@@ -82,6 +82,7 @@ pub fn publish_crate<P: AsRef<Path>>(
 }
 
 #[test]
+#[cfg(feature = "test-0")]
 fn test_detect_rate_limit_error() {
     let full_error_msg = "
 Updating crates.io index

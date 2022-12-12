@@ -545,6 +545,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg(feature = "test-0")]
 fn test_get_publish_order() {
     use std::collections::HashMap;
 

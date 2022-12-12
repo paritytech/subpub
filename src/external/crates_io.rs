@@ -101,6 +101,7 @@ pub fn crate_versions<Name: AsRef<str>>(name: Name) -> anyhow::Result<Vec<Crates
         .collect()
 }
 
+#[cfg(not(test))]
 pub fn download_crate(name: &str, version: &semver::Version) -> anyhow::Result<Option<Vec<u8>>> {
     let client = reqwest::blocking::Client::new();
     let version = version.to_string();
@@ -125,18 +126,28 @@ pub fn download_crate(name: &str, version: &semver::Version) -> anyhow::Result<O
     }
 }
 
-#[cfg(any(feature = "test-1", feature = "test-2", feature = "test-3"))]
-pub fn download_crate_for_testing(_: &str, _: &semver::Version) -> Option<Vec<u8>> {
+#[cfg(test)]
+pub fn download_crate_for_testing(
+    _: &str,
+    _: &semver::Version,
+    #[allow(unused_variables)] pkg_bytes: &[u8],
+) -> anyhow::Result<Option<Vec<u8>>> {
     #[cfg(feature = "test-1")]
     {
-        return Some(vec![]);
+        return Ok(Some(pkg_bytes.clone()));
     }
     #[cfg(feature = "test-2")]
     {
-        return Some(vec![0]);
+        return Ok(Some(vec![]));
     }
     #[cfg(feature = "test-3")]
     {
-        return None;
+        return Ok(None);
+    }
+    #[allow(unreachable_code)]
+    {
+        Err(anyhow::anyhow!(
+            "download_crate_for_testing is not set up for this test suite"
+        ))
     }
 }

@@ -48,7 +48,7 @@ pub struct CrateDetails {
 }
 
 impl CrateDetails {
-    #[cfg(test)]
+    #[cfg(feature = "test-0")]
     pub fn new_for_testing(name: String) -> Self {
         Self {
             name,
@@ -489,28 +489,30 @@ impl CrateDetails {
             anyhow::bail!("Failed to package crate {}", &self.name);
         };
 
-        fn get_cratesio_bytes(
-            name: &str,
-            version: &semver::Version,
-        ) -> anyhow::Result<Option<Vec<u8>>> {
-            #[cfg(any(feature = "test-1", feature = "test-2", feature = "test-3"))]
-            return Ok(external::crates_io::download_crate_for_testing(
-                name, version,
-            ));
-            #[allow(unreachable_code)]
-            external::crates_io::download_crate(name, version)
-        }
-        let cratesio_bytes = if let Some(bytes) = get_cratesio_bytes(&self.name, &self.version)? {
-            bytes
-        } else {
-            info!("The crate is not published to crates.io");
-            return Ok(true);
-        };
-
         let pkg_path = target_dir
             .join("package")
             .join(format!("{}-{}.crate", &self.name, &self.version));
         let pkg_bytes = fs::read(&pkg_path)?;
+
+        fn get_cratesio_bytes(
+            name: &str,
+            version: &semver::Version,
+            #[allow(unused_variables)] pkg_bytes: &[u8],
+        ) -> anyhow::Result<Option<Vec<u8>>> {
+            #[cfg(test)]
+            {
+                external::crates_io::download_crate_for_testing(name, version, pkg_bytes)
+            }
+            #[cfg(not(test))]
+            external::crates_io::download_crate(name, version)
+        }
+        let cratesio_bytes =
+            if let Some(bytes) = get_cratesio_bytes(&self.name, &self.version, &pkg_bytes)? {
+                bytes
+            } else {
+                info!("The crate is not published to crates.io");
+                return Ok(true);
+            };
 
         if cratesio_bytes == pkg_bytes {
             info!(
@@ -642,17 +644,106 @@ fn filter_path_dependencies<P: AsRef<Path>>(
     Ok(deps)
 }
 
-#[cfg(test)]
+#[cfg(all(test, any(feature = "test-1", feature = "test-2", feature = "test-3")))]
 mod tests {
+    use tempfile::TempDir;
+
+    use super::*;
+
+    fn setup_details() -> (TempDir, CrateDetails) {
+        let tmp_dir = tempfile::tempdir().unwrap();
+
+        assert_eq!(
+            {
+                let mut cmd = Command::new("git");
+                cmd.current_dir(&tmp_dir)
+                    .arg("init")
+                    .arg("--quiet")
+                    .status()
+                    .unwrap()
+                    .success()
+            },
+            true
+        );
+
+        fs::write(
+            tmp_dir.path().join("Cargo.toml"),
+            r#"
+[package]
+name = "lib"
+version = "0.1.0"
+edition = "2021"
+description = "placeholder"
+license = "Apache-2.0"
+documentation = "https://en.wikipedia.org/wiki/HTTP_404"
+homepage = "https://en.wikipedia.org/wiki/HTTP_404"
+repository = "https://en.wikipedia.org/wiki/HTTP_404"
+            "#,
+        )
+        .unwrap();
+
+        let src_dir = tmp_dir.path().join("src");
+        fs::create_dir(&src_dir).unwrap();
+        fs::write(
+            &src_dir.join("main.rs"),
+            r#"
+pub fn add(left: usize, right: usize) -> usize {
+    left + right
+}
+           "#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            {
+                let mut cmd = Command::new("git");
+                cmd.current_dir(&tmp_dir)
+                    .arg("add")
+                    .arg(".")
+                    .status()
+                    .unwrap()
+                    .success()
+            },
+            true
+        );
+        assert_eq!(
+            {
+                let mut cmd = Command::new("git");
+                cmd.current_dir(&tmp_dir)
+                    .arg("commit")
+                    .arg("--quiet")
+                    .arg("--message")
+                    .arg("initial commit")
+                    .status()
+                    .unwrap()
+                    .success()
+            },
+            true
+        );
+
+        let details = CrateDetails::load(tmp_dir.path().join("Cargo.toml")).unwrap();
+
+        (tmp_dir, details)
+    }
+
     #[test]
     #[cfg(feature = "test-1")]
-    pub fn test_crate_not_published_if_unchanged() {}
+    pub fn test_crate_not_published_if_unchanged() {
+        let (tmp_dir, details) = setup_details();
+        assert_eq!(details.needs_publishing(&tmp_dir).unwrap(), false);
+    }
 
     #[test]
     #[cfg(feature = "test-2")]
-    pub fn test_crate_published_if_changed() {}
+    pub fn test_crate_published_if_changed() {
+        let (tmp_dir, details) = setup_details();
+        assert_eq!(details.needs_publishing(&tmp_dir).unwrap(), true);
+    }
 
     #[test]
     #[cfg(feature = "test-3")]
-    pub fn test_crate_published_if_unpublished() {}
+    pub fn test_crate_published_if_unpublished() {
+        let (tmp_dir, details) = setup_details();
+        assert_eq!(details.needs_publishing(&tmp_dir).unwrap(), true);
+    }
 }
