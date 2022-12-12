@@ -3,6 +3,7 @@ use std::{path::Path, process::Command};
 const CHECKPOINT_SAVE: &str = "[subpub] CHECKPOINT_SAVE";
 const CHECKPOINT_REVERT: &str = "[subpub] CHECKPOINT_REVERT";
 
+#[derive(PartialEq, Eq)]
 pub enum GitCheckpoint {
     Save,
     RevertLater,
@@ -68,7 +69,9 @@ pub fn with_git_checkpoint<T, P: AsRef<Path>, F: FnOnce() -> T>(
     op: GitCheckpoint,
     func: F,
 ) -> anyhow::Result<T> {
-    git_checkpoint(&root, GitCheckpoint::Save)?;
+    if op != GitCheckpoint::Save {
+        git_checkpoint(&root, GitCheckpoint::Save)?;
+    };
     let result = func();
     git_checkpoint(&root, op)?;
     Ok(result)
