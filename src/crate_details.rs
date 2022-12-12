@@ -110,7 +110,9 @@ impl CrateDetails {
                         if workspace {
                             // Default to "0.1.0" for crates which have their
                             // version set by workspace properties (i.e.
-                            // disregard the workspace's version)
+                            // disregard the workspace's version), since
+                            // individual crate releases are administered in
+                            // parallel from how the workspace is versioned
                             Version::new(0, 1, 0)
                         } else {
                             anyhow::bail!(
