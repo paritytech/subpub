@@ -690,7 +690,7 @@ repository = "https://en.wikipedia.org/wiki/HTTP_404"
 pub fn add(left: usize, right: usize) -> usize {
     left + right
 }
-           "#,
+            "#,
         )
         .unwrap();
 
