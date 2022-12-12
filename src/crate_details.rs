@@ -489,20 +489,30 @@ impl CrateDetails {
             anyhow::bail!("Failed to package crate {}", &self.name);
         };
 
-        let crates_io_bytes =
-            if let Some(bytes) = external::crates_io::download_crate(&self.name, &self.version)? {
-                bytes
-            } else {
-                info!("The crate is not published to crates.io");
-                return Ok(true);
-            };
+        fn get_cratesio_bytes(
+            name: &str,
+            version: &semver::Version,
+        ) -> anyhow::Result<Option<Vec<u8>>> {
+            #[cfg(any(feature = "test-1", feature = "test-2", feature = "test-3"))]
+            return Ok(external::crates_io::download_crate_for_testing(
+                name, version,
+            ));
+            #[allow(unreachable_code)]
+            external::crates_io::download_crate(name, version)
+        }
+        let cratesio_bytes = if let Some(bytes) = get_cratesio_bytes(&self.name, &self.version)? {
+            bytes
+        } else {
+            info!("The crate is not published to crates.io");
+            return Ok(true);
+        };
 
         let pkg_path = target_dir
             .join("package")
             .join(format!("{}-{}.crate", &self.name, &self.version));
         let pkg_bytes = fs::read(&pkg_path)?;
 
-        if crates_io_bytes == pkg_bytes {
+        if cratesio_bytes == pkg_bytes {
             info!(
                 "{:?} is identical to the version {} from crates.io",
                 pkg_path, &self.version
@@ -630,4 +640,19 @@ fn filter_path_dependencies<P: AsRef<Path>>(
     }
 
     Ok(deps)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    #[cfg(feature = "test-1")]
+    pub fn test_crate_not_published_if_unchanged() {}
+
+    #[test]
+    #[cfg(feature = "test-2")]
+    pub fn test_crate_published_if_changed() {}
+
+    #[test]
+    #[cfg(feature = "test-3")]
+    pub fn test_crate_published_if_unpublished() {}
 }

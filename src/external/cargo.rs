@@ -109,25 +109,9 @@ feature. If you run into errors such as:
 
 Or:
 
-    error[E0432]: unresolved import `foo::bar`
+    error[XXX]: unresolved import `foo::bar`
 
 Assuming that the crate works fine locally, the error occurs because `foo` is a
 dev-dependency, which was stripped before publishing. You can work around that
-by putting `foo` as an optional dependency in [dependencies]. For example, if
-you have the following Cargo.toml:
-
-    [dev-dependencies]
-    foo = {{ path = \"../foo\" }}
-
-    [features]
-    full = [\"foo/bar\"]
-
-You should add `foo` as an optional dependency:
-
-    [dependencies]
-    foo = {{ default-features = false, optional = true, path = \"../foo\" }}
-
-You should keep `foo` as a dev-dependency as well in that case. Alternatively,
-you can promote `foo` to [dependencies] and remove it from [dev-dependencies] if
-that makes more sense for your scenario.
+by using `foo` conditionally behind a feature flag.
 ";

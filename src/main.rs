@@ -93,3 +93,10 @@ fn setup_tracing() {
             .init();
     };
 }
+
+#[cfg(all(feature = "test-1", feature = "test-2"))]
+compile_error!("test-1 and test-2 cannot be enabled together");
+#[cfg(all(feature = "test-1", feature = "test-3"))]
+compile_error!("test-1 and test-3 cannot be enabled together");
+#[cfg(all(feature = "test-2", feature = "test-3"))]
+compile_error!("test-2 and test-3 cannot be enabled together");

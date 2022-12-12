@@ -124,3 +124,19 @@ pub fn download_crate(name: &str, version: &semver::Version) -> anyhow::Result<O
         }
     }
 }
+
+#[cfg(any(feature = "test-1", feature = "test-2", feature = "test-3"))]
+pub fn download_crate_for_testing(_: &str, _: &semver::Version) -> Option<Vec<u8>> {
+    #[cfg(feature = "test-1")]
+    {
+        return Some(vec![]);
+    }
+    #[cfg(feature = "test-2")]
+    {
+        return Some(vec![0]);
+    }
+    #[cfg(feature = "test-3")]
+    {
+        return None;
+    }
+}
