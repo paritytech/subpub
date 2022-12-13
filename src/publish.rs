@@ -79,57 +79,6 @@ pub struct PublishOpts {
     post_check: bool,
 }
 
-/// Defines the crates publishing order from least to most dependents
-fn get_publish_order(details: &HashMap<CrateName, CrateDetails>) -> Vec<String> {
-    let mut publish_order: Vec<OrderedCrate> = vec![];
-
-    struct OrderedCrate {
-        name: String,
-        rank: usize,
-    }
-    loop {
-        let mut progressed = false;
-        for (krate, details) in details {
-            if publish_order
-                .iter()
-                .any(|ord_crate| ord_crate.name == *krate)
-            {
-                continue;
-            }
-            let deps: HashSet<&String> = HashSet::from_iter(details.deps_to_publish());
-            let ordered_deps = publish_order
-                .iter()
-                .filter(|ord_crate| deps.iter().any(|dep| **dep == ord_crate.name))
-                .collect::<Vec<_>>();
-            if ordered_deps.len() == deps.len() {
-                publish_order.push(OrderedCrate {
-                    rank: ordered_deps.iter().fold(1usize, |acc, ord_crate| {
-                        acc.checked_add(ord_crate.rank).unwrap()
-                    }),
-                    name: krate.into(),
-                });
-                progressed = true;
-            }
-        }
-        if !progressed {
-            break;
-        }
-    }
-
-    publish_order.sort_by(|a, b| {
-        use std::cmp::Ordering;
-        match a.rank.cmp(&b.rank) {
-            Ordering::Equal => a.name.cmp(&b.name),
-            other => other,
-        }
-    });
-
-    publish_order
-        .into_iter()
-        .map(|ord_crate| ord_crate.name)
-        .collect()
-}
-
 pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     if env::var("CI").is_ok() {
         info!("Publishing has started");
@@ -557,6 +506,58 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     cargo_update_workspace(&opts.root)?;
 
     Ok(())
+}
+
+/// Produces the crates' publishing order from least to most dependents,
+/// tiebreaking by natural sorting order based on the crates' names
+fn get_publish_order(details: &HashMap<CrateName, CrateDetails>) -> Vec<String> {
+    let mut publish_order: Vec<OrderedCrate> = vec![];
+
+    struct OrderedCrate {
+        name: String,
+        rank: usize,
+    }
+    loop {
+        let mut progressed = false;
+        for (krate, details) in details {
+            if publish_order
+                .iter()
+                .any(|ord_crate| ord_crate.name == *krate)
+            {
+                continue;
+            }
+            let deps: HashSet<&String> = HashSet::from_iter(details.deps_to_publish());
+            let ordered_deps = publish_order
+                .iter()
+                .filter(|ord_crate| deps.iter().any(|dep| **dep == ord_crate.name))
+                .collect::<Vec<_>>();
+            if ordered_deps.len() == deps.len() {
+                publish_order.push(OrderedCrate {
+                    rank: ordered_deps.iter().fold(1usize, |acc, ord_crate| {
+                        acc.checked_add(ord_crate.rank).unwrap()
+                    }),
+                    name: krate.into(),
+                });
+                progressed = true;
+            }
+        }
+        if !progressed {
+            break;
+        }
+    }
+
+    publish_order.sort_by(|a, b| {
+        use std::cmp::Ordering;
+        match a.rank.cmp(&b.rank) {
+            Ordering::Equal => a.name.cmp(&b.name),
+            other => other,
+        }
+    });
+
+    publish_order
+        .into_iter()
+        .map(|ord_crate| ord_crate.name)
+        .collect()
 }
 
 #[test]
