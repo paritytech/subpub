@@ -77,6 +77,12 @@ pub struct PublishOpts {
         help = "Run post checks, e.g. cargo check, after publishing"
     )]
     post_check: bool,
+
+    #[clap(
+        long = "for-pull-request",
+        help = "Set up the changes such that the diff can be used for a pull request"
+    )]
+    for_pull_request: bool,
 }
 
 pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
@@ -485,7 +491,9 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 .with_context(|| format!("Crate not found: {krate}"))?;
             cargo_check_crate(&details.manifest_path)?;
         }
+    }
 
+    if opts.for_pull_request {
         git_hard_reset(&opts.root, &initial_commit)?;
 
         for (_, details) in crates.crates_map.iter() {
