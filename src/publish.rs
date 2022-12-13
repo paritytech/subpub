@@ -496,17 +496,13 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     if opts.for_pull_request {
         git_hard_reset(&opts.root, &initial_commit)?;
 
-        for (_, details) in crates.crates_map.iter() {
-            if details.should_be_published {
-                for (_, other_details) in crates.crates_map.iter() {
-                    if other_details.should_be_published {
-                        other_details.write_dependency_version(
-                            &details.name,
-                            &details.version,
-                            false,
-                        )?;
-                    }
-                }
+        for krate in processed_crates {
+            let details = crates
+                .crates_map
+                .get(krate)
+                .with_context(|| format!("Crate not found: {krate}"))?;
+            for (_, other_details) in crates.crates_map.iter() {
+                other_details.write_dependency_version(krate, &details.version, false)?;
             }
         }
 
