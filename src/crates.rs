@@ -51,8 +51,8 @@ impl Crates {
                 if let Some(other_details) = crates_map.get(&details.name) {
                     anyhow::bail!(
                         "Crate parsed for {:?} has the same name of another crate parsed for {:?}",
-                        details.toml_path,
-                        other_details.toml_path,
+                        details.manifest_path,
+                        other_details.manifest_path,
                     );
                 }
                 crates_map.insert(details.name.clone(), details);

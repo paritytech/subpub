@@ -43,7 +43,7 @@ pub struct CrateDetails {
     pub build_deps: HashSet<String>,
     pub dev_deps: HashSet<String>,
     pub should_be_published: bool,
-    pub toml_path: PathBuf,
+    pub manifest_path: PathBuf,
     pub readme: Option<String>,
 }
 
@@ -57,24 +57,29 @@ impl CrateDetails {
             build_deps: HashSet::new(),
             dev_deps: HashSet::new(),
             should_be_published: true,
-            toml_path: PathBuf::new(),
+            manifest_path: PathBuf::new(),
             readme: None,
         }
     }
 
     /// Read a Cargo.toml file, pulling out the information we care about.
-    pub fn load(toml_path: PathBuf) -> anyhow::Result<CrateDetails> {
-        let toml: toml_edit::Document = read_toml(&toml_path)?;
+    pub fn load(manifest_path: PathBuf) -> anyhow::Result<CrateDetails> {
+        let toml: toml_edit::Document = read_toml(&manifest_path)?;
 
         let pkg = toml
             .get("package")
-            .ok_or_else(|| anyhow!("Cannot read [package] section from {:?}", &toml_path))?;
+            .ok_or_else(|| anyhow!("Cannot read [package] section from {:?}", &manifest_path))?;
 
         let name = pkg
             .get("name")
-            .ok_or_else(|| anyhow!("Cannot read package.name from {:?}", &toml_path))?
+            .ok_or_else(|| anyhow!("Cannot read package.name from {:?}", &manifest_path))?
             .as_str()
-            .ok_or_else(|| anyhow!("Cannot read package.name as a string from {:?}", &toml_path))?
+            .ok_or_else(|| {
+                anyhow!(
+                    "Cannot read package.name as a string from {:?}",
+                    &manifest_path
+                )
+            })?
             .to_owned();
 
         let readme = if let Some(readme) = pkg.get("readme") {
@@ -83,7 +88,7 @@ impl CrateDetails {
             } else {
                 anyhow::bail!(
                     "Cannot read package.readme as a string from {:?}",
-                    &toml_path
+                    &manifest_path
                 );
             }
         } else {
@@ -92,17 +97,23 @@ impl CrateDetails {
 
         let version = {
             let version = pkg.get("version").with_context(|| {
-                format!(".package.version couldn't be parsed for {:?}", &toml_path)
+                format!(
+                    ".package.version couldn't be parsed for {:?}",
+                    &manifest_path
+                )
             })?;
             if let Some(version) = version.as_str() {
                 Version::parse(version).with_context(|| {
-                    format!("Cannot parse .version ({version}) as SemVer for {toml_path:?}")
+                    format!(
+                        "Cannot parse .version \"{}\" as SemVer for {:?}",
+                        version, manifest_path
+                    )
                 })?
             } else {
                 let version = version.as_table_like().with_context(|| {
                     format!(
                         ".package.version should be a string or table-like in {:?}",
-                        &toml_path
+                        &manifest_path
                     )
                 })?;
                 if let Some(workspace) = version.get("workspace") {
@@ -117,17 +128,20 @@ impl CrateDetails {
                         } else {
                             anyhow::bail!(
                                 "Expected .package.version.workspace to be true in {:?}",
-                                &toml_path
+                                &manifest_path
                             );
                         }
                     } else {
                         anyhow::bail!(
                             "Expected .package.version.workspace to be a boolean value in {:?}",
-                            &toml_path
+                            &manifest_path
                         );
                     }
                 } else {
-                    anyhow::bail!("Expected .package.version.workspace for {:?}", &toml_path);
+                    anyhow::bail!(
+                        "Expected .package.version.workspace for {:?}",
+                        &manifest_path
+                    );
                 }
             }
         };
@@ -140,17 +154,17 @@ impl CrateDetails {
             match key {
                 CrateDependencyKey::Dependencies => {
                     for item in get_all_dependency_sections(&toml, key_name) {
-                        deps.extend(filter_path_dependencies(&toml_path, key_name, item)?)
+                        deps.extend(filter_path_dependencies(&manifest_path, key_name, item)?)
                     }
                 }
                 CrateDependencyKey::DevDependencies => {
                     for item in get_all_dependency_sections(&toml, key_name) {
-                        dev_deps.extend(filter_path_dependencies(&toml_path, key_name, item)?)
+                        dev_deps.extend(filter_path_dependencies(&manifest_path, key_name, item)?)
                     }
                 }
                 CrateDependencyKey::BuildDependencies => {
                     for item in get_all_dependency_sections(&toml, key_name) {
-                        build_deps.extend(filter_path_dependencies(&toml_path, key_name, item)?)
+                        build_deps.extend(filter_path_dependencies(&manifest_path, key_name, item)?)
                     }
                 }
             }
@@ -160,7 +174,10 @@ impl CrateDetails {
             if let Some(value) = value.as_bool() {
                 value
             } else {
-                anyhow::bail!("Expected package.publish to be boolean in {:?}", &toml_path)
+                anyhow::bail!(
+                    "Expected package.publish to be boolean in {:?}",
+                    &manifest_path
+                )
             }
         } else {
             true
@@ -172,7 +189,7 @@ impl CrateDetails {
             deps,
             dev_deps,
             build_deps,
-            toml_path,
+            manifest_path,
             should_be_published,
             readme,
         })
@@ -243,7 +260,12 @@ impl CrateDetails {
         remove_dependency_path: bool,
     ) -> anyhow::Result<()> {
         if self.all_deps().any(|dep| dep == dependency) {
-            write_dependency_version(&self.toml_path, dependency, version, remove_dependency_path)?;
+            write_dependency_version(
+                &self.manifest_path,
+                dependency,
+                version,
+                remove_dependency_path,
+            )?;
         }
         Ok(())
     }
@@ -328,12 +350,12 @@ impl CrateDetails {
                 format!(
                     ".{} should be table-like in {:?}",
                     dev_deps_key,
-                    self.toml_path.as_os_str()
+                    self.manifest_path.as_os_str()
                 )
             })?;
             for dev_dep in &self.dev_deps {
                 if !self.deps_to_publish().any(|dep| dep == dev_dep) {
-                    needs_toml_write |= visit(item, &dev_deps_key, dev_dep, &self.toml_path)?;
+                    needs_toml_write |= visit(item, &dev_deps_key, dev_dep, &self.manifest_path)?;
                 }
             }
         }
@@ -344,7 +366,7 @@ impl CrateDetails {
             let targets_tbl = targets_tbl.as_table_like_mut().with_context(|| {
                 format!(
                     ".target should be table-like in {:?}",
-                    self.toml_path.as_os_str()
+                    self.manifest_path.as_os_str()
                 )
             })?;
             for (target, target_tbl) in targets_tbl.iter_mut() {
@@ -353,7 +375,7 @@ impl CrateDetails {
                     format!(
                         ".{} should be table-like in {:?}",
                         target_path,
-                        self.toml_path.as_os_str()
+                        self.manifest_path.as_os_str()
                     )
                 })?;
                 if let Some(dev_deps_tbl) = target_tbl.get_mut(&dev_deps_key) {
@@ -362,13 +384,17 @@ impl CrateDetails {
                         format!(
                             ".{} should be table-like in {:?}",
                             dev_deps_tbl_path,
-                            self.toml_path.as_os_str()
+                            self.manifest_path.as_os_str()
                         )
                     })?;
                     for dev_dep in &self.dev_deps {
                         if !self.deps_to_publish().any(|dep| dep == dev_dep) {
-                            needs_toml_write |=
-                                visit(dev_deps_tbl, &dev_deps_tbl_path, dev_dep, &self.toml_path)?;
+                            needs_toml_write |= visit(
+                                dev_deps_tbl,
+                                &dev_deps_tbl_path,
+                                dev_dep,
+                                &self.manifest_path,
+                            )?;
                         }
                     }
                 }
@@ -395,9 +421,9 @@ impl CrateDetails {
         // have one.
         if self.readme.is_none() {
             let crate_readme = &self
-                .toml_path
+                .manifest_path
                 .parent()
-                .with_context(|| format!("Failed to find parent dir of {:?}", &self.toml_path))?
+                .with_context(|| format!("Failed to find parent dir of {:?}", &self.manifest_path))?
                 .join("README.md");
             if fs::metadata(crate_readme).is_err() {
                 with_git_checkpoint(
@@ -428,7 +454,7 @@ impl CrateDetails {
     }
 
     pub fn publish(&self, verify: bool) -> Result<(), PublishError> {
-        external::cargo::publish_crate(&self.name, &self.toml_path, verify)
+        external::cargo::publish_crate(&self.name, &self.manifest_path, verify)
     }
 
     pub fn adjust_version(&mut self, prev_versions: &[CratesIoCrateVersion]) -> anyhow::Result<()> {
@@ -478,7 +504,7 @@ impl CrateDetails {
         if !cmd
             .arg("package")
             .arg("--manifest-path")
-            .arg(&self.toml_path)
+            .arg(&self.manifest_path)
             .arg("--no-verify")
             .arg("--allow-dirty")
             .arg("--target-dir")
@@ -548,11 +574,11 @@ impl CrateDetails {
     }
 
     fn read_toml(&self) -> anyhow::Result<toml_edit::Document> {
-        read_toml(&self.toml_path)
+        read_toml(&self.manifest_path)
     }
 
     fn write_toml(&self, toml: &toml_edit::Document) -> anyhow::Result<()> {
-        write_toml(&self.toml_path, toml)
+        write_toml(&self.manifest_path, toml)
     }
 }
 

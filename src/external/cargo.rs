@@ -116,3 +116,29 @@ Assuming that the crate works fine locally, the error occurs because `foo` is a
 dev-dependency, which was stripped before publishing. You can work around that
 by using `foo` conditionally behind a feature flag.
 ";
+
+pub fn cargo_update_workspace<P: AsRef<Path>>(root: P) -> anyhow::Result<()> {
+    let mut cmd = Command::new("cargo");
+    let status = cmd
+        .current_dir(&root)
+        .arg("update")
+        .arg("--quiet")
+        .arg("--workspace")
+        .status()?;
+    if !status.success() {
+        anyhow::bail!("Command failed: {:?}", cmd);
+    }
+    Ok(())
+}
+
+pub fn cargo_check_crate<P: AsRef<Path>>(manifest_path: P) -> anyhow::Result<()> {
+    let mut cmd = Command::new("cargo");
+    cmd.arg("check")
+        .arg("--quiet")
+        .arg("--manifest-path")
+        .arg(manifest_path.as_ref());
+    if !cmd.status()?.success() {
+        anyhow::bail!("Command failed: {cmd:?}");
+    };
+    Ok(())
+}

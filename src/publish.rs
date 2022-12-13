@@ -2,7 +2,6 @@ use std::{
     collections::{HashMap, HashSet},
     env,
     path::PathBuf,
-    process::{self},
     time::Instant,
 };
 
@@ -13,7 +12,10 @@ use tracing::{info, span, Level};
 use crate::{
     crate_details::CrateDetails,
     crates::{CrateName, Crates},
-    external::crates_io,
+    external::{
+        cargo::{cargo_check_crate, cargo_update_workspace},
+        crates_io,
+    },
     git::{git_hard_reset, git_head_sha, with_git_checkpoint, GitCheckpoint},
 };
 
@@ -342,9 +344,9 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             .with_context(|| format!("Crate not found: {krate}"))?;
         if !details.should_be_published {
             if let Some(parent_crate) = parent_crate {
-                anyhow::bail!("Crate {krate} should not be published, but it is a dependency of {parent_crate}, and that is a dependency of {initial_crate}, which would be published. Check if {krate} has \"publish = false\" in {:?}.", details.toml_path);
+                anyhow::bail!("Crate {krate} should not be published, but it is a dependency of {parent_crate}, and that is a dependency of {initial_crate}, which would be published. Check if {krate} has \"publish = false\" in {:?}.", details.manifest_path);
             } else {
-                anyhow::bail!("Crate {krate} should not be published, but it is a dependency of {initial_crate}, which would be published. Check if {krate} has \"publish = false\" in {:?}.", details.toml_path);
+                anyhow::bail!("Crate {krate} should not be published, but it is a dependency of {initial_crate}, which would be published. Check if {krate} has \"publish = false\" in {:?}.", details.manifest_path);
             }
         }
 
@@ -532,14 +534,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 .crates_map
                 .get(krate)
                 .with_context(|| format!("Crate not found: {krate}"))?;
-            let mut cmd = process::Command::new("cargo");
-            cmd.arg("check")
-                .arg("--quiet")
-                .arg("--manifest-path")
-                .arg(details.toml_path.as_path());
-            if !cmd.status()?.success() {
-                anyhow::bail!("Command failed: {cmd:?}");
-            };
+            cargo_check_crate(&details.manifest_path)?;
         }
     }
 
@@ -558,6 +553,8 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             }
         }
     }
+
+    cargo_update_workspace(&opts.root)?;
 
     Ok(())
 }
