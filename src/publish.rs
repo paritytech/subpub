@@ -485,25 +485,25 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 .with_context(|| format!("Crate not found: {krate}"))?;
             cargo_check_crate(&details.manifest_path)?;
         }
-    }
 
-    git_hard_reset(&opts.root, &initial_commit)?;
+        git_hard_reset(&opts.root, &initial_commit)?;
 
-    for (_, details) in crates.crates_map.iter() {
-        if details.should_be_published {
-            for (_, other_details) in crates.crates_map.iter() {
-                if other_details.should_be_published {
-                    other_details.write_dependency_version(
-                        &details.name,
-                        &details.version,
-                        false,
-                    )?;
+        for (_, details) in crates.crates_map.iter() {
+            if details.should_be_published {
+                for (_, other_details) in crates.crates_map.iter() {
+                    if other_details.should_be_published {
+                        other_details.write_dependency_version(
+                            &details.name,
+                            &details.version,
+                            false,
+                        )?;
+                    }
                 }
             }
         }
-    }
 
-    cargo_update_workspace(&opts.root)?;
+        cargo_update_workspace(&opts.root)?;
+    }
 
     Ok(())
 }
