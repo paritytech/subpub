@@ -134,7 +134,7 @@ pub fn download_crate_for_testing(
 ) -> anyhow::Result<Option<Vec<u8>>> {
     #[cfg(feature = "test-1")]
     {
-        return Ok(Some(pkg_bytes.clone()));
+        return Ok(Some(pkg_bytes.to_vec()));
     }
     #[cfg(feature = "test-2")]
     {

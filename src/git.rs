@@ -111,3 +111,46 @@ pub fn git_checkpoint_revert<P: AsRef<Path>>(root: P) -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+pub fn git_head_sha<P: AsRef<Path>>(root: P) -> anyhow::Result<String> {
+    let mut cmd = Command::new("git");
+    let output = cmd
+        .current_dir(&root)
+        .arg("rev-parse")
+        .arg("HEAD")
+        .output()?;
+    if !output.status.success() {
+        anyhow::bail!("Command failed: {:?}", cmd);
+    }
+    let head_sha = String::from_utf8_lossy(&output.stdout[..])
+        .trim()
+        .to_string();
+    Ok(head_sha)
+}
+
+pub fn git_hard_reset<P: AsRef<Path>>(root: P, initial_commit: &str) -> anyhow::Result<()> {
+    let mut cmd = Command::new("git");
+    if !cmd
+        .current_dir(&root)
+        .arg("add")
+        .arg(".")
+        .status()?
+        .success()
+    {
+        anyhow::bail!("Command failed: {:?}", cmd);
+    }
+
+    let mut cmd = Command::new("git");
+    if !cmd
+        .current_dir(&root)
+        .arg("reset")
+        .arg("--hard")
+        .arg(initial_commit)
+        .status()?
+        .success()
+    {
+        anyhow::bail!("Command failed: {:?}", cmd);
+    }
+
+    Ok(())
+}

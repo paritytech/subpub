@@ -2,7 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     env,
     path::PathBuf,
-    process,
+    process::{self},
     time::Instant,
 };
 
@@ -14,7 +14,7 @@ use crate::{
     crate_details::CrateDetails,
     crates::{CrateName, Crates},
     external::crates_io,
-    git::{with_git_checkpoint, GitCheckpoint},
+    git::{git_hard_reset, git_head_sha, with_git_checkpoint, GitCheckpoint},
 };
 
 #[derive(Parser, Debug, Clone)]
@@ -132,6 +132,8 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     if env::var("CI").is_ok() {
         info!("Publishing has started");
     }
+
+    let initial_commit = git_head_sha(&opts.root)?;
 
     let mut crates = Crates::load_workspace_crates(opts.root.clone())?;
 
@@ -538,6 +540,22 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             if !cmd.status()?.success() {
                 anyhow::bail!("Command failed: {cmd:?}");
             };
+        }
+    }
+
+    git_hard_reset(&opts.root, &initial_commit)?;
+
+    for (_, details) in crates.crates_map.iter() {
+        if details.should_be_published {
+            for (_, other_details) in crates.crates_map.iter() {
+                if other_details.should_be_published {
+                    other_details.write_dependency_version(
+                        &details.name,
+                        &details.version,
+                        false,
+                    )?;
+                }
+            }
         }
     }
 
