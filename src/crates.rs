@@ -88,10 +88,10 @@ impl Crates {
         last_publish_instant: &mut Option<Instant>,
         index_url: Option<&String>,
     ) -> anyhow::Result<()> {
-        let details = match self.crates_map.get(krate) {
-            Some(details) => details,
-            None => anyhow::bail!("Crate not found: {krate}"),
-        };
+        let details = self
+            .crates_map
+            .get(krate)
+            .with_context(|| format!("Crate not found: {krate}"))?;
 
         let should_verify = crates_to_verify.get(krate).is_some();
 

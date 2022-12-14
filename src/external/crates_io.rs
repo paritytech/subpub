@@ -17,6 +17,7 @@
 use std::env;
 
 use anyhow::Context;
+use tracing::info;
 
 pub fn does_crate_exist(name: &str, version: &semver::Version) -> anyhow::Result<bool> {
     let client = reqwest::blocking::Client::new();
@@ -195,6 +196,7 @@ pub fn does_crate_exist_in_cratesio_index(
     let req_url = get_cratesio_index_url(index_url, krate);
     let client = reqwest::blocking::Client::new();
 
+    info!("Querying crate {krate} from {req_url}");
     let res = client
         .get(&req_url)
         .header(
@@ -229,8 +231,10 @@ pub fn does_crate_exist_in_cratesio_index(
         pub vers: String,
     }
     for line in content.lines().rev() {
+        info!("Queried crate {krate} line: {}", line);
         let line = serde_json::from_str::<IndexMetadataLine>(line)
             .with_context(|| format!("Unable to parse line as IndexMetadataLine: {}", line))?;
+        info!("Comparing version {} to {}", line.vers, target_version);
         if line.vers == target_version {
             return Ok(true);
         }
