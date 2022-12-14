@@ -14,7 +14,7 @@ use crate::{
     crates::{CrateName, Crates},
     external::{
         cargo::{cargo_check_crate, cargo_update_workspace},
-        crates_io,
+        crates_io::{self, CratesIoIndexConfiguration},
     },
     git::{git_hard_reset, git_head_sha, with_git_checkpoint, GitCheckpoint},
 };
@@ -97,20 +97,15 @@ pub struct PublishOpts {
     index_repository: Option<String>,
 }
 
-pub struct IndexConfiguration<'a> {
-    pub url: &'a String,
-    pub repository: &'a String,
-}
-
 pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
-    info!("Publishing has started");
-
     let index_conf = match (opts.index_url.as_ref(), opts.index_repository.as_ref()) {
-        (Some(url), Some(repository)) => Some(IndexConfiguration { url, repository }),
+        (Some(url), Some(repository)) => Some(CratesIoIndexConfiguration { url, repository }),
         (Some(_), _) => anyhow::bail!("Specify --index-repository if using --index-url"),
         (_, Some(_)) => anyhow::bail!("Specify --index-url if using --index-repository"),
         _ => None,
     };
+
+    info!("Publishing has started");
 
     let initial_commit = git_head_sha(&opts.root)?;
 

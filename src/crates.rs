@@ -29,9 +29,8 @@ use tracing::{info, warn};
 
 use crate::{
     crate_details::CrateDetails,
-    external::{self, cargo::PublishError},
+    external::{self, cargo::PublishError, crates_io::CratesIoIndexConfiguration},
     git::*,
-    publish::IndexConfiguration,
     toml::{read_toml, write_toml},
 };
 
@@ -87,7 +86,7 @@ impl Crates {
         crates_to_verify: &HashSet<&String>,
         after_publish_delay: Option<&u64>,
         last_publish_instant: &mut Option<Instant>,
-        index_conf: Option<&IndexConfiguration>,
+        index_conf: Option<&CratesIoIndexConfiguration>,
     ) -> anyhow::Result<()> {
         let details = self
             .crates_map

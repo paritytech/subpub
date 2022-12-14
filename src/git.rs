@@ -157,7 +157,7 @@ pub fn git_hard_reset<P: AsRef<Path>>(root: P, initial_commit: &str) -> anyhow::
 
 pub fn git_remote_head_sha<S: AsRef<str>>(remote: S) -> anyhow::Result<String> {
     let mut cmd = Command::new("git");
-    let output = cmd.arg("ls-remote").arg(remote).output()?;
+    let output = cmd.arg("ls-remote").arg(remote.as_ref()).output()?;
     if !output.status.success() {
         anyhow::bail!("Command failed: {:?}", cmd);
     }
@@ -165,12 +165,13 @@ pub fn git_remote_head_sha<S: AsRef<str>>(remote: S) -> anyhow::Result<String> {
         .trim()
         .to_string();
     for line in output.lines() {
+        let line = line.trim();
         if line.ends_with("HEAD") {
-            let parts = line.split_whitespace();
+            let mut parts = line.split_whitespace();
             if let Some(head_sha) = parts.next() {
                 return Ok(head_sha.to_string());
             }
         }
     }
-    anyhow::bail!("Failed to parse HEAD sha for line {}", line);
+    anyhow::bail!("Failed to parse HEAD sha for output:\n{}", output);
 }

@@ -18,7 +18,7 @@ use std::env;
 
 use anyhow::Context;
 
-use crate::publish::IndexConfiguration;
+use crate::git::git_remote_head_sha;
 
 pub fn does_crate_exist(name: &str, version: &semver::Version) -> anyhow::Result<bool> {
     let client = reqwest::blocking::Client::new();
@@ -189,26 +189,21 @@ fn cratesio_index_prefix(krate: &str) -> String {
     buf
 }
 
+pub struct CratesIoIndexConfiguration<'a> {
+    pub url: &'a String,
+    pub repository: &'a String,
+}
+
 pub fn does_crate_exist_in_cratesio_index(
-    index_conf: &IndexConfiguration,
+    index_conf: &CratesIoIndexConfiguration,
     krate: &str,
     version: &semver::Version,
 ) -> anyhow::Result<bool> {
-    let req_url = get_cratesio_index_url(index_conf.url, krate);
-    let target_version = version.to_string();
+    let head_sha = git_remote_head_sha(index_conf.repository)?;
+    let req_url = get_cratesio_index_metadata_url(index_conf.url, &head_sha, krate);
 
-    let mut req = reqwest::blocking::Client::new().get(&req_url);
-
-    if let Some(index_api_auth_header) = index_api_auth_header {
-        req = req.header("Authorization", index_api_auth_header);
-    }
-
-    if let Some(index_api_accept_header) = index_api_accept_header {
-        req = req.header("Accept", index_api_accept_header);
-    }
-
+    let req = reqwest::blocking::Client::new().get(&req_url);
     let res = req
-        .header("Accept", "application/vnd.github.v3.raw")
         .header(
             "User-Agent",
             "https://github.com/paritytech/subpub / ? : checking if crate is available",
@@ -225,16 +220,11 @@ pub fn does_crate_exist_in_cratesio_index(
 
     // Each line of the metadata file is a JSON object with a .vers field
     // Example: {"name":"pallet-foo","vers":"2.0.0-alpha.3","deps":[]}
-    let res_data = {
-        let mut content = res
-            .text_with_charset("utf-8")
-            .with_context(|| format!("Failed to parse response as utf-8 from {}", req_url))?;
-        // Add this so that the last line in the response is taken into account as well
-        if !content.ends_with('\n') {
-            content.push('\n');
-        }
-        content
-    };
+    let res_data = res
+        .text_with_charset("utf-8")
+        .with_context(|| format!("Failed to parse response as utf-8 from {}", req_url))?;
+
+    let target_version = version.to_string();
 
     #[derive(serde::Deserialize)]
     struct IndexMetadataLine {
@@ -251,23 +241,26 @@ pub fn does_crate_exist_in_cratesio_index(
     Ok(false)
 }
 
-fn get_cratesio_index_url(index_url: &str, krate: &str) -> String {
+fn get_cratesio_index_metadata_url(index_url: &str, head_sha: &str, krate: &str) -> String {
     let crate_prefix = cratesio_index_prefix(krate);
-    format!("{}/contents/{}/{}", index_url, crate_prefix, krate)
+    format!("{}/{}/{}/{}", index_url, head_sha, crate_prefix, krate)
 }
 
 #[test]
 #[cfg(feature = "test-0")]
 fn test_get_cratesio_index_url() {
     let index_url = "https://api.github.com/rust-lang/crates.io-index";
+    let head_sha = "ab12cde34f";
 
+    let krate = "fork-tree";
     assert_eq!(
-        get_cratesio_index_url(index_url, "fork-tree"),
-        format!("{}/contents/fo/rk/fork-tree", index_url)
+        get_cratesio_index_metadata_url(index_url, head_sha, krate),
+        format!("{}/{}/fo/rk/{}", index_url, head_sha, krate)
     );
 
+    let krate = "sc-network";
     assert_eq!(
-        get_cratesio_index_url(index_url, "sc-network"),
-        format!("{}/contents/sc/-n/sc-network", index_url)
+        get_cratesio_index_metadata_url(index_url, head_sha, krate),
+        format!("{}/{}/sc/-n/{}", index_url, head_sha, krate)
     );
 }
