@@ -204,9 +204,16 @@ pub fn does_crate_exist_in_cratesio_index(
         .send()
         .with_context(|| format!("Failed to check {krate} from {req_url}"))?;
 
+    let res_status = res.status();
+    if res_status == reqwest::StatusCode::NOT_FOUND {
+        return Ok(false);
+    } else if !res_status.is_success() {
+        anyhow::bail!("Unexpected response status {} for {}", res_status, req_url);
+    }
+
     let content = res
         .text_with_charset("utf-8")
-        .with_context(|| format!("Failed to parse response from {} as utf-8", req_url))?;
+        .with_context(|| format!("Failed to parse response as utf-8 from {}", req_url))?;
 
     let target_version = version.to_string();
 
