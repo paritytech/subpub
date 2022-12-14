@@ -200,8 +200,8 @@ pub fn does_crate_exist_in_cratesio_index(
     version: &semver::Version,
 ) -> anyhow::Result<bool> {
     let head_sha = git_remote_head_sha(index_conf.repository)?;
-    let req_url = get_cratesio_index_metadata_url(index_conf.url, &head_sha, krate);
 
+    let req_url = get_cratesio_index_metadata_url(index_conf.url, &head_sha, krate);
     let req = reqwest::blocking::Client::new().get(&req_url);
     let res = req
         .header(
