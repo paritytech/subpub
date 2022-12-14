@@ -85,26 +85,32 @@ pub struct PublishOpts {
     for_pull_request: bool,
 
     #[clap(
-        long = "index-api",
+        long = "index-url",
         help = "The index API to check after publishing crates"
     )]
-    index_api: Option<String>,
+    index_url: Option<String>,
 
     #[clap(
-        long = "index-api-auth-header",
-        help = "The Authorization header to use for --index-api"
+        long = "index-repository",
+        help = "The index API to check after publishing crates"
     )]
-    index_api_auth_header: Option<String>,
+    index_repository: Option<String>,
+}
 
-    #[clap(
-        long = "index-api-accept-header",
-        help = "The Accept header to use for --index-api"
-    )]
-    index_api_accept_header: Option<String>,
+pub struct IndexConfiguration<'a> {
+    pub url: &'a String,
+    pub repository: &'a String,
 }
 
 pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     info!("Publishing has started");
+
+    let index_conf = match (opts.index_url.as_ref(), opts.index_repository.as_ref()) {
+        (Some(url), Some(repository)) => Some(IndexConfiguration { url, repository }),
+        (Some(_), _) => anyhow::bail!("Specify --index-repository if using --index-url"),
+        (_, Some(_)) => anyhow::bail!("Specify --index-url if using --index-repository"),
+        _ => None,
+    };
 
     let initial_commit = git_head_sha(&opts.root)?;
 
@@ -480,9 +486,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                         &crates_to_verify,
                         opts.after_publish_delay.as_ref(),
                         &mut last_publish_instant,
-                        opts.index_api.as_ref(),
-                        opts.index_api_auth_header.as_ref(),
-                        opts.index_api_accept_header.as_ref(),
+                        index_conf.as_ref(),
                     )?;
                     version
                 } else {

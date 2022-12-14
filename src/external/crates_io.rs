@@ -18,6 +18,8 @@ use std::env;
 
 use anyhow::Context;
 
+use crate::publish::IndexConfiguration;
+
 pub fn does_crate_exist(name: &str, version: &semver::Version) -> anyhow::Result<bool> {
     let client = reqwest::blocking::Client::new();
     let crates_api = env::var("SPUB_CRATES_API").unwrap();
@@ -188,13 +190,11 @@ fn cratesio_index_prefix(krate: &str) -> String {
 }
 
 pub fn does_crate_exist_in_cratesio_index(
-    index_api: &str,
-    index_api_auth_header: Option<&String>,
-    index_api_accept_header: Option<&String>,
+    index_conf: &IndexConfiguration,
     krate: &str,
     version: &semver::Version,
 ) -> anyhow::Result<bool> {
-    let req_url = get_cratesio_index_url(index_api, krate);
+    let req_url = get_cratesio_index_url(index_conf.url, krate);
     let target_version = version.to_string();
 
     let mut req = reqwest::blocking::Client::new().get(&req_url);
@@ -223,11 +223,18 @@ pub fn does_crate_exist_in_cratesio_index(
         anyhow::bail!("Unexpected response status {} for {}", res_status, req_url);
     }
 
-    // Each line of the response is a JSON object with a .vers field
+    // Each line of the metadata file is a JSON object with a .vers field
     // Example: {"name":"pallet-foo","vers":"2.0.0-alpha.3","deps":[]}
-    let res_data = res
-        .text_with_charset("utf-8")
-        .with_context(|| format!("Failed to parse response as utf-8 from {}", req_url))?;
+    let res_data = {
+        let mut content = res
+            .text_with_charset("utf-8")
+            .with_context(|| format!("Failed to parse response as utf-8 from {}", req_url))?;
+        // Add this so that the last line in the response is taken into account as well
+        if !content.ends_with('\n') {
+            content.push('\n');
+        }
+        content
+    };
 
     #[derive(serde::Deserialize)]
     struct IndexMetadataLine {

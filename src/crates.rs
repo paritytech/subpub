@@ -31,6 +31,7 @@ use crate::{
     crate_details::CrateDetails,
     external::{self, cargo::PublishError},
     git::*,
+    publish::IndexConfiguration,
     toml::{read_toml, write_toml},
 };
 
@@ -86,9 +87,7 @@ impl Crates {
         crates_to_verify: &HashSet<&String>,
         after_publish_delay: Option<&u64>,
         last_publish_instant: &mut Option<Instant>,
-        index_api: Option<&String>,
-        index_api_auth_header: Option<&String>,
-        index_api_accept_header: Option<&String>,
+        index_conf: Option<&IndexConfiguration>,
     ) -> anyhow::Result<()> {
         let details = self
             .crates_map
@@ -151,11 +150,9 @@ impl Crates {
             "Waiting for crate {} to be available in the registry...",
             krate
         );
-        if let Some(index_api) = index_api {
+        if let Some(index_conf) = index_conf {
             while !external::crates_io::does_crate_exist_in_cratesio_index(
-                index_api,
-                index_api_auth_header,
-                index_api_accept_header,
+                index_conf,
                 krate,
                 &details.version,
             )? {
