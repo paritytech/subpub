@@ -213,9 +213,15 @@ pub fn does_crate_exist_in_cratesio_index(
         anyhow::bail!("Unexpected response status {} for {}", res_status, req_url);
     }
 
-    let content = res
-        .text_with_charset("utf-8")
-        .with_context(|| format!("Failed to parse response as utf-8 from {}", req_url))?;
+    let content = {
+        let mut content = res
+            .text_with_charset("utf-8")
+            .with_context(|| format!("Failed to parse response as utf-8 from {}", req_url))?;
+        if !content.ends_with('\n') {
+            content.push('\n');
+        }
+        content
+    };
 
     let target_version = version.to_string();
 
