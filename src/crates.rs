@@ -86,6 +86,7 @@ impl Crates {
         crates_to_verify: &HashSet<&String>,
         after_publish_delay: Option<&u64>,
         last_publish_instant: &mut Option<Instant>,
+        index_url: Option<&String>,
     ) -> anyhow::Result<()> {
         let details = match self.crates_map.get(krate) {
             Some(details) => details,
@@ -137,7 +138,17 @@ impl Crates {
         // Don't return until the crate has finished being published; it won't
         // be immediately visible on crates.io, so wait until it shows up.
         while !external::crates_io::does_crate_exist(krate, &details.version)? {
-            thread::sleep(Duration::from_millis(2500))
+            thread::sleep(Duration::from_millis(1536))
+        }
+
+        if let Some(index_url) = index_url {
+            while !external::crates_io::does_crate_exist_in_cratesio_index(
+                index_url,
+                krate,
+                &details.version,
+            )? {
+                thread::sleep(Duration::from_millis(1536))
+            }
         }
 
         *last_publish_instant = Some(Instant::now());

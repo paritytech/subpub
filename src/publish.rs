@@ -83,6 +83,12 @@ pub struct PublishOpts {
         help = "Set up the changes such that the diff can be used for a pull request"
     )]
     for_pull_request: bool,
+
+    #[clap(
+        long = "index-url",
+        help = "The index to check after publishing crates"
+    )]
+    index_url: Option<String>,
 }
 
 pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
@@ -449,6 +455,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                         &crates_to_verify,
                         opts.after_publish_delay.as_ref(),
                         &mut last_publish_instant,
+                        opts.index_url.as_ref(),
                     )?;
                     version
                 } else {

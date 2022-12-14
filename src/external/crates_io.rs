@@ -151,3 +151,62 @@ pub fn download_crate_for_testing(
         ))
     }
 }
+
+// Adapted from https://github.com/frewsxcv/rust-crates-index/blob/868d651f783fae41e79c9eee01d2679f53dd90e7/src/lib.rs#L287
+fn cratesio_index_prefix(krate: &str) -> String {
+    let mut buf = String::new();
+
+    match krate.len() {
+        0 => (),
+        1 => buf.push('1'),
+        2 => buf.push('2'),
+        3 => {
+            buf.push('3');
+            buf.push('/');
+            if let Some(bytes) = krate.as_bytes().get(0..1) {
+                for byte in bytes.to_ascii_lowercase() {
+                    buf.push(byte as char);
+                }
+            }
+        }
+        _ => {
+            if let Some(bytes) = krate.as_bytes().get(0..2) {
+                for byte in bytes.to_ascii_lowercase() {
+                    buf.push(byte as char);
+                }
+                buf.push('/');
+                if let Some(bytes) = krate.as_bytes().get(2..4) {
+                    for byte in bytes.to_ascii_lowercase() {
+                        buf.push(byte as char);
+                    }
+                }
+            }
+        }
+    };
+
+    buf.push('/');
+
+    buf
+}
+
+pub fn does_crate_exist_in_cratesio_index(
+    index_url: &str,
+    krate: &str,
+    version: &semver::Version,
+) -> anyhow::Result<bool> {
+    let client = reqwest::blocking::Client::new();
+    let version = version.to_string();
+    let crate_prefix = cratesio_index_prefix(krate);
+
+    let req_url = format!("{}/blob/master/{}/{}", index_url, crate_prefix, krate);
+    let res = client
+        .get(&req_url)
+        .header(
+            "User-Agent",
+            "https://github.com/paritytech/subpub / ? : checking if crate is available",
+        )
+        .send()
+        .with_context(|| format!("Failed to check {krate} from {req_url}"))?;
+
+    Ok(false)
+}
