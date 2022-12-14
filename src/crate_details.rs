@@ -458,7 +458,10 @@ impl CrateDetails {
         external::cargo::publish_crate(&self.name, &self.manifest_path, verify)
     }
 
-    pub fn adjust_version(&mut self, prev_versions: &[CratesIoCrateVersion]) -> anyhow::Result<()> {
+    pub fn adjust_version(
+        &mut self,
+        prev_versions: &[CratesIoCrateVersion],
+    ) -> anyhow::Result<bool> {
         let highest_version = prev_versions
             .iter()
             .filter_map(|prev_version| {
@@ -473,8 +476,10 @@ impl CrateDetails {
             .unwrap_or(&self.version);
         if highest_version != &self.version {
             self.write_own_version(highest_version.to_owned())?;
+            Ok(true)
+        } else {
+            Ok(false)
         }
-        Ok(())
     }
 
     pub fn needs_publishing<P: AsRef<Path>>(&self, root: P) -> anyhow::Result<bool> {

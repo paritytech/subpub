@@ -433,13 +433,28 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             let crate_version = {
                 let prev_versions = crates_io::crate_versions(krate)?;
 
+                let did_adjust_version = {
+                    let details = crates
+                        .crates_map
+                        .get_mut(krate)
+                        .with_context(|| format!("Crate not found: {krate}"))?;
+                    details.adjust_version(&prev_versions)?
+                };
+
+                if did_adjust_version {
+                    let details = crates
+                        .crates_map
+                        .get(krate)
+                        .with_context(|| format!("Crate not found: {krate}"))?;
+                    for (_, other_details) in crates.crates_map.iter() {
+                        other_details.write_dependency_version(krate, &details.version, false)?;
+                    }
+                }
+
                 let details = crates
                     .crates_map
                     .get_mut(krate)
                     .with_context(|| format!("Crate not found: {krate}"))?;
-
-                details.adjust_version(&prev_versions)?;
-
                 if details.needs_publishing(&opts.root)? {
                     with_git_checkpoint(&opts.root, GitCheckpoint::Save, || {
                         details.maybe_bump_version(
