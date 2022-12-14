@@ -257,15 +257,15 @@ fn get_cratesio_index_url(index_url: &str, krate: &str) -> String {
 #[test]
 #[cfg(feature = "test-0")]
 fn test_get_cratesio_index_url() {
-    let index_url = "https://raw.githubusercontent.com/rust-lang/crates.io-index";
+    let index_url = "https://api.github.com/rust-lang/crates.io-index";
 
     assert_eq!(
         get_cratesio_index_url(index_url, "fork-tree"),
-        format!("{}/master/fo/rk/fork-tree", index_url)
+        format!("{}/contents/fo/rk/fork-tree", index_url)
     );
 
     assert_eq!(
         get_cratesio_index_url(index_url, "sc-network"),
-        format!("{}/master/sc/-n/sc-network", index_url)
+        format!("{}/contents/sc/-n/sc-network", index_url)
     );
 }
