@@ -223,22 +223,17 @@ pub fn does_crate_exist_in_cratesio_index(
         anyhow::bail!("Unexpected response status {} for {}", res_status, req_url);
     }
 
-    let content = {
-        let mut content = res
-            .text_with_charset("utf-8")
-            .with_context(|| format!("Failed to parse response as utf-8 from {}", req_url))?;
-        // Add this so that the last line in the response is taken into account as well
-        if !content.ends_with('\n') {
-            content.push('\n');
-        }
-        content
-    };
+    // Each line of the response is a JSON object with a .vers field
+    // Example: {"name":"pallet-foo","vers":"2.0.0-alpha.3","deps":[]}
+    let res_data = res
+        .text_with_charset("utf-8")
+        .with_context(|| format!("Failed to parse response as utf-8 from {}", req_url))?;
 
     #[derive(serde::Deserialize)]
     struct IndexMetadataLine {
         pub vers: String,
     }
-    for line in content.lines().rev() {
+    for line in res_data.lines().rev() {
         let line = serde_json::from_str::<IndexMetadataLine>(line)
             .with_context(|| format!("Unable to parse line as IndexMetadataLine: {}", line))?;
         if line.vers == target_version {
