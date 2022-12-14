@@ -85,16 +85,26 @@ pub struct PublishOpts {
     for_pull_request: bool,
 
     #[clap(
-        long = "index-url",
-        help = "The index to check after publishing crates"
+        long = "index-api",
+        help = "The index API to check after publishing crates"
     )]
-    index_url: Option<String>,
+    index_api: Option<String>,
+
+    #[clap(
+        long = "index-api-token",
+        help = "The API token to use for --index-api"
+    )]
+    index_api_token: Option<String>,
+
+    #[clap(
+        long = "index-api-header",
+        help = "The API header to use for --index-api"
+    )]
+    index_api_accept_header: Option<String>,
 }
 
 pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
-    if env::var("CI").is_ok() {
-        info!("Publishing has started");
-    }
+    info!("Publishing has started");
 
     let initial_commit = git_head_sha(&opts.root)?;
 
@@ -470,7 +480,9 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                         &crates_to_verify,
                         opts.after_publish_delay.as_ref(),
                         &mut last_publish_instant,
-                        opts.index_url.as_ref(),
+                        opts.index_api.as_ref(),
+                        opts.index_api_token.as_ref(),
+                        opts.index_api_accept_header.as_ref(),
                     )?;
                     version
                 } else {

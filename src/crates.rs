@@ -86,7 +86,9 @@ impl Crates {
         crates_to_verify: &HashSet<&String>,
         after_publish_delay: Option<&u64>,
         last_publish_instant: &mut Option<Instant>,
-        index_url: Option<&String>,
+        index_api: Option<&String>,
+        index_api_token: Option<&String>,
+        index_api_accept_header: Option<&String>,
     ) -> anyhow::Result<()> {
         let details = self
             .crates_map
@@ -149,9 +151,11 @@ impl Crates {
             "Waiting for crate {} to be available in the registry...",
             krate
         );
-        if let Some(index_url) = index_url {
+        if let Some(index_api) = index_api {
             while !external::crates_io::does_crate_exist_in_cratesio_index(
-                index_url,
+                index_api,
+                index_api_token,
+                index_api_accept_header,
                 krate,
                 &details.version,
             )? {

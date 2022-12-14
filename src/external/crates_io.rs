@@ -17,7 +17,7 @@
 use std::env;
 
 use anyhow::Context;
-use tracing::info;
+
 
 pub fn does_crate_exist(name: &str, version: &semver::Version) -> anyhow::Result<bool> {
     let client = reqwest::blocking::Client::new();
@@ -189,16 +189,27 @@ fn cratesio_index_prefix(krate: &str) -> String {
 }
 
 pub fn does_crate_exist_in_cratesio_index(
-    index_url: &str,
+    index_api: &str,
+    index_api_token: Option<&String>,
+    index_api_accept_header: Option<&String>,
     krate: &str,
     version: &semver::Version,
 ) -> anyhow::Result<bool> {
-    let req_url = get_cratesio_index_url(index_url, krate);
-    let client = reqwest::blocking::Client::new();
+    let req_url = get_cratesio_index_url(index_api, krate);
+    let target_version = version.to_string();
 
-    info!("Querying crate {krate} from {req_url}");
-    let res = client
-        .get(&req_url)
+    let mut req = reqwest::blocking::Client::new().get(&req_url);
+
+    if let Some(index_api_token) = index_api_token {
+        req = req.header("Authorization", format!("token {}", index_api_token));
+    }
+
+    if let Some(index_api_accept_header) = index_api_accept_header {
+        req = req.header("Accept", index_api_accept_header);
+    }
+
+    let res = req
+        .header("Accept", "application/vnd.github.v3.raw")
         .header(
             "User-Agent",
             "https://github.com/paritytech/subpub / ? : checking if crate is available",
@@ -224,17 +235,13 @@ pub fn does_crate_exist_in_cratesio_index(
         content
     };
 
-    let target_version = version.to_string();
-
     #[derive(serde::Deserialize)]
     struct IndexMetadataLine {
         pub vers: String,
     }
     for line in content.lines().rev() {
-        info!("Queried crate {krate} line: {}", line);
         let line = serde_json::from_str::<IndexMetadataLine>(line)
             .with_context(|| format!("Unable to parse line as IndexMetadataLine: {}", line))?;
-        info!("Comparing version {} to {}", line.vers, target_version);
         if line.vers == target_version {
             return Ok(true);
         }
@@ -245,7 +252,7 @@ pub fn does_crate_exist_in_cratesio_index(
 
 fn get_cratesio_index_url(index_url: &str, krate: &str) -> String {
     let crate_prefix = cratesio_index_prefix(krate);
-    format!("{}/master/{}/{}", index_url, crate_prefix, krate)
+    format!("{}/contents/{}/{}", index_url, crate_prefix, krate)
 }
 
 #[test]
