@@ -91,14 +91,14 @@ pub struct PublishOpts {
     index_api: Option<String>,
 
     #[clap(
-        long = "index-api-token",
-        help = "The API token to use for --index-api"
+        long = "index-api-auth-header",
+        help = "The Authorization header to use for --index-api"
     )]
     index_api_auth_header: Option<String>,
 
     #[clap(
-        long = "index-api-header",
-        help = "The API header to use for --index-api"
+        long = "index-api-accept-header",
+        help = "The Accept header to use for --index-api"
     )]
     index_api_accept_header: Option<String>,
 }
