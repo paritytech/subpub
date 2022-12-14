@@ -184,8 +184,6 @@ fn cratesio_index_prefix(krate: &str) -> String {
         }
     };
 
-    buf.push('/');
-
     buf
 }
 
@@ -194,11 +192,9 @@ pub fn does_crate_exist_in_cratesio_index(
     krate: &str,
     version: &semver::Version,
 ) -> anyhow::Result<bool> {
-    let client = reqwest::blocking::Client::new();
-    let version = version.to_string();
-    let crate_prefix = cratesio_index_prefix(krate);
+    let req_url = get_cratesio_index_url(index_url, krate);
 
-    let req_url = format!("{}/blob/master/{}/{}", index_url, crate_prefix, krate);
+    let client = reqwest::blocking::Client::new();
     let res = client
         .get(&req_url)
         .header(
@@ -208,5 +204,44 @@ pub fn does_crate_exist_in_cratesio_index(
         .send()
         .with_context(|| format!("Failed to check {krate} from {req_url}"))?;
 
+    let content = res
+        .text_with_charset("utf-8")
+        .with_context(|| format!("Failed to parse response from {} as utf-8", req_url))?;
+
+    let target_version = version.to_string();
+
+    #[derive(serde::Deserialize)]
+    struct IndexMetadataLine {
+        pub vers: String,
+    }
+    for line in content.lines().rev() {
+        let line = serde_json::from_str::<IndexMetadataLine>(line)
+            .with_context(|| format!("Unable to parse line as IndexMetadataLine: {}", line))?;
+        if line.vers == target_version {
+            return Ok(true);
+        }
+    }
+
     Ok(false)
+}
+
+fn get_cratesio_index_url(index_url: &str, krate: &str) -> String {
+    let crate_prefix = cratesio_index_prefix(krate);
+    format!("{}/blob/master/{}/{}", index_url, crate_prefix, krate)
+}
+
+#[test]
+#[cfg(feature = "test-0")]
+fn test_get_cratesio_index_url() {
+    let index_url = "https://github.com/rust-lang/crates.io-index";
+
+    assert_eq!(
+        get_cratesio_index_url(index_url, "fork-tree"),
+        format!("{}/blob/master/fo/rk/fork-tree", index_url)
+    );
+
+    assert_eq!(
+        get_cratesio_index_url(index_url, "sc-network"),
+        format!("{}/blob/master/sc/-n/sc-network", index_url)
+    );
 }
