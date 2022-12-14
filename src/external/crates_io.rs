@@ -18,7 +18,6 @@ use std::env;
 
 use anyhow::Context;
 
-
 pub fn does_crate_exist(name: &str, version: &semver::Version) -> anyhow::Result<bool> {
     let client = reqwest::blocking::Client::new();
     let crates_api = env::var("SPUB_CRATES_API").unwrap();
@@ -190,7 +189,7 @@ fn cratesio_index_prefix(krate: &str) -> String {
 
 pub fn does_crate_exist_in_cratesio_index(
     index_api: &str,
-    index_api_token: Option<&String>,
+    index_api_auth_header: Option<&String>,
     index_api_accept_header: Option<&String>,
     krate: &str,
     version: &semver::Version,
@@ -200,8 +199,8 @@ pub fn does_crate_exist_in_cratesio_index(
 
     let mut req = reqwest::blocking::Client::new().get(&req_url);
 
-    if let Some(index_api_token) = index_api_token {
-        req = req.header("Authorization", format!("token {}", index_api_token));
+    if let Some(index_api_auth_header) = index_api_auth_header {
+        req = req.header("Authorization", index_api_auth_header);
     }
 
     if let Some(index_api_accept_header) = index_api_accept_header {

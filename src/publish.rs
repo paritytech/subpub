@@ -94,7 +94,7 @@ pub struct PublishOpts {
         long = "index-api-token",
         help = "The API token to use for --index-api"
     )]
-    index_api_token: Option<String>,
+    index_api_auth_header: Option<String>,
 
     #[clap(
         long = "index-api-header",
@@ -481,7 +481,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                         opts.after_publish_delay.as_ref(),
                         &mut last_publish_instant,
                         opts.index_api.as_ref(),
-                        opts.index_api_token.as_ref(),
+                        opts.index_api_auth_header.as_ref(),
                         opts.index_api_accept_header.as_ref(),
                     )?;
                     version

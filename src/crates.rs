@@ -87,7 +87,7 @@ impl Crates {
         after_publish_delay: Option<&u64>,
         last_publish_instant: &mut Option<Instant>,
         index_api: Option<&String>,
-        index_api_token: Option<&String>,
+        index_api_auth_header: Option<&String>,
         index_api_accept_header: Option<&String>,
     ) -> anyhow::Result<()> {
         let details = self
@@ -154,7 +154,7 @@ impl Crates {
         if let Some(index_api) = index_api {
             while !external::crates_io::does_crate_exist_in_cratesio_index(
                 index_api,
-                index_api_token,
+                index_api_auth_header,
                 index_api_accept_header,
                 krate,
                 &details.version,
