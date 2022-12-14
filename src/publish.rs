@@ -95,6 +95,12 @@ pub struct PublishOpts {
         help = "The index API to check after publishing crates"
     )]
     index_repository: Option<String>,
+
+    #[clap(
+        long = "clear-cargo-home",
+        help = "The $CARGO_HOME directory to clear after publishing a crate"
+    )]
+    clear_cargo_home: Option<String>,
 }
 
 pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
@@ -482,6 +488,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                         opts.after_publish_delay.as_ref(),
                         &mut last_publish_instant,
                         index_conf.as_ref(),
+                        opts.clear_cargo_home.as_ref(),
                     )?;
                     version
                 } else {

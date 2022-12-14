@@ -87,6 +87,7 @@ impl Crates {
         after_publish_delay: Option<&u64>,
         last_publish_instant: &mut Option<Instant>,
         index_conf: Option<&CratesIoIndexConfiguration>,
+        clear_cargo_home: Option<&String>,
     ) -> anyhow::Result<()> {
         let details = self
             .crates_map
@@ -145,11 +146,11 @@ impl Crates {
             thread::sleep(Duration::from_millis(1536))
         }
 
-        info!(
-            "Waiting for crate {} to be available in the registry...",
-            krate
-        );
         if let Some(index_conf) = index_conf {
+            info!(
+                "Waiting for crate {} to be available in the registry...",
+                krate
+            );
             while !external::crates_io::does_crate_exist_in_cratesio_index(
                 index_conf,
                 krate,
@@ -160,6 +161,11 @@ impl Crates {
         }
 
         *last_publish_instant = Some(Instant::now());
+
+        if let Some(cargo_home) = clear_cargo_home {
+            fs::remove_dir_all(cargo_home)?;
+            fs::create_dir_all(cargo_home)?;
+        }
 
         if let Ok(crates_committed_file) = env::var("SPUB_CRATES_COMMITTED_FILE") {
             loop {
