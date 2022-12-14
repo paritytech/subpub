@@ -224,6 +224,7 @@ pub fn does_crate_exist_in_cratesio_index(
         pub vers: String,
     }
     for line in content.lines().rev() {
+        info!("Queried crate {krate} line: {}", line);
         let line = serde_json::from_str::<IndexMetadataLine>(line)
             .with_context(|| format!("Unable to parse line as IndexMetadataLine: {}", line))?;
         if line.vers == target_version {
