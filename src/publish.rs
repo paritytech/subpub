@@ -534,9 +534,18 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     }
 
     if opts.for_pull_request {
+        info!("Preparing diff for a pull request");
+
         git_hard_reset(&opts.root, &initial_commit)?;
 
         for krate in processed_crates {
+            {
+                let details = crates
+                    .crates_map
+                    .get_mut(krate)
+                    .with_context(|| format!("Crate not found: {krate}"))?;
+                details.write_own_version(details.version.clone())?;
+            }
             let details = crates
                 .crates_map
                 .get(krate)
