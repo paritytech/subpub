@@ -227,21 +227,21 @@ pub fn does_crate_exist_in_cratesio_index(
 
 fn get_cratesio_index_url(index_url: &str, krate: &str) -> String {
     let crate_prefix = cratesio_index_prefix(krate);
-    format!("{}/blob/master/{}/{}", index_url, crate_prefix, krate)
+    format!("{}/master/{}/{}", index_url, crate_prefix, krate)
 }
 
 #[test]
 #[cfg(feature = "test-0")]
 fn test_get_cratesio_index_url() {
-    let index_url = "https://github.com/rust-lang/crates.io-index";
+    let index_url = "https://raw.githubusercontent.com/rust-lang/crates.io-index";
 
     assert_eq!(
         get_cratesio_index_url(index_url, "fork-tree"),
-        format!("{}/blob/master/fo/rk/fork-tree", index_url)
+        format!("{}/master/fo/rk/fork-tree", index_url)
     );
 
     assert_eq!(
         get_cratesio_index_url(index_url, "sc-network"),
-        format!("{}/blob/master/sc/-n/sc-network", index_url)
+        format!("{}/master/sc/-n/sc-network", index_url)
     );
 }
