@@ -135,12 +135,20 @@ impl Crates {
 
         git_checkpoint_revert(&self.root)?;
 
+        info!(
+            "Waiting for crate {} to be available on crates.io...",
+            krate
+        );
         // Don't return until the crate has finished being published; it won't
         // be immediately visible on crates.io, so wait until it shows up.
         while !external::crates_io::does_crate_exist(krate, &details.version)? {
             thread::sleep(Duration::from_millis(1536))
         }
 
+        info!(
+            "Waiting for crate {} to be available in the registry...",
+            krate
+        );
         if let Some(index_url) = index_url {
             while !external::crates_io::does_crate_exist_in_cratesio_index(
                 index_url,
