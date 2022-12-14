@@ -17,7 +17,6 @@
 use std::env;
 
 use anyhow::Context;
-use tracing::info;
 
 pub fn does_crate_exist(name: &str, version: &semver::Version) -> anyhow::Result<bool> {
     let client = reqwest::blocking::Client::new();
