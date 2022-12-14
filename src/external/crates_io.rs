@@ -193,7 +193,6 @@ pub fn does_crate_exist_in_cratesio_index(
     version: &semver::Version,
 ) -> anyhow::Result<bool> {
     let req_url = get_cratesio_index_url(index_url, krate);
-
     let client = reqwest::blocking::Client::new();
     let res = client
         .get(&req_url)
