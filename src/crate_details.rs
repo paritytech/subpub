@@ -25,6 +25,7 @@ use anyhow::{anyhow, Context};
 use external::crates_io::CratesIoCrateVersion;
 use semver::Version;
 use strum::IntoEnumIterator;
+use tempfile::TempDir;
 use tracing::{info, span, Level};
 
 use crate::{
@@ -477,12 +478,6 @@ impl CrateDetails {
     }
 
     pub fn needs_publishing<P: AsRef<Path>>(&self, root: P) -> anyhow::Result<bool> {
-        let result = self.needs_publishing_inner(&root);
-        git_checkpoint_revert(&root)?;
-        result
-    }
-
-    fn needs_publishing_inner<P: AsRef<Path>>(&self, root: P) -> anyhow::Result<bool> {
         info!(
             "Comparing crate {} against crates.io to see if it needs to be published",
             self.name
@@ -491,11 +486,22 @@ impl CrateDetails {
         let span = span!(Level::INFO, "__", crate = self.name);
         let _enter = span.enter();
 
-        let tmp_dir = tempfile::tempdir()?;
+        enum TargetDir {
+            Temp(TempDir),
+            Path(PathBuf),
+        }
+        impl TargetDir {
+            fn path(&self) -> PathBuf {
+                match self {
+                    TargetDir::Temp(tmp_dir) => tmp_dir.path().to_path_buf(),
+                    TargetDir::Path(path) => path.clone(),
+                }
+            }
+        }
         let target_dir = if let Ok(tmp_dir) = env::var("SPUB_TMP") {
-            PathBuf::from(tmp_dir)
+            TargetDir::Path(PathBuf::from(tmp_dir))
         } else {
-            tmp_dir.path().to_path_buf()
+            TargetDir::Temp(tempfile::tempdir()?)
         };
 
         info!("Generating .crate file");
@@ -508,14 +514,16 @@ impl CrateDetails {
             .arg("--no-verify")
             .arg("--allow-dirty")
             .arg("--target-dir")
-            .arg(&target_dir)
+            .arg(target_dir.path())
             .status()?
             .success()
         {
             anyhow::bail!("Failed to package crate {}", &self.name);
         };
+        git_checkpoint_revert(&root)?;
 
         let pkg_path = target_dir
+            .path()
             .join("package")
             .join(format!("{}-{}.crate", &self.name, &self.version));
         let pkg_bytes = fs::read(&pkg_path)?;
@@ -530,7 +538,9 @@ impl CrateDetails {
                 external::crates_io::download_crate_for_testing(name, version, pkg_bytes)
             }
             #[cfg(not(test))]
-            external::crates_io::download_crate(name, version)
+            {
+                external::crates_io::download_crate(name, version)
+            }
         }
         let cratesio_bytes =
             if let Some(bytes) = get_cratesio_bytes(&self.name, &self.version, &pkg_bytes)? {
@@ -672,8 +682,6 @@ fn filter_path_dependencies<P: AsRef<Path>>(
 
 #[cfg(all(test, any(feature = "test-1", feature = "test-2", feature = "test-3")))]
 mod tests {
-    use tempfile::TempDir;
-
     use super::*;
 
     fn setup_details() -> (TempDir, CrateDetails) {
