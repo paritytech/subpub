@@ -114,7 +114,8 @@ Or:
 
 Assuming that the crate works fine locally, the error occurs because `foo` is a
 dev-dependency, which was stripped before publishing. You can work around that
-by using `foo` conditionally behind a feature flag.
+by using `foo` conditionally behind a feature flag or by promoting `foo` to a
+normal dependency.
 ";
 
 pub fn cargo_update_workspace<P: AsRef<Path>>(root: P) -> anyhow::Result<()> {
