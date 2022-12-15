@@ -144,6 +144,7 @@ pub fn git_hard_reset<P: AsRef<Path>>(root: P, initial_commit: &str) -> anyhow::
     if !cmd
         .current_dir(&root)
         .arg("reset")
+        .arg("--quiet")
         .arg("--hard")
         .arg(initial_commit)
         .status()?
