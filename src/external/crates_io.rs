@@ -154,8 +154,10 @@ pub fn download_crate_for_testing(
     }
 }
 
-// Adapted from https://github.com/frewsxcv/rust-crates-index/blob/868d651f783fae41e79c9eee01d2679f53dd90e7/src/lib.rs#L287
-fn cratesio_index_prefix(krate: &str) -> String {
+/// Constructs the crate's registry path as defined on
+/// https://doc.rust-lang.org/cargo/reference/registries.html#index-format
+/// Adapted from https://github.com/frewsxcv/rust-crates-index/blob/868d651f783fae41e79c9eee01d2679f53dd90e7/src/lib.rs#L287
+fn cratesio_index_crate_path(krate: &str) -> String {
     let mut buf = String::new();
 
     match krate.len() {
@@ -242,15 +244,15 @@ pub fn does_crate_exist_in_cratesio_index(
 }
 
 fn get_cratesio_index_metadata_url(index_url: &str, head_sha: &str, krate: &str) -> String {
-    let crate_prefix = cratesio_index_prefix(krate);
-    format!("{}/{}/{}/{}", index_url, head_sha, crate_prefix, krate)
+    let crate_path = cratesio_index_crate_path(krate);
+    format!("{}/{}/{}/{}", index_url, head_sha, crate_path, krate)
 }
 
 #[test]
 #[cfg(feature = "test-0")]
 fn test_get_cratesio_index_url() {
-    let index_url = "https://api.github.com/rust-lang/crates.io-index";
-    let head_sha = "ab12cde34f";
+    let index_url = "https://raw.githubusercontent.com/rust-lang/crates.io-index";
+    let head_sha = "d90b3649f26334dc4026112ba8208993cbd88116";
 
     let krate = "fork-tree";
     assert_eq!(
