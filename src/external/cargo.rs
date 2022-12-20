@@ -20,6 +20,7 @@ use anyhow::anyhow;
 
 pub enum PublishError {
     RateLimited(String),
+    SpuriousNetworkError(String),
     Any(anyhow::Error),
 }
 
@@ -33,6 +34,25 @@ impl From<io::Error> for PublishError {
 fn detect_rate_limit_error(err_msg: &str) -> Option<String> {
     err_msg
         .match_indices("You have published too many crates")
+        .next()
+        .map(|(idx, _)| err_msg.chars().skip(idx).collect())
+}
+
+/*
+   By
+   https://github.com/rust-lang/cargo/blob/1d8cdaa01eea3af5ad36c600fbf21b51a1684454/crates/crates-io/lib.rs#L281
+   we can deduce that cargo currently relies on the curl library, thus we need
+   to handle any relevant errors of
+   https://docs.rs/curl/latest/curl/struct.Error.html (which are themselves
+   related to https://curl.se/libcurl/c/libcurl-errors.html). That being said,
+   some network-related errors can also happen outside of curl, such as
+   DNS-related errors.
+*/
+fn detect_spurious_network_error(err_msg: &str) -> Option<String> {
+    err_msg
+        .match_indices(
+            "dns error: failed to lookup address information: Temporary failure in name resolution",
+        )
         .next()
         .map(|(idx, _)| err_msg.chars().skip(idx).collect())
 }
@@ -69,9 +89,11 @@ pub fn publish_crate<P: AsRef<Path>>(
         let err_msg = String::from_utf8_lossy(&output.stderr[..]);
         if let Some(rate_limit_err) = detect_rate_limit_error(&err_msg) {
             return Err(PublishError::RateLimited(rate_limit_err));
+        } else if let Some(spurious_network_err) = detect_spurious_network_error(&err_msg) {
+            return Err(PublishError::SpuriousNetworkError(spurious_network_err));
         } else {
             return Err(PublishError::Any(anyhow!(
-                "Failed to publish crate {krate}. Command failed: {cmd:?}. Output:\n{}\n{}",
+                "Failed to publish crate {krate}. Command failed: {cmd:?}\nOutput:\n{}\n{}",
                 err_msg,
                 DEV_DEPS_TROUBLESHOOT_HINT,
             )));
@@ -127,7 +149,11 @@ pub fn cargo_update_workspace<P: AsRef<Path>>(root: P) -> anyhow::Result<()> {
         .arg("--workspace")
         .status()?;
     if !status.success() {
-        anyhow::bail!("Command failed: {:?}", cmd);
+        return Err(anyhow!(
+            "Failed to update workspace of {:?}. Command failed: {:?}",
+            root.as_ref(),
+            cmd
+        ));
     }
     Ok(())
 }
@@ -139,7 +165,7 @@ pub fn cargo_check_crate<P: AsRef<Path>>(manifest_path: P) -> anyhow::Result<()>
         .arg("--manifest-path")
         .arg(manifest_path.as_ref());
     if !cmd.status()?.success() {
-        anyhow::bail!("Command failed: {cmd:?}");
+        return Err(anyhow!("Failed to check crate. Command failed: {:?}", cmd));
     };
     Ok(())
 }

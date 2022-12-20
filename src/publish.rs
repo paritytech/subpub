@@ -106,8 +106,8 @@ pub struct PublishOpts {
 pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     let index_conf = match (opts.index_url.as_ref(), opts.index_repository.as_ref()) {
         (Some(url), Some(repository)) => Some(CratesIoIndexConfiguration { url, repository }),
-        (Some(_), _) => anyhow::bail!("Specify --index-repository if using --index-url"),
-        (_, Some(_)) => anyhow::bail!("Specify --index-url if using --index-repository"),
+        (Some(_), _) => return Err(anyhow!("Specify --index-repository if using --index-url")),
+        (_, Some(_)) => return Err(anyhow!("Specify --index-url if using --index-repository")),
         _ => None,
     };
 
@@ -133,14 +133,14 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         .filter(|krate| !publish_order.iter().any(|ord_crate| ord_crate == *krate))
         .collect::<Vec<_>>();
     if !unordered_crates.is_empty() {
-        anyhow::bail!(
+        return Err(anyhow!(
             "Failed to determine publish order for the following crates: {}",
             unordered_crates
                 .iter()
                 .map(|krate| (*krate).into())
                 .collect::<Vec<String>>()
                 .join(", ")
-        );
+        ));
     }
 
     let crates_to_exclude = {
@@ -278,7 +278,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         candidate_crates
     };
     if selected_crates.is_empty() {
-        anyhow::bail!("No crates could be selected from the CLI options");
+        return Err(anyhow!("No crates could be selected from the CLI options"));
     }
 
     info!(
@@ -310,9 +310,18 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             .any(|excluded_crate| *excluded_crate == krate)
         {
             if let Some(parent_crate) = parent_crate {
-                anyhow::bail!("Crate {krate} was excluded from CLI options, but it is a dependency of {parent_crate}, and that is a dependency of {initial_crate}, which would be published.");
+                return Err(anyhow!(
+                    "Crate {} was excluded from CLI options, but it is a dependency of {}, and that is a dependency of {}, which would be published.",
+                    krate,
+                    parent_crate,
+                    initial_crate
+                ));
             } else {
-                anyhow::bail!("Crate {krate} was excluded from CLI options, but it is a dependency of  {initial_crate}, which would be published.");
+                return Err(anyhow!(
+                    "Crate {} was excluded from CLI options, but it is a dependency of  {}, which would be published.",
+                    krate,
+                    initial_crate
+                ));
             }
         }
 
@@ -322,9 +331,22 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             .with_context(|| format!("Crate not found: {krate}"))?;
         if !details.should_be_published {
             if let Some(parent_crate) = parent_crate {
-                anyhow::bail!("Crate {krate} should not be published, but it is a dependency of {parent_crate}, and that is a dependency of {initial_crate}, which would be published. Check if {krate} has \"publish = false\" in {:?}.", details.manifest_path);
+                return Err(anyhow!(
+                    "Crate {} should not be published, but it is a dependency of {}, and that is a dependency of {}, which would be published. Check if {} has \"publish = false\" in {:?}.",
+                    krate,
+                    parent_crate,
+                    initial_crate,
+                    krate,
+                    details.manifest_path
+                ));
             } else {
-                anyhow::bail!("Crate {krate} should not be published, but it is a dependency of {initial_crate}, which would be published. Check if {krate} has \"publish = false\" in {:?}.", details.manifest_path);
+                return Err(anyhow!(
+                    "Crate {} should not be published, but it is a dependency of {}, which would be published. Check if {} has \"publish = false\" in {:?}.",
+                    krate,
+                    initial_crate,
+                    krate,
+                    details.manifest_path
+                ));
             }
         }
 

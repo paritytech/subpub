@@ -23,7 +23,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use strum::{EnumIter, EnumString, IntoEnumIterator};
 use tracing::{info, warn};
 
@@ -49,11 +49,11 @@ impl Crates {
             for cargo_toml in cargo_tomls {
                 let details = CrateDetails::load(cargo_toml)?;
                 if let Some(other_details) = crates_map.get(&details.name) {
-                    anyhow::bail!(
+                    return Err(anyhow!(
                         "Crate parsed for {:?} has the same name of another crate parsed for {:?}",
                         details.manifest_path,
                         other_details.manifest_path,
-                    );
+                    ));
                 }
                 crates_map.insert(details.name.clone(), details);
             }
@@ -65,14 +65,14 @@ impl Crates {
         for details in crates_map.values() {
             for dep in details.deps_to_publish() {
                 if !crates_map.contains_key(dep) {
-                    anyhow::bail!(
-                      "Crate {} refers to path dependency {}, which could not be detected for the workspace of {:?}. You might need to add {} as a workspace member in {:?}.",
-                      &details.name,
-                      dep,
-                      root.display(),
-                      dep,
-                      root.display()
-                    );
+                    return Err(anyhow!(
+                        "Crate {} refers to path dependency {}, which could not be detected for the workspace of {:?}. You might need to add {} as a workspace member in {:?}.",
+                        &details.name,
+                        dep,
+                        root.display(),
+                        dep,
+                        root.display()
+                    ));
                 }
             }
         }
@@ -115,6 +115,7 @@ impl Crates {
         }
 
         info!("Publishing crate {krate}");
+        let mut spurious_network_err_count = 0;
         while let Err(err) = details.publish(should_verify) {
             match err {
                 PublishError::RateLimited(err) => {
@@ -127,6 +128,21 @@ impl Crates {
                         rate_limit_delay
                     );
                     thread::sleep(rate_limit_delay);
+                }
+                PublishError::SpuriousNetworkError(err) => {
+                    info!("`cargo publish` failed due to: {err}");
+                    spurious_network_err_count += 1;
+                    if spurious_network_err_count > 8 {
+                        let rate_limit_delay = Duration::from_secs(30);
+                        info!(
+                            "Sleeping for {:?} before trying to publish again",
+                            rate_limit_delay
+                        );
+                        thread::sleep(rate_limit_delay);
+                    } else {
+                        info!("cargo publish yielded too many network errors; it won't be retried");
+                        return Err(anyhow!(err));
+                    }
                 }
                 PublishError::Any(err) => {
                     return Err(err);
@@ -243,7 +259,11 @@ fn workspace_cargo_tomls(root: &PathBuf) -> anyhow::Result<Vec<PathBuf>> {
         .arg("**/Cargo.toml")
         .output()?;
     if !cargo_tomls_output.status.success() {
-        anyhow::bail!("Failed to run `git ls-files` for {root:?}",);
+        return Err(anyhow!(
+            "Failed to run `git ls-files` for {:?}. Command failed: {:?}",
+            root,
+            cmd
+        ));
     }
     Ok(String::from_utf8(cargo_tomls_output.stdout.clone())
         .with_context(|| {
@@ -377,12 +397,12 @@ pub fn write_dependency_version<P: AsRef<Path>>(
                         }
                     }
                 } else {
-                    anyhow::bail!(
+                    return Err(anyhow!(
                         "{}.{}.package should be a string in {:?}",
                         dep_key_display,
                         key,
                         toml_path.as_ref().as_os_str()
-                    );
+                    ));
                 }
             }
         }

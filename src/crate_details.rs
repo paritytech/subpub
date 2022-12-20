@@ -87,10 +87,10 @@ impl CrateDetails {
             if let Some(readme) = readme.as_str() {
                 Some(readme.to_owned())
             } else {
-                anyhow::bail!(
+                return Err(anyhow!(
                     "Cannot read package.readme as a string from {:?}",
                     &manifest_path
-                );
+                ));
             }
         } else {
             None
@@ -127,22 +127,22 @@ impl CrateDetails {
                             // parallel from how the workspace is versioned
                             Version::new(0, 1, 0)
                         } else {
-                            anyhow::bail!(
+                            return Err(anyhow!(
                                 "Expected .package.version.workspace to be true in {:?}",
                                 &manifest_path
-                            );
+                            ));
                         }
                     } else {
-                        anyhow::bail!(
+                        return Err(anyhow!(
                             "Expected .package.version.workspace to be a boolean value in {:?}",
                             &manifest_path
-                        );
+                        ));
                     }
                 } else {
-                    anyhow::bail!(
+                    return Err(anyhow!(
                         "Expected .package.version.workspace for {:?}",
                         &manifest_path
-                    );
+                    ));
                 }
             }
         };
@@ -175,10 +175,10 @@ impl CrateDetails {
             if let Some(value) = value.as_bool() {
                 value
             } else {
-                anyhow::bail!(
+                return Err(anyhow!(
                     "Expected package.publish to be boolean in {:?}",
                     &manifest_path
-                )
+                ));
             }
         } else {
             true
@@ -327,12 +327,12 @@ impl CrateDetails {
                             );
                         }
                     } else {
-                        anyhow::bail!(
+                        return Err(anyhow!(
                             ".{}.{}.package should be a string in {:?}",
                             dev_deps_tbl_path,
                             key,
                             toml_path.as_ref().as_os_str()
-                        );
+                        ));
                     }
                 }
             }
@@ -523,7 +523,11 @@ impl CrateDetails {
             .status()?
             .success()
         {
-            anyhow::bail!("Failed to package crate {}", &self.name);
+            return Err(anyhow!(
+                "Failed to package crate {}. Command failed: {:?}",
+                &self.name,
+                cmd
+            ));
         };
         git_checkpoint_revert(&root)?;
 
@@ -637,12 +641,12 @@ fn filter_path_dependencies<P: AsRef<Path>>(
                 if val.is_str() {
                     continue;
                 } else {
-                    anyhow::bail!(
+                    return Err(anyhow!(
                         "{} {} in {:?} should be specified as a string or table",
                         key_name,
                         key,
                         toml_path.as_ref(),
-                    );
+                    ));
                 }
             }
         };

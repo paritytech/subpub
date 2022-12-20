@@ -16,7 +16,7 @@
 
 use std::env;
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 
 use crate::git::git_remote_head_sha;
 
@@ -41,10 +41,10 @@ pub fn does_crate_exist(name: &str, version: &semver::Version) -> anyhow::Result
     if !res_status.is_success() {
         // We get a 200 back even if we ask for crates/versions that don't exist,
         // so a non-200 means something worse went wrong.
-        anyhow::bail!(
+        return Err(anyhow!(
             "Non-200 status trying to connect to {url} ({})",
             res.status()
-        );
+        ));
     }
 
     Ok(true)
@@ -58,9 +58,9 @@ pub struct CratesIoCrateVersion {
 pub fn crate_versions<Name: AsRef<str>>(name: Name) -> anyhow::Result<Vec<CratesIoCrateVersion>> {
     let client = reqwest::blocking::Client::new();
     let crates_api = env::var("SPUB_CRATES_API").unwrap();
-    let url = format!("{crates_api}/crates/{}/versions", name.as_ref());
+    let req_url = format!("{crates_api}/crates/{}/versions", name.as_ref());
     let res = client
-        .get(&url)
+        .get(&req_url)
         .header(
             "User-Agent",
             "https://github.com/paritytech/subpub / ? : checking previous crate versions",
@@ -74,7 +74,11 @@ pub fn crate_versions<Name: AsRef<str>>(name: Name) -> anyhow::Result<Vec<Crates
     }
 
     if !res_status.is_success() {
-        anyhow::bail!("Non-200 status from response of {url} ({})", res.status());
+        return Err(anyhow!(
+            "Unexpected response status {} for {}",
+            res_status,
+            req_url,
+        ));
     }
 
     #[derive(serde::Deserialize)]
@@ -122,7 +126,11 @@ pub fn download_crate(name: &str, version: &semver::Version) -> anyhow::Result<O
             if res.status().is_success() {
                 Ok(Some(res.bytes()?.to_vec()))
             } else {
-                anyhow::bail!("Request to {req_url} failed with HTTP status code {res_status}");
+                Err(anyhow!(
+                    "Unexpected response status {} for {}",
+                    res_status,
+                    req_url
+                ))
             }
         }
     }
@@ -217,7 +225,11 @@ pub fn does_crate_exist_in_cratesio_index(
     if res_status == reqwest::StatusCode::NOT_FOUND {
         return Ok(false);
     } else if !res_status.is_success() {
-        anyhow::bail!("Unexpected response status {} for {}", res_status, req_url);
+        return Err(anyhow!(
+            "Unexpected response status {} for {}",
+            res_status,
+            req_url
+        ));
     }
 
     // Each line of the metadata file is a JSON object with a .vers field

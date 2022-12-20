@@ -1,5 +1,7 @@
 use std::{path::Path, process::Command};
 
+use anyhow::anyhow;
+
 const CHECKPOINT_SAVE: &str = "[subpub] CHECKPOINT_SAVE";
 const CHECKPOINT_REVERT: &str = "[subpub] CHECKPOINT_REVERT";
 
@@ -17,10 +19,10 @@ fn git_checkpoint<P: AsRef<Path>>(root: P, op: GitCheckpoint) -> anyhow::Result<
         .arg("--porcelain=v1")
         .output()?;
     if !git_status_output.status.success() {
-        anyhow::bail!(
+        return Err(anyhow!(
             "Failed to get git status for {:?}",
             root.as_ref().as_os_str()
-        );
+        ));
     }
 
     let git_status_output = String::from_utf8_lossy(&git_status_output.stdout[..]);
@@ -34,10 +36,10 @@ fn git_checkpoint<P: AsRef<Path>>(root: P, op: GitCheckpoint) -> anyhow::Result<
             .status()?
             .success()
         {
-            anyhow::bail!(
+            return Err(anyhow!(
                 "Failed to `git add` files for {:?}",
                 root.as_ref().as_os_str()
-            );
+            ));
         }
 
         let commit_msg = match op {
@@ -54,10 +56,10 @@ fn git_checkpoint<P: AsRef<Path>>(root: P, op: GitCheckpoint) -> anyhow::Result<
             .status()?
             .success()
         {
-            anyhow::bail!(
+            return Err(anyhow!(
                 "Failed to `git commit` files for {:?}",
                 root.as_ref().as_os_str()
-            );
+            ));
         }
     };
 
@@ -87,7 +89,11 @@ pub fn git_checkpoint_revert<P: AsRef<Path>>(root: P) -> anyhow::Result<()> {
             .arg("--pretty=%B")
             .output()?;
         if !output.status.success() {
-            anyhow::bail!("Failed to get commit message of last commit");
+            return Err(anyhow!(
+                "Failed to get commit message of last commit for {:?}. Command failed: {:?}",
+                root.as_ref(),
+                cmd
+            ));
         }
 
         let last_commit_msg = String::from_utf8_lossy(&output.stdout[..]);
@@ -103,7 +109,10 @@ pub fn git_checkpoint_revert<P: AsRef<Path>>(root: P) -> anyhow::Result<()> {
                 .status()?
                 .success()
             {
-                anyhow::bail!("Failed to revert checkpoint commit");
+                return Err(anyhow!(
+                    "Failed to revert checkpoint commit. Command failed: {:?}",
+                    cmd
+                ));
             }
         } else {
             break;
@@ -120,7 +129,11 @@ pub fn git_head_sha<P: AsRef<Path>>(root: P) -> anyhow::Result<String> {
         .arg("HEAD")
         .output()?;
     if !output.status.success() {
-        anyhow::bail!("Command failed: {:?}", cmd);
+        return Err(anyhow!(
+            "Failed to get the HEAD sha of {:?}. Command failed: {:?}",
+            root.as_ref(),
+            cmd
+        ));
     }
     let head_sha = String::from_utf8_lossy(&output.stdout[..])
         .trim()
@@ -137,7 +150,11 @@ pub fn git_hard_reset<P: AsRef<Path>>(root: P, initial_commit: &str) -> anyhow::
         .status()?
         .success()
     {
-        anyhow::bail!("Command failed: {:?}", cmd);
+        return Err(anyhow!(
+            "Failed to run `git add` in {:?}. Command failed: {:?}",
+            root.as_ref(),
+            cmd
+        ));
     }
 
     let mut cmd = Command::new("git");
@@ -150,7 +167,11 @@ pub fn git_hard_reset<P: AsRef<Path>>(root: P, initial_commit: &str) -> anyhow::
         .status()?
         .success()
     {
-        anyhow::bail!("Command failed: {:?}", cmd);
+        return Err(anyhow!(
+            "Failed to `git reset` the files of {:?}. Command failed: {:?}",
+            root.as_ref(),
+            cmd
+        ));
     }
 
     Ok(())
@@ -160,7 +181,11 @@ pub fn git_remote_head_sha<S: AsRef<str>>(remote: S) -> anyhow::Result<String> {
     let mut cmd = Command::new("git");
     let output = cmd.arg("ls-remote").arg(remote.as_ref()).output()?;
     if !output.status.success() {
-        anyhow::bail!("Command failed: {:?}", cmd);
+        return Err(anyhow!(
+            "Failed to query the remote HEAD sha of {}. Command failed: {:?}",
+            remote.as_ref(),
+            cmd
+        ));
     }
     let output = String::from_utf8_lossy(&output.stdout[..])
         .trim()
@@ -174,5 +199,10 @@ pub fn git_remote_head_sha<S: AsRef<str>>(remote: S) -> anyhow::Result<String> {
             }
         }
     }
-    anyhow::bail!("Failed to parse HEAD sha for output:\n{}", output);
+    Err(anyhow!(
+        "Failed to parse HEAD sha of {} from the output of {:?}\nOutput:\n{}",
+        remote.as_ref(),
+        cmd,
+        output
+    ))
 }
