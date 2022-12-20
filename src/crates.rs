@@ -119,6 +119,7 @@ impl Crates {
         while let Err(err) = details.publish(should_verify) {
             match err {
                 PublishError::RateLimited(err) => {
+                    spurious_network_err_count = 0;
                     info!("`cargo publish` failed due to rate limiting: {err}");
                     // crates.io should give a new token every 1 minute, so
                     // sleep by that much and try again
@@ -132,7 +133,7 @@ impl Crates {
                 PublishError::SpuriousNetworkError(err) => {
                     info!("`cargo publish` failed due to: {err}");
                     spurious_network_err_count += 1;
-                    if spurious_network_err_count > 8 {
+                    if spurious_network_err_count < 8 {
                         let rate_limit_delay = Duration::from_secs(30);
                         info!(
                             "Sleeping for {:?} before trying to publish again",
