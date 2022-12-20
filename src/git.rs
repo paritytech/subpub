@@ -90,7 +90,7 @@ pub fn git_checkpoint_revert<P: AsRef<Path>>(root: P) -> anyhow::Result<()> {
             .output()?;
         if !output.status.success() {
             return Err(anyhow!(
-                "Failed to get commit message of last commit for {:?}. Command failed: {:?}",
+                "Failed to get the last commit's message for {:?}. Command failed: {:?}",
                 root.as_ref(),
                 cmd
             ));

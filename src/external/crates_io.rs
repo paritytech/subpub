@@ -23,9 +23,9 @@ use crate::git::git_remote_head_sha;
 pub fn does_crate_exist(name: &str, version: &semver::Version) -> anyhow::Result<bool> {
     let client = reqwest::blocking::Client::new();
     let crates_api = env::var("SPUB_CRATES_API").unwrap();
-    let url = format!("{crates_api}/crates/{name}/{version}");
+    let req_url = format!("{crates_api}/crates/{name}/{version}");
     let res = client
-        .get(&url)
+        .get(&req_url)
         .header(
             "User-Agent",
             "https://github.com/paritytech/subpub / ? : checking if the crate exists",
@@ -42,8 +42,9 @@ pub fn does_crate_exist(name: &str, version: &semver::Version) -> anyhow::Result
         // We get a 200 back even if we ask for crates/versions that don't exist,
         // so a non-200 means something worse went wrong.
         return Err(anyhow!(
-            "Non-200 status trying to connect to {url} ({})",
-            res.status()
+            "Unexpected response status {} for {}",
+            res_status,
+            req_url
         ));
     }
 

@@ -318,7 +318,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 ));
             } else {
                 return Err(anyhow!(
-                    "Crate {} was excluded from CLI options, but it is a dependency of  {}, which would be published.",
+                    "Crate {} was excluded from CLI options, but it is a dependency of {}, which would be published.",
                     krate,
                     initial_crate
                 ));
