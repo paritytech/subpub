@@ -169,3 +169,24 @@ pub fn cargo_check_crate<P: AsRef<Path>>(manifest_path: P) -> anyhow::Result<()>
     };
     Ok(())
 }
+
+#[test]
+#[cfg(feature = "test-0")]
+fn test_detect_spurious_network_error() {
+    let full_error_msg = "
+Updating crates.io index
+Packaging sc-rpc-api v0.10.0 (/substrate/client/rpc-api)
+Uploading sc-rpc-api v0.10.0 (/substrate/client/rpc-api)
+error: failed to publish crate sc-rpc-ai
+Caused by:
+  dns error: failed to lookup address information: Temporary failure in name resolution
+";
+
+    let expected_error_msg_part =
+        "dns error: failed to lookup address information: Temporary failure in name resolution\n";
+
+    assert_eq!(
+        detect_spurious_network_error(full_error_msg),
+        Some(expected_error_msg_part.to_owned())
+    );
+}
