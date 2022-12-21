@@ -103,24 +103,6 @@ pub fn publish_crate<P: AsRef<Path>>(
     Ok(())
 }
 
-#[test]
-#[cfg(feature = "test-0")]
-fn test_detect_rate_limit_error() {
-    let full_error_msg = "
-Updating crates.io index
-Packaging sc-rpc-api v0.10.0 (/substrate/client/rpc-api)
-Uploading sc-rpc-api v0.10.0 (/substrate/client/rpc-api)
-You have published too many crates in a short period of time. Please try again after {PLACEHOLDER} or email help@crates.io to have your limit increased.
-";
-
-    let expected_error_msg_part = "You have published too many crates in a short period of time. Please try again after {PLACEHOLDER} or email help@crates.io to have your limit increased.\n";
-
-    assert_eq!(
-        detect_rate_limit_error(full_error_msg),
-        Some(expected_error_msg_part.to_owned())
-    );
-}
-
 const DEV_DEPS_TROUBLESHOOT_HINT: &str = "
 Note: dev-dependencies are stripped before publishing. This might cause errors
 during pre-publish verification in case a dev-dependency is used for a cargo
@@ -187,6 +169,24 @@ Caused by:
 
     assert_eq!(
         detect_spurious_network_error(full_error_msg),
+        Some(expected_error_msg_part.to_owned())
+    );
+}
+
+#[test]
+#[cfg(feature = "test-0")]
+fn test_detect_rate_limit_error() {
+    let full_error_msg = "
+Updating crates.io index
+Packaging sc-rpc-api v0.10.0 (/substrate/client/rpc-api)
+Uploading sc-rpc-api v0.10.0 (/substrate/client/rpc-api)
+You have published too many crates in a short period of time. Please try again after {PLACEHOLDER} or email help@crates.io to have your limit increased.
+";
+
+    let expected_error_msg_part = "You have published too many crates in a short period of time. Please try again after {PLACEHOLDER} or email help@crates.io to have your limit increased.\n";
+
+    assert_eq!(
+        detect_rate_limit_error(full_error_msg),
         Some(expected_error_msg_part.to_owned())
     );
 }
