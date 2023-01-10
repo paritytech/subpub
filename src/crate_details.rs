@@ -118,20 +118,11 @@ impl CrateDetails {
                     )
                 })?;
                 if let Some(workspace) = version.get("workspace") {
-                    if let Some(workspace) = workspace.as_bool() {
-                        if workspace {
-                            // Default to "0.1.0" for crates which have their
-                            // version set by workspace properties (i.e.
-                            // disregard the workspace's version), since
-                            // individual crate releases are administered in
-                            // parallel from how the workspace is versioned
-                            Version::new(0, 1, 0)
-                        } else {
-                            return Err(anyhow!(
-                                "Expected .package.version.workspace to be true in {:?}",
-                                &manifest_path
-                            ));
-                        }
+                    if workspace.as_bool().is_some() {
+                        return Err(anyhow!(
+                            "workspace version is not supported, but it's used in {:?}",
+                            &manifest_path
+                        ));
                     } else {
                         return Err(anyhow!(
                             "Expected .package.version.workspace to be a boolean value in {:?}",
