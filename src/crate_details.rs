@@ -22,6 +22,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Context};
+use cargo_metadata::Package;
 use external::crates_io::CratesIoCrateVersion;
 use semver::Version;
 use strum::IntoEnumIterator;
@@ -45,7 +46,7 @@ pub struct CrateDetails {
     pub dev_deps: HashSet<String>,
     pub should_be_published: bool,
     pub manifest_path: PathBuf,
-    pub readme: Option<String>,
+    pub readme: Option<PathBuf>,
 }
 
 impl CrateDetails {
@@ -63,80 +64,10 @@ impl CrateDetails {
         }
     }
 
-    /// Read a Cargo.toml file, pulling out the information we care about.
-    pub fn load(manifest_path: PathBuf) -> anyhow::Result<CrateDetails> {
-        let toml: toml_edit::Document = read_toml(&manifest_path)?;
+    pub fn load(pkg: &Package) -> anyhow::Result<CrateDetails> {
+        let manifest_path = &pkg.manifest_path;
 
-        let pkg = toml
-            .get("package")
-            .ok_or_else(|| anyhow!("Cannot read [package] section from {:?}", &manifest_path))?;
-
-        let name = pkg
-            .get("name")
-            .ok_or_else(|| anyhow!("Cannot read package.name from {:?}", &manifest_path))?
-            .as_str()
-            .ok_or_else(|| {
-                anyhow!(
-                    "Cannot read package.name as a string from {:?}",
-                    &manifest_path
-                )
-            })?
-            .to_owned();
-
-        let readme = if let Some(readme) = pkg.get("readme") {
-            if let Some(readme) = readme.as_str() {
-                Some(readme.to_owned())
-            } else {
-                return Err(anyhow!(
-                    "Cannot read package.readme as a string from {:?}",
-                    &manifest_path
-                ));
-            }
-        } else {
-            None
-        };
-
-        let version = {
-            let version = pkg.get("version").with_context(|| {
-                format!(
-                    ".package.version couldn't be parsed for {:?}",
-                    &manifest_path
-                )
-            })?;
-            if let Some(version) = version.as_str() {
-                Version::parse(version).with_context(|| {
-                    format!(
-                        "Cannot parse .version \"{}\" as SemVer for {:?}",
-                        version, manifest_path
-                    )
-                })?
-            } else {
-                let version = version.as_table_like().with_context(|| {
-                    format!(
-                        ".package.version should be a string or table-like in {:?}",
-                        &manifest_path
-                    )
-                })?;
-                if let Some(workspace) = version.get("workspace") {
-                    if workspace.as_bool().is_some() {
-                        return Err(anyhow!(
-                            "workspace version is not supported, but it's used in {:?}",
-                            &manifest_path
-                        ));
-                    } else {
-                        return Err(anyhow!(
-                            "Expected .package.version.workspace to be a boolean value in {:?}",
-                            &manifest_path
-                        ));
-                    }
-                } else {
-                    return Err(anyhow!(
-                        "Expected .package.version.workspace for {:?}",
-                        &manifest_path
-                    ));
-                }
-            }
-        };
+        let toml: toml_edit::Document = read_toml(manifest_path)?;
 
         let mut build_deps = HashSet::new();
         let mut dev_deps = HashSet::new();
@@ -146,44 +77,36 @@ impl CrateDetails {
             match key {
                 CrateDependencyKey::Dependencies => {
                     for item in get_all_dependency_sections(&toml, key_name) {
-                        deps.extend(filter_path_dependencies(&manifest_path, key_name, item)?)
+                        deps.extend(filter_path_dependencies(manifest_path, key_name, item)?)
                     }
                 }
                 CrateDependencyKey::DevDependencies => {
                     for item in get_all_dependency_sections(&toml, key_name) {
-                        dev_deps.extend(filter_path_dependencies(&manifest_path, key_name, item)?)
+                        dev_deps.extend(filter_path_dependencies(manifest_path, key_name, item)?)
                     }
                 }
                 CrateDependencyKey::BuildDependencies => {
                     for item in get_all_dependency_sections(&toml, key_name) {
-                        build_deps.extend(filter_path_dependencies(&manifest_path, key_name, item)?)
+                        build_deps.extend(filter_path_dependencies(manifest_path, key_name, item)?)
                     }
                 }
             }
         }
 
-        let should_be_published = if let Some(value) = pkg.get("publish") {
-            if let Some(value) = value.as_bool() {
-                value
-            } else {
-                return Err(anyhow!(
-                    "Expected package.publish to be boolean in {:?}",
-                    &manifest_path
-                ));
-            }
-        } else {
-            true
+        let should_be_published = match pkg.publish.as_ref() {
+            Some(registries) => !registries.is_empty(),
+            None => true,
         };
 
         Ok(CrateDetails {
-            name,
-            version,
+            name: pkg.name.clone(),
+            version: pkg.version.clone(),
             deps,
             dev_deps,
             build_deps,
-            manifest_path,
+            manifest_path: pkg.manifest_path.clone().into(),
             should_be_published,
-            readme,
+            readme: pkg.readme.as_ref().map(|readme| readme.clone().into()),
         })
     }
 

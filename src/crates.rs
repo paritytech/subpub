@@ -18,14 +18,13 @@ use std::{
     collections::{HashMap, HashSet},
     env, fs,
     path::{Path, PathBuf},
-    process::Command,
     thread,
     time::{Duration, Instant},
 };
 
 use anyhow::{anyhow, Context};
 use strum::{EnumIter, EnumString, IntoEnumIterator};
-use tracing::{info, warn};
+use tracing::info;
 
 use crate::{
     crate_details::CrateDetails,
@@ -43,11 +42,15 @@ pub struct Crates {
 
 impl Crates {
     pub fn load_workspace_crates(root: PathBuf) -> anyhow::Result<Crates> {
+        let workspace_meta = cargo_metadata::MetadataCommand::new()
+            .current_dir(&root)
+            .exec()
+            .with_context(|| format!("Failed to run cargo_metadata for {:?}", &root))?;
+
         let crates_map = {
-            let cargo_tomls = workspace_cargo_tomls(&root)?;
             let mut crates_map: HashMap<String, CrateDetails> = HashMap::new();
-            for cargo_toml in cargo_tomls {
-                let details = CrateDetails::load(cargo_toml)?;
+            for package in workspace_meta.workspace_packages() {
+                let details = CrateDetails::load(package)?;
                 if let Some(other_details) = crates_map.get(&details.name) {
                     return Err(anyhow!(
                         "Crate parsed for {:?} has the same name of another crate parsed for {:?}",
@@ -235,56 +238,6 @@ impl Crates {
             .filter(|krate| registered_crates.iter().any(|reg_crate| reg_crate == krate))
             .collect())
     }
-}
-
-fn workspace_cargo_tomls(root: &PathBuf) -> anyhow::Result<Vec<PathBuf>> {
-    if let Ok(metadata) = cargo_metadata::MetadataCommand::new()
-        .current_dir(root)
-        .exec()
-    {
-        return Ok(metadata
-            .workspace_packages()
-            .into_iter()
-            .map(|pkg| pkg.manifest_path.as_std_path().to_path_buf())
-            .collect());
-    } else {
-        warn!("cargo_metadata failed for workspace {root:?}; falling back to Git detection");
-    }
-
-    let mut cmd = Command::new("git");
-    let cargo_tomls_output = cmd
-        .current_dir(root)
-        .arg("ls-files")
-        .arg("--full-name")
-        .arg("--exclude-standard")
-        .arg("**/Cargo.toml")
-        .output()?;
-    if !cargo_tomls_output.status.success() {
-        return Err(anyhow!(
-            "Failed to run `git ls-files` for {:?}. Command failed: {:?}",
-            root,
-            cmd
-        ));
-    }
-    Ok(String::from_utf8(cargo_tomls_output.stdout.clone())
-        .with_context(|| {
-            format!(
-                "Failed to parse output as UTF-8: {:?}\nBytes: {:?}",
-                String::from_utf8_lossy(&cargo_tomls_output.stdout[..]),
-                &cargo_tomls_output.stdout
-            )
-        })?
-        .lines()
-        .filter_map(|file_path| {
-            if file_path.is_empty() {
-                None
-            } else {
-                let mut root = root.clone();
-                root.push(file_path);
-                Some(root)
-            }
-        })
-        .collect())
 }
 
 #[derive(EnumString, strum::Display, EnumIter, PartialEq, Eq)]
