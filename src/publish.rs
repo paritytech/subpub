@@ -2,11 +2,13 @@ use std::{
     collections::{HashMap, HashSet},
     env,
     path::PathBuf,
+    str::FromStr,
     time::Instant,
 };
 
 use anyhow::{anyhow, Context};
 use clap::Parser;
+use strum::EnumString;
 use tracing::{info, span, Level};
 
 use crate::{
@@ -101,6 +103,15 @@ pub struct PublishOpts {
         help = "The $CARGO_HOME directory to clear after publishing a crate"
     )]
     clear_cargo_home: Option<String>,
+
+    #[clap(long = "stop-at-step", help = "The step to stop at")]
+    stop_at_step: Option<String>,
+}
+
+#[derive(EnumString, strum::Display, PartialEq, Eq)]
+enum StepToStopAt {
+    #[strum(to_string = "validation")]
+    Validation,
 }
 
 pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
@@ -109,6 +120,15 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         (Some(_), _) => return Err(anyhow!("Specify --index-repository if using --index-url")),
         (_, Some(_)) => return Err(anyhow!("Specify --index-url if using --index-repository")),
         _ => None,
+    };
+
+    let stop_at_step = if let Some(step) = opts.stop_at_step.as_ref() {
+        Some(
+            StepToStopAt::from_str(step)
+                .with_context(|| format!("Invalid step for --stop-at-step: {}", step))?,
+        )
+    } else {
+        None
     };
 
     info!("Publishing has started");
@@ -375,6 +395,10 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     for krate in &selected_crates {
         info!("Validating crate {krate}");
         validate_crates(&crates, krate, None, krate, &crates_to_exclude, &[])?;
+    }
+
+    if stop_at_step == Some(StepToStopAt::Validation) {
+        return Ok(());
     }
 
     if let Ok(registry) = env::var("SPUB_REGISTRY") {
