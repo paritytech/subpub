@@ -130,3 +130,57 @@ fn test_maybe_bump_for_breaking_change() {
         Some(Version::new(0, 0, 1))
     );
 }
+
+/// Bumps a version for the purpose of signifying a compatible change
+fn bump_for_compatible_change(mut version: Version) -> Version {
+    if version.major != 0 {
+        version.minor += 1;
+        version.patch = 0;
+    } else {
+        version.patch += 1;
+    }
+    version
+}
+
+pub fn maybe_bump_for_compatible_change(
+    prev_versions: Vec<Version>,
+    current_version: Version,
+) -> Option<Version> {
+    prev_versions.into_iter().max().map(|latest_version| {
+        let max_version = match &current_version.cmp(&latest_version) {
+            Ordering::Greater => current_version.to_owned(),
+            _ => latest_version,
+        };
+        bump_for_compatible_change(max_version)
+    })
+}
+
+#[test]
+#[cfg(feature = "test-0")]
+fn test_maybe_bump_for_compatible_change() {
+    // Picks the highest version among (previous versions + the current version)
+    // when previous versions have the highest version
+    assert_eq!(
+        maybe_bump_for_compatible_change(vec![Version::new(0, 2, 0)], Version::new(0, 1, 0)),
+        Some(Version::new(0, 2, 1))
+    );
+
+    // Picks the highest version among (previous versions + the current version)
+    // when the current version is the highest version
+    assert_eq!(
+        maybe_bump_for_compatible_change(vec![Version::new(0, 1, 0)], Version::new(0, 2, 0)),
+        Some(Version::new(0, 2, 1))
+    );
+
+    // Produces a minor version increase for major versions
+    assert_eq!(
+        maybe_bump_for_compatible_change(vec![Version::new(1, 0, 0)], Version::new(1, 0, 0)),
+        Some(Version::new(1, 1, 0))
+    );
+
+    // Produces a patch increase for minor versions
+    assert_eq!(
+        maybe_bump_for_compatible_change(vec![Version::new(0, 1, 0)], Version::new(0, 1, 0)),
+        Some(Version::new(0, 1, 1))
+    );
+}
