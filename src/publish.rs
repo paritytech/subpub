@@ -128,7 +128,7 @@ pub struct PublishOpts {
 
     #[clap(
         long = "set-version",
-        help = "Given in the form [crate]=[version]. Sets the crate to the given version without bumping it. This option takes precedence over --pre-bump-version. Can be specified multiple times."
+        help = "Given in the form [crate]=[version]. Sets the crate to the given version without changing it anyhow. This option takes precedence over --pre-bump-version. Can be specified multiple times."
     )]
     set_versions: Vec<String>,
 }
@@ -186,8 +186,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                     _ => return Err(anyhow!(
                             "Argument \"{}\" of --pre-bump-version should be given in the form [crate]=[version]",
                             arg
-                            )
-                        )
+                        ))
                 }
             };
             let version = Version::parse(raw_version).with_context(|| {

@@ -376,7 +376,7 @@ impl CrateDetails {
         &mut self,
         prev_versions: &[CratesIoCrateVersion],
     ) -> anyhow::Result<bool> {
-        let highest_version = prev_versions
+        let next_version = prev_versions
             .iter()
             .filter_map(|prev_version| {
                 if prev_version.yanked {
@@ -388,8 +388,8 @@ impl CrateDetails {
             .chain(vec![&self.version].into_iter())
             .max()
             .unwrap_or(&self.version);
-        if highest_version != &self.version {
-            self.write_own_version(highest_version.to_owned())?;
+        if next_version != &self.version {
+            self.write_own_version(next_version.to_owned())?;
             Ok(true)
         } else {
             Ok(false)
