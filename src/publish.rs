@@ -8,6 +8,7 @@ use std::{
 
 use anyhow::{anyhow, Context};
 use clap::Parser;
+use semver::Version;
 use strum::EnumString;
 use tracing::{info, span, Level};
 
@@ -106,6 +107,30 @@ pub struct PublishOpts {
 
     #[clap(long = "stop-at-step", help = "The step to stop at")]
     stop_at_step: Option<String>,
+
+    #[clap(
+        long = "bump-compatible",
+        help = "Bump this crate to a compatible version. Dependents of those crates will be also bumped to a compatible version ONLY IF all dependencies have been bumped compatibly. Can be specified multiple times."
+    )]
+    compatible_bumps: Vec<String>,
+
+    #[clap(
+        long = "bump-major",
+        help = "Bump this crate to a major version. This option takes precedence over --bump-compatible. Can be specified multiple times."
+    )]
+    major_bumps: Vec<String>,
+
+    #[clap(
+        long = "pre-bump-version",
+        help = "Given in the form [crate]=[version]. Sets the crate to the given version before bumping it. Can be specified multiple times."
+    )]
+    pre_bump_versions: Vec<String>,
+
+    #[clap(
+        long = "set-version",
+        help = "Given in the form [crate]=[version]. Sets the crate to the given version without bumping it. This option takes precedence over --pre-bump-version. Can be specified multiple times."
+    )]
+    set_versions: Vec<String>,
 }
 
 #[derive(EnumString, strum::Display, PartialEq, Eq)]
@@ -120,6 +145,62 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         (Some(_), _) => return Err(anyhow!("Specify --index-repository if using --index-url")),
         (_, Some(_)) => return Err(anyhow!("Specify --index-url if using --index-repository")),
         _ => None,
+    };
+
+    let pre_bump_versions = {
+        let mut pre_bump_versions: HashMap<String, Version> = HashMap::new();
+
+        for arg in opts.pre_bump_versions {
+            let (krate, raw_version) = {
+                let mut parts = arg.split('=');
+                match (parts.next(), parts.next(), parts.next()) {
+                    (Some(krate), Some(raw_version), None) => (krate, raw_version),
+                    _ => return Err(anyhow!(
+                            "Argument \"{}\" of --pre-bump-version should be given in the form [crate]=[version]",
+                            arg
+                            )
+                        )
+                }
+            };
+            let version = Version::parse(raw_version).with_context(|| {
+                format!(
+                    "Version \"{}\" from argument \"{}\" of --pre-bump-version could not be parsed as SemVer",
+                    arg,
+                    raw_version
+                )
+            })?;
+            pre_bump_versions.insert(krate.into(), version);
+        }
+
+        pre_bump_versions
+    };
+
+    let set_versions = {
+        let mut set_versions: HashMap<String, Version> = HashMap::new();
+
+        for arg in opts.set_versions {
+            let (krate, raw_version) = {
+                let mut parts = arg.split('=');
+                match (parts.next(), parts.next(), parts.next()) {
+                    (Some(krate), Some(raw_version), None) => (krate, raw_version),
+                    _ => return Err(anyhow!(
+                            "Argument \"{}\" of --pre-bump-version should be given in the form [crate]=[version]",
+                            arg
+                            )
+                        )
+                }
+            };
+            let version = Version::parse(raw_version).with_context(|| {
+                format!(
+                    "Version \"{}\" from argument \"{}\" of --pre-bump-version could not be parsed as SemVer",
+                    arg,
+                    raw_version
+                )
+            })?;
+            set_versions.insert(krate.into(), version);
+        }
+
+        set_versions
     };
 
     let stop_at_step = if let Some(step) = opts.stop_at_step.as_ref() {
