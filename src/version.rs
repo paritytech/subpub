@@ -18,6 +18,12 @@ use std::cmp::Ordering;
 
 pub use semver::Version;
 
+#[derive(PartialEq, Eq)]
+pub enum VersionBumpHeuristic {
+    Breaking,
+    Compatible,
+}
+
 /// Bumps a version for the purpose of signifying a breaking change
 fn bump_for_breaking_change(mut version: Version) -> Version {
     if version.pre != semver::Prerelease::EMPTY {

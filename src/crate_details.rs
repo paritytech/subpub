@@ -34,7 +34,9 @@ use crate::{
     external::{self, cargo::PublishError},
     git::*,
     toml::{read_toml, write_toml},
-    version::maybe_bump_for_breaking_change,
+    version::{
+        maybe_bump_for_breaking_change, maybe_bump_for_compatible_change, VersionBumpHeuristic,
+    },
 };
 
 #[derive(Debug, Clone)]
@@ -491,8 +493,16 @@ impl CrateDetails {
     pub fn maybe_bump_version(
         &mut self,
         prev_versions: Vec<semver::Version>,
+        bump_mode: &VersionBumpHeuristic,
     ) -> anyhow::Result<bool> {
-        let new_version = maybe_bump_for_breaking_change(prev_versions, self.version.clone());
+        let new_version = match bump_mode {
+            VersionBumpHeuristic::Breaking => {
+                maybe_bump_for_breaking_change(prev_versions, self.version.clone())
+            }
+            VersionBumpHeuristic::Compatible => {
+                maybe_bump_for_compatible_change(prev_versions, self.version.clone())
+            }
+        };
         let bumped = if let Some(new_version) = new_version {
             info!(
                 "Bumping crate {} from {} to {}",

@@ -20,6 +20,8 @@ use crate::{
         crates_io::{self, CratesIoIndexConfiguration},
     },
     git::{git_hard_reset, git_head_sha, with_git_checkpoint, GitCheckpoint},
+    publish::crates_io::CratesIoCrateVersion,
+    version::VersionBumpHeuristic,
 };
 
 #[derive(Parser, Debug, Clone)]
@@ -110,15 +112,15 @@ pub struct PublishOpts {
 
     #[clap(
         long = "bump-compatible",
-        help = "Bump this crate to a compatible version. Dependents of those crates will be also bumped to a compatible version ONLY IF all dependencies have been bumped compatibly. Can be specified multiple times."
+        help = "Bump this crate to a compatible version. Dependents of those crates will be also bumped to a compatible version ONLY IF all of their dependencies have been bumped compatibly. Can be specified multiple times."
     )]
-    compatible_bumps: Vec<String>,
+    crates_to_bump_compatibly: Vec<String>,
 
     #[clap(
         long = "bump-major",
         help = "Bump this crate to a major version. This option takes precedence over --bump-compatible. Can be specified multiple times."
     )]
-    major_bumps: Vec<String>,
+    crates_to_bump_majorly: Vec<String>,
 
     #[clap(
         long = "pre-bump-version",
@@ -128,9 +130,15 @@ pub struct PublishOpts {
 
     #[clap(
         long = "set-version",
-        help = "Given in the form [crate]=[version]. Sets the crate to the given version without changing it anyhow. This option takes precedence over --pre-bump-version. Can be specified multiple times."
+        help = "Given in the form [crate]=[version]. Sets the crate to the given version despite of other versioning heuristics implemented by this tool. This option takes precedence over --pre-bump-version. Can be specified multiple times."
     )]
     set_versions: Vec<String>,
+
+    #[clap(
+        long = "verify-none",
+        help = "Disable crate verification before publishing. Takes precedence over --verify-only."
+    )]
+    verify_none: bool,
 }
 
 #[derive(EnumString, strum::Display, PartialEq, Eq)]
@@ -488,7 +496,9 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     }
 
     let crates_to_verify = {
-        let mut crates_to_verify = if opts.verify_only.is_empty() {
+        let mut crates_to_verify = if opts.verify_none {
+            HashSet::new()
+        } else if opts.verify_only.is_empty() {
             HashSet::from_iter(publish_order.iter())
         } else {
             HashSet::from_iter(opts.verify_only.iter())
@@ -507,6 +517,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         crates_to_verify
     };
 
+    let mut crate_bump_heuristic: HashMap<&String, VersionBumpHeuristic> = HashMap::new();
     let mut processed_crates: HashSet<&String> = HashSet::new();
     let mut last_publish_instant: Option<Instant> = None;
     for sel_crate in selected_crates {
@@ -517,6 +528,30 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             info!("Crate was already processed",);
             continue;
         }
+
+        let should_adjust_version = {
+            if let Some(set_version) = set_versions.get(sel_crate) {
+                with_git_checkpoint(&opts.root, GitCheckpoint::Save, || -> anyhow::Result<()> {
+                    let details = crates
+                        .crates_map
+                        .get_mut(sel_crate)
+                        .with_context(|| format!("Crate not found: {sel_crate}"))?;
+                    details.write_own_version(set_version.to_owned())
+                })??;
+                false
+            } else if let Some(pre_bump_version) = pre_bump_versions.get(sel_crate) {
+                with_git_checkpoint(&opts.root, GitCheckpoint::Save, || -> anyhow::Result<()> {
+                    let details = crates
+                        .crates_map
+                        .get_mut(sel_crate)
+                        .with_context(|| format!("Crate not found: {sel_crate}"))?;
+                    details.write_own_version(pre_bump_version.to_owned())
+                })??;
+                true
+            } else {
+                true
+            }
+        };
 
         info!("Processing crate");
 
@@ -574,14 +609,28 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
         for krate in crates_to_publish {
             let crate_version = {
-                let prev_versions = crates_io::crate_versions(krate)?;
+                enum AdjustVersion {
+                    BasedOnPreviousVersions(Vec<CratesIoCrateVersion>),
+                    No,
+                }
+                let adjust_version = if should_adjust_version {
+                    let prev_versions = crates_io::crate_versions(krate)?;
+                    AdjustVersion::BasedOnPreviousVersions(prev_versions)
+                } else {
+                    AdjustVersion::No
+                };
 
                 let did_adjust_version = {
-                    let details = crates
-                        .crates_map
-                        .get_mut(krate)
-                        .with_context(|| format!("Crate not found: {krate}"))?;
-                    details.adjust_version(&prev_versions)?
+                    match adjust_version {
+                        AdjustVersion::BasedOnPreviousVersions(ref prev_versions) => {
+                            let details = crates
+                                .crates_map
+                                .get_mut(krate)
+                                .with_context(|| format!("Crate not found: {krate}"))?;
+                            details.adjust_version(prev_versions)?
+                        }
+                        AdjustVersion::No => false,
+                    }
                 };
 
                 if did_adjust_version {
@@ -599,14 +648,58 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                     .get_mut(krate)
                     .with_context(|| format!("Crate not found: {krate}"))?;
                 if details.needs_publishing(&opts.root)? {
-                    with_git_checkpoint(&opts.root, GitCheckpoint::Save, || {
-                        details.maybe_bump_version(
-                            prev_versions
-                                .into_iter()
-                                .map(|prev_version| prev_version.version)
-                                .collect(),
-                        )
-                    })??;
+                    match adjust_version {
+                        AdjustVersion::BasedOnPreviousVersions(prev_versions) => {
+                            with_git_checkpoint(
+                                &opts.root,
+                                GitCheckpoint::Save,
+                                || -> anyhow::Result<()> {
+                                    let bump_heuristic = if opts
+                                        .crates_to_bump_majorly
+                                        .iter()
+                                        .any(|some_crate| some_crate == krate)
+                                    {
+                                        VersionBumpHeuristic::Breaking
+                                    } else if opts
+                                        .crates_to_bump_compatibly
+                                        .iter()
+                                        .any(|some_crate| some_crate == krate)
+                                    {
+                                        VersionBumpHeuristic::Compatible
+                                    } else if let Some(dep_bumped_compatibly) =
+                                        details.deps_to_publish().find(|dep| {
+                                            crate_bump_heuristic.get(dep)
+                                                == Some(&VersionBumpHeuristic::Compatible)
+                                        })
+                                    {
+                                        if let Some(dep_bumped_breakingly) =
+                                            details.deps_to_publish().find(|dep| {
+                                                crate_bump_heuristic.get(dep)
+                                                    == Some(&VersionBumpHeuristic::Breaking)
+                                            })
+                                        {
+                                            info!("`{}` and `{}` are dependencies of `{}`; `{}` was bumped with a compatible change, but `{}` was bumped with a breaking change, therefore `{}` will be bumped with a breaking change as well", dep_bumped_compatibly, dep_bumped_breakingly, krate, dep_bumped_compatibly, dep_bumped_breakingly, krate);
+                                            VersionBumpHeuristic::Breaking
+                                        } else {
+                                            VersionBumpHeuristic::Compatible
+                                        }
+                                    } else {
+                                        VersionBumpHeuristic::Breaking
+                                    };
+                                    details.maybe_bump_version(
+                                        prev_versions
+                                            .into_iter()
+                                            .map(|prev_version| prev_version.version)
+                                            .collect(),
+                                        &bump_heuristic,
+                                    )?;
+                                    crate_bump_heuristic.insert(krate, bump_heuristic);
+                                    Ok(())
+                                },
+                            )??;
+                        }
+                        AdjustVersion::No => (),
+                    }
                     let version = details.version.clone();
                     crates.publish(
                         krate,
