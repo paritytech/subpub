@@ -109,7 +109,7 @@ impl Crates {
                 if now < after_publish_delay {
                     let sleep_duration = after_publish_delay - now;
                     info!(
-                        "Waiting for {:?} before publishing crate {krate}",
+                        "Waiting for {:?} before publishing crate {krate} to avoid rate limits",
                         sleep_duration
                     );
                     thread::sleep(sleep_duration);
