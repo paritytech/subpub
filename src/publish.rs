@@ -40,7 +40,7 @@ pub struct PublishOpts {
     #[clap(
         short = 's',
         long = "start-from",
-        help = "Start publishing from this crate. Useful to resume the process in case it fails for some reason. This option does not take into account crates which are ordered before the given crate, so you might potentially miiss added or renamed crates in case they are ordered before the given crate."
+        help = "Start publishing from this crate. Useful to resume the process in case it fails for some reason. If the source code you're publishing has changed, there's a risk of missing new and/or modified crates if they're ordered before the one provided by this option."
     )]
     start_from: Option<String>,
 
@@ -112,25 +112,25 @@ pub struct PublishOpts {
 
     #[clap(
         long = "bump-compatible",
-        help = "Bump this crate to a compatible version. Dependents of those crates will be also bumped to a compatible version ONLY IF all of their dependencies have been bumped compatibly. Can be specified multiple times."
+        help = "Provide the name for a crate which should be bumped to a compatible version IF it needs to be bumped before publishing. Dependents of those crates will be also bumped to a compatible version ONLY IF all of their dependencies have been bumped compatibly. Can be specified multiple times."
     )]
     crates_to_bump_compatibly: Vec<String>,
 
     #[clap(
         long = "bump-major",
-        help = "Bump this crate to a major version. This option takes precedence over --bump-compatible. Can be specified multiple times."
+        help = "Provide the name for a crate which should be bumped to a major version IF it needs to be bumped before publishing. This option takes precedence over --bump-compatible. Can be specified multiple times."
     )]
     crates_to_bump_majorly: Vec<String>,
 
     #[clap(
         long = "pre-bump-version",
-        help = "Given in the form [crate]=[version]. Sets the crate to the given version before bumping it. Can be specified multiple times."
+        help = "Given in the form [crate]=[version]. Sets the crate to the given version before processing it. Can be specified multiple times."
     )]
     pre_bump_versions: Vec<String>,
 
     #[clap(
         long = "set-version",
-        help = "Given in the form [crate]=[version]. Sets the crate to the given version despite of other versioning heuristics implemented by this tool. This option takes precedence over --pre-bump-version. Can be specified multiple times."
+        help = "Given in the form [crate]=[version]. Sets the crate to a fixed version which will not change before publishing it. This option takes precedence over --pre-bump-version. Can be specified multiple times."
     )]
     set_versions: Vec<String>,
 
