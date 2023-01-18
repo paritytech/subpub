@@ -320,6 +320,16 @@ pub fn write_dependency_version<P: AsRef<Path>>(
                             toml_path.as_ref().as_os_str()
                         )
                     })?;
+                    if item.get("workspace").is_some() {
+                        return Err(
+                            anyhow!(
+                                ".workspace is not supported for dependencies, but it's used for .{}.{} in {:?}",
+                                dep_key_display,
+                                key,
+                                toml_path.as_ref().as_os_str()
+                            )
+                        );
+                    }
                     item.insert("version", toml_edit::value(version.to_string()));
                     if remove_dependency_path {
                         item.remove("path");
@@ -345,6 +355,16 @@ pub fn write_dependency_version<P: AsRef<Path>>(
                 };
                 if let Some(pkg) = pkg.as_str() {
                     if pkg == dep {
+                        if item.get("workspace").is_some() {
+                            return Err(
+                                 anyhow!(
+                                    ".workspace is not supported for dependencies, but it's used for .{}.{} in {:?}",
+                                    dep_key_display,
+                                    key,
+                                    toml_path.as_ref().as_os_str()
+                                )
+                            );
+                        }
                         item.insert("version", toml_edit::value(version.to_string()));
                         if remove_dependency_path {
                             item.remove("path");
