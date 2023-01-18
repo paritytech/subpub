@@ -135,6 +135,12 @@ pub struct PublishOpts {
     set_versions: Vec<String>,
 
     #[clap(
+        long = "disable-version-adjustment",
+        help = "Disable any version adjustments, i.e. versions will be published exactly as they are in the source code."
+    )]
+    no_version_adjustment: bool,
+
+    #[clap(
         long = "verify-none",
         help = "Disable crate verification before publishing. Takes precedence over --verify-only."
     )]
@@ -447,6 +453,12 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                     krate,
                     details.manifest_path
                 ));
+            } else if krate == initial_crate {
+                return Err(anyhow!(
+                    "Crate {} should not be published. Check if it has \"publish = false\" in {:?}.",
+                    krate,
+                    details.manifest_path
+                ));
             } else {
                 return Err(anyhow!(
                     "Crate {} should not be published, but it is a dependency of {}, which would be published. Check if {} has \"publish = false\" in {:?}.",
@@ -530,7 +542,9 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         }
 
         let should_adjust_version = {
-            if let Some(set_version) = set_versions.get(sel_crate) {
+            if opts.no_version_adjustment {
+                false
+            } else if let Some(set_version) = set_versions.get(sel_crate) {
                 with_git_checkpoint(&opts.root, GitCheckpoint::Save, || -> anyhow::Result<()> {
                     let details = crates
                         .crates_map
