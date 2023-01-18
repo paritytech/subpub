@@ -30,7 +30,7 @@ use tempfile::TempDir;
 use tracing::{info, span, Level};
 
 use crate::{
-    crates::{edit_all_dependency_sections, write_dependency_version, CrateDependencyKey},
+    dependencies::{edit_all_dependency_sections, write_dependency_version, CrateDependencyKey},
     external::{self, cargo::PublishError},
     git::*,
     toml::{read_toml, write_toml},

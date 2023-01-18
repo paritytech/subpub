@@ -16,6 +16,7 @@
 
 mod crate_details;
 mod crates;
+mod dependencies;
 mod external;
 mod git;
 mod publish;
