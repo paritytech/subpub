@@ -33,7 +33,7 @@ pub struct PublishOpts {
     #[clap(
         short = 'p',
         long = "publish-only",
-        help = "Only publish this crate. If this option is not used, all crates in the target workspace will be considered for publishing. Can be specified multiple times."
+        help = "Only publish this crate. If this option is not used, all crates in the target workspace will be considered for publishing. Note that dependencies of the selected crates will also be considered for publishing. Can be specified multiple times."
     )]
     publish_only: Vec<String>,
 
