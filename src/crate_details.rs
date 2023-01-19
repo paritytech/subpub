@@ -114,9 +114,9 @@ impl CrateDetails {
 
     pub fn write_own_version(&mut self, new_version: Version) -> anyhow::Result<()> {
         // Load TOML file and update the version in that.
-        let mut toml = self.read_toml()?;
-        toml["package"]["version"] = toml_edit::value(new_version.to_string());
-        self.write_toml(&toml)?;
+        let mut manifest = self.read_manifest()?;
+        manifest["package"]["version"] = toml_edit::value(new_version.to_string());
+        self.write_toml(&manifest)?;
 
         // If that worked, save the in-memory version too
         self.version = new_version;
@@ -138,22 +138,38 @@ impl CrateDetails {
     pub fn set_registry<S: AsRef<str>>(&self, registry: S) -> anyhow::Result<()> {
         let registry = registry.as_ref();
 
-        let mut toml = self.read_toml()?;
+        let mut manifest = self.read_manifest()?;
 
-        fn visit(item: &mut toml_edit::Item, registry: &str) -> anyhow::Result<()> {
-            let table = match item.as_table_like_mut() {
-                Some(table) => table,
-                None => return Ok(()),
-            };
+        fn visit(
+            item: &mut toml_edit::Item,
+            registry: &str,
+            dep_key_display: &str,
+            manifest_path: &PathBuf,
+        ) -> anyhow::Result<()> {
+            let deps = item.as_table_like_mut().with_context(|| {
+                format!(
+                    ".{} should be table-like in {:?}",
+                    dep_key_display, manifest_path
+                )
+            })?;
 
-            for (_, item) in table.iter_mut() {
-                if let Some(version) = item.as_str() {
+            for (key, value) in deps.iter_mut() {
+                if let Some(version) = value.as_str() {
                     let mut tbl = toml_edit::InlineTable::new();
                     tbl.insert("version", version.into());
                     tbl.insert("registry", registry.into());
-                    *item = toml_edit::Item::Value(toml_edit::Value::InlineTable(tbl));
+                    *value = toml_edit::Item::Value(toml_edit::Value::InlineTable(tbl));
                 } else {
-                    item["registry"] = toml_edit::value(registry.to_string());
+                    let item = value.as_table_like_mut().with_context(|| {
+                        format!(
+                            ".{}.{} should be a string or table-like in {:?}",
+                            dep_key_display, key, manifest_path
+                        )
+                    })?;
+                    item.insert("registry", toml_edit::value(registry.to_string()));
+                    for key in &["git", "branch", "tag", "rev"] {
+                        item.remove(key);
+                    }
                 }
             }
 
@@ -161,10 +177,12 @@ impl CrateDetails {
         }
 
         for key in CrateDependencyKey::iter() {
-            edit_all_dependency_sections(&mut toml, key, |item, _, _| visit(item, registry))?;
+            edit_all_dependency_sections(&mut manifest, key, |item, _, dep_key_display| {
+                visit(item, registry, dep_key_display, &self.manifest_path)
+            })?;
         }
 
-        self.write_toml(&toml)?;
+        self.write_toml(&manifest)?;
 
         Ok(())
     }
@@ -256,13 +274,13 @@ impl CrateDetails {
             Ok(false)
         }
 
-        let mut toml = self.read_toml()?;
+        let mut manifest = self.read_manifest()?;
         let mut needs_toml_write = false;
 
         let dev_deps_key = CrateDependencyKey::DevDependencies.to_string();
 
         // Visit [dev-dependencies]
-        if let Some(item) = toml.get_mut(&dev_deps_key) {
+        if let Some(item) = manifest.get_mut(&dev_deps_key) {
             let item = item.as_table_like_mut().with_context(|| {
                 format!(
                     ".{} should be table-like in {:?}",
@@ -279,7 +297,7 @@ impl CrateDetails {
 
         // Visit [target.X.dev-dependencies]
         let targets_key = "target";
-        if let Some(targets_tbl) = toml.get_mut(targets_key) {
+        if let Some(targets_tbl) = manifest.get_mut(targets_key) {
             let targets_tbl = targets_tbl.as_table_like_mut().with_context(|| {
                 format!(
                     ".target should be table-like in {:?}",
@@ -322,7 +340,7 @@ impl CrateDetails {
             with_git_checkpoint(
                 &root,
                 GitCheckpoint::RevertLater,
-                || -> anyhow::Result<()> { self.write_toml(&toml) },
+                || -> anyhow::Result<()> { self.write_toml(&manifest) },
             )??;
         }
 
@@ -516,7 +534,7 @@ impl CrateDetails {
         Ok(bumped)
     }
 
-    fn read_toml(&self) -> anyhow::Result<toml_edit::Document> {
+    fn read_manifest(&self) -> anyhow::Result<toml_edit::Document> {
         read_toml(&self.manifest_path)
     }
 

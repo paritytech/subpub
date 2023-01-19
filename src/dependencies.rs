@@ -64,25 +64,28 @@ pub fn write_dependency_version<P: AsRef<Path>>(
         version: &semver::Version,
         dep: &str,
         dep_key_display: &str,
-        toml_path: P,
+        manifest_path: P,
         remove_dependency_path: bool,
     ) -> anyhow::Result<()> {
-        let table = match item.as_table_like_mut() {
-            Some(table) => table,
-            None => return Ok(()),
-        };
+        let deps = item.as_table_like_mut().with_context(|| {
+            format!(
+                ".{} should be table-like in {:?}",
+                dep_key_display,
+                manifest_path.as_ref().as_os_str()
+            )
+        })?;
 
-        for (key, item) in table.iter_mut() {
+        for (key, value) in deps.iter_mut() {
             if key == dep {
-                if item.is_str() {
-                    *item = toml_edit::value(version.to_string());
+                if value.is_str() {
+                    *value = toml_edit::value(version.to_string());
                 } else {
-                    let item = item.as_table_like_mut().with_context(|| {
+                    let item = value.as_table_like_mut().with_context(|| {
                         format!(
                             ".{}.{} should be a string or table-like in {:?}",
                             dep_key_display,
                             key,
-                            toml_path.as_ref().as_os_str()
+                            manifest_path.as_ref().as_os_str()
                         )
                     })?;
                     if item.get("workspace").is_some() {
@@ -91,7 +94,7 @@ pub fn write_dependency_version<P: AsRef<Path>>(
                                 ".workspace is not supported for dependencies, but it's used for .{}.{} in {:?}",
                                 dep_key_display,
                                 key,
-                                toml_path.as_ref().as_os_str()
+                                manifest_path.as_ref().as_os_str()
                             )
                         );
                     }
@@ -101,15 +104,15 @@ pub fn write_dependency_version<P: AsRef<Path>>(
                     }
                 }
             } else {
-                let item = if item.as_str().is_some() {
+                let item = if value.as_str().is_some() {
                     continue;
                 } else {
-                    item.as_table_like_mut().with_context(|| {
+                    value.as_table_like_mut().with_context(|| {
                         format!(
                             ".{}.{} should be a string or table-like in {:?}",
                             dep_key_display,
                             key,
-                            toml_path.as_ref().as_os_str()
+                            manifest_path.as_ref().as_os_str()
                         )
                     })?
                 };
@@ -126,7 +129,7 @@ pub fn write_dependency_version<P: AsRef<Path>>(
                                     ".workspace is not supported for dependencies, but it's used for .{}.{} in {:?}",
                                     dep_key_display,
                                     key,
-                                    toml_path.as_ref().as_os_str()
+                                    manifest_path.as_ref().as_os_str()
                                 )
                             );
                         }
@@ -140,7 +143,7 @@ pub fn write_dependency_version<P: AsRef<Path>>(
                         "{}.{}.package should be a string in {:?}",
                         dep_key_display,
                         key,
-                        toml_path.as_ref().as_os_str()
+                        manifest_path.as_ref().as_os_str()
                     ));
                 }
             }
