@@ -202,16 +202,14 @@ impl CrateDetails {
         // consumed from the registry after publishing.
         remove_dep_path: bool,
     ) -> anyhow::Result<()> {
-        if self.all_deps().any(|self_dep| self_dep == dep) {
-            write_dependency_field_value(
-                &self.manifest_path,
-                &[dep],
-                if remove_dep_path { &["path"] } else { &[] },
-                "version",
-                &version.to_string(),
-                true,
-            )?;
-        }
+        write_dependency_field_value(
+            &self.manifest_path,
+            &[dep],
+            if remove_dep_path { &["path"] } else { &[] },
+            "version",
+            &version.to_string(),
+            true,
+        )?;
         Ok(())
     }
 

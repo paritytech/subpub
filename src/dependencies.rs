@@ -69,7 +69,7 @@ pub fn write_dependency_field_value<P: AsRef<Path>, S: AsRef<str>>(
         field: &str,
         field_value: &str,
         overwrite_str_value: bool,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<bool> {
         let deps_tbl = item.as_table_like_mut().with_context(|| {
             format!(
                 ".{} should be table-like in {:?}",
@@ -77,6 +77,8 @@ pub fn write_dependency_field_value<P: AsRef<Path>, S: AsRef<str>>(
                 manifest_path.as_ref().as_os_str()
             )
         })?;
+
+        let mut modified = false;
 
         for (key, value) in deps_tbl.iter_mut() {
             if let Some(value) = value.as_table_like_mut() {
@@ -102,12 +104,14 @@ pub fn write_dependency_field_value<P: AsRef<Path>, S: AsRef<str>>(
                         for fields_to_remove in fields_to_remove {
                             value.remove(fields_to_remove);
                         }
+                        modified = true;
                     }
                 } else if deps.iter().any(|dep| dep.as_ref() == key.get()) {
                     value.insert(field, toml_edit::value(field_value));
                     for fields_to_remove in fields_to_remove {
                         value.remove(fields_to_remove);
                     }
+                    modified = true;
                 }
             } else if let Some(version) = value.as_str() {
                 if deps.iter().any(|dep| dep.as_ref() == key.get()) {
@@ -119,6 +123,7 @@ pub fn write_dependency_field_value<P: AsRef<Path>, S: AsRef<str>>(
                         tbl.insert(field, field_value.into());
                         *value = toml_edit::Item::Value(toml_edit::Value::InlineTable(tbl));
                     }
+                    modified = true;
                 }
             } else {
                 return Err(anyhow!(
@@ -130,12 +135,14 @@ pub fn write_dependency_field_value<P: AsRef<Path>, S: AsRef<str>>(
             }
         }
 
-        Ok(())
+        Ok(modified)
     }
+
+    let mut modified = false;
 
     for dep_key in CrateDependencyKey::iter() {
         edit_all_dependency_sections(&mut manifest, &dep_key, |item, _, dep_key_display| {
-            visit(
+            modified |= visit(
                 item,
                 deps,
                 dep_key_display,
@@ -144,11 +151,14 @@ pub fn write_dependency_field_value<P: AsRef<Path>, S: AsRef<str>>(
                 field,
                 field_value,
                 overwrite_str_value,
-            )
+            )?;
+            Ok(())
         })?;
     }
 
-    write_toml(manifest_path, &manifest)?;
+    if modified {
+        write_toml(manifest_path, &manifest)?;
+    }
 
     Ok(())
 }
