@@ -129,10 +129,10 @@ pub struct PublishOpts {
     pre_bump_versions: Vec<String>,
 
     #[clap(
-        long = "set-version",
+        long = "publish-version",
         help = "Given in the form [crate]=[version]. Sets the crate to a fixed version which will not change before publishing it. This option takes precedence over --pre-bump-version. Can be specified multiple times."
     )]
-    set_versions: Vec<String>,
+    publish_versions: Vec<String>,
 
     #[clap(
         long = "disable-version-adjustment",
@@ -151,6 +151,12 @@ pub struct PublishOpts {
         help = "Given in the form [crate]=[description]. Attach the given description to the crate to be used for debugging purposes."
     )]
     crates_debug_descriptions: Vec<String>,
+
+    #[clap(
+        long = "set-dependency-version",
+        help = "Given in the form [crate]=[version]. Sets a crate dependency to a given version. Can be specified multiple times."
+    )]
+    set_dependency_versions: Vec<String>,
 }
 
 #[derive(EnumString, strum::Display, PartialEq, Eq)]
@@ -216,10 +222,10 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         crates_debug_descriptions
     };
 
-    let set_versions = {
-        let mut set_versions: HashMap<String, Version> = HashMap::new();
+    let publish_versions = {
+        let mut publish_versions: HashMap<String, Version> = HashMap::new();
 
-        for arg in opts.set_versions {
+        for arg in opts.publish_versions {
             let (krate, raw_version) = {
                 let mut parts = arg.split('=');
                 match (parts.next(), parts.next(), parts.next()) {
@@ -237,10 +243,37 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                     raw_version
                 )
             })?;
-            set_versions.insert(krate.into(), version);
+            publish_versions.insert(krate.into(), version);
         }
 
-        set_versions
+        publish_versions
+    };
+
+    let set_dependency_versions = {
+        let mut set_dependency_versions: HashMap<String, Version> = HashMap::new();
+
+        for arg in opts.set_dependency_versions {
+            let (krate, raw_version) = {
+                let mut parts = arg.split('=');
+                match (parts.next(), parts.next(), parts.next()) {
+                    (Some(krate), Some(raw_version), None) => (krate, raw_version),
+                    _ => return Err(anyhow!(
+                            "Argument \"{}\" of --pre-bump-version should be given in the form [crate]=[version]",
+                            arg
+                        ))
+                }
+            };
+            let version = Version::parse(raw_version).with_context(|| {
+                format!(
+                    "Version \"{}\" from argument \"{}\" of --pre-bump-version could not be parsed as SemVer",
+                    arg,
+                    raw_version
+                )
+            })?;
+            set_dependency_versions.insert(krate.into(), version);
+        }
+
+        set_dependency_versions
     };
 
     let stop_at_step = if let Some(step) = opts.stop_at_step.as_ref() {
@@ -560,6 +593,12 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         }
     }
 
+    for (dep, version) in set_dependency_versions {
+        for (_, details) in crates.crates_map.iter() {
+            details.write_dependency_version(&dep, &version, true)?;
+        }
+    }
+
     let crates_to_verify = {
         let mut crates_to_verify = if opts.verify_none {
             HashSet::new()
@@ -597,7 +636,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         let should_adjust_version = {
             if opts.no_version_adjustment {
                 false
-            } else if let Some(set_version) = set_versions.get(sel_crate) {
+            } else if let Some(set_version) = publish_versions.get(sel_crate) {
                 with_git_checkpoint(&opts.root, GitCheckpoint::Save, || -> anyhow::Result<()> {
                     let details = crates
                         .crates_map
