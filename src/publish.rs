@@ -145,6 +145,12 @@ pub struct PublishOpts {
         help = "Disable crate verification before publishing. Takes precedence over --verify-only."
     )]
     verify_none: bool,
+
+    #[clap(
+        long = "crate-debug-description",
+        help = "Given in the form [crate]=[description]. Attach the given description to the crate to be used for debugging purposes."
+    )]
+    crates_debug_descriptions: Vec<String>,
 }
 
 #[derive(EnumString, strum::Display, PartialEq, Eq)]
@@ -187,6 +193,27 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         }
 
         pre_bump_versions
+    };
+
+    let crates_debug_descriptions = {
+        let mut crates_debug_descriptions: HashMap<String, String> = HashMap::new();
+
+        for arg in opts.crates_debug_descriptions {
+            let (krate, description) = {
+                let mut parts = arg.split('=');
+                match (parts.next(), parts.next(), parts.next()) {
+                    (Some(krate), Some(raw_version), None) => (krate, raw_version),
+                    _ => return Err(anyhow!(
+                            "Argument \"{}\" of --pre-bump-version should be given in the form [crate]=[version]",
+                            arg
+                            )
+                        )
+                }
+            };
+            crates_debug_descriptions.insert(krate.into(), description.into());
+        }
+
+        crates_debug_descriptions
     };
 
     let set_versions = {
@@ -406,6 +433,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
     fn validate_crates(
         crates: &Crates,
+        crates_debug_descriptions: &HashMap<String, String>,
         initial_crate: &String,
         parent_crate: Option<&String>,
         krate: &String,
@@ -419,22 +447,35 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             return Ok(());
         }
 
+        fn get_crate_debug_description(
+            debug_descriptions: &HashMap<String, String>,
+            krate: &String,
+        ) -> String {
+            if let Some(debug_annotation) = debug_descriptions.get(krate) {
+                format!(" NOTE!: {}.", debug_annotation)
+            } else {
+                "".into()
+            }
+        }
+
         if excluded_crates
             .iter()
             .any(|excluded_crate| *excluded_crate == krate)
         {
             if let Some(parent_crate) = parent_crate {
                 return Err(anyhow!(
-                    "Crate {} was excluded from CLI options, but it is a dependency of {}, and that is a dependency of {}, which would be published.",
+                    "Crate {} was excluded from CLI options, but it is a dependency of {}, and that is a dependency of {}, which would be published.{}",
                     krate,
                     parent_crate,
-                    initial_crate
+                    initial_crate,
+                    get_crate_debug_description(crates_debug_descriptions, krate)
                 ));
             } else {
                 return Err(anyhow!(
-                    "Crate {} was excluded from CLI options, but it is a dependency of {}, which would be published.",
+                    "Crate {} was excluded from CLI options, but it is a dependency of {}, which would be published.{}",
                     krate,
-                    initial_crate
+                    initial_crate,
+                    get_crate_debug_description(crates_debug_descriptions, krate)
                 ));
             }
         }
@@ -444,28 +485,31 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             .get(krate)
             .with_context(|| format!("Crate not found: {krate}"))?;
         if !details.should_be_published {
-            if let Some(parent_crate) = parent_crate {
+            if krate == initial_crate {
                 return Err(anyhow!(
-                    "Crate {} should not be published, but it is a dependency of {}, and that is a dependency of {}, which would be published. Check if {} has \"publish = false\" in {:?}.",
+                    "Crate {} should not be published. Check if it has \"publish = false\" in {:?}.{}",
+                    krate,
+                    details.manifest_path,
+                    get_crate_debug_description(crates_debug_descriptions, krate)
+                ));
+            } else if let Some(parent_crate) = parent_crate {
+                return Err(anyhow!(
+                    "Crate {} should not be published, but it is a dependency of {}, and that is a dependency of {}, which would be published. Check if {} has \"publish = false\" in {:?}.{}",
                     krate,
                     parent_crate,
                     initial_crate,
                     krate,
-                    details.manifest_path
-                ));
-            } else if krate == initial_crate {
-                return Err(anyhow!(
-                    "Crate {} should not be published. Check if it has \"publish = false\" in {:?}.",
-                    krate,
-                    details.manifest_path
+                    details.manifest_path,
+                    get_crate_debug_description(crates_debug_descriptions, krate)
                 ));
             } else {
                 return Err(anyhow!(
-                    "Crate {} should not be published, but it is a dependency of {}, which would be published. Check if {} has \"publish = false\" in {:?}.",
+                    "Crate {} should not be published, but it is a dependency of {}, which would be published. Check if {} has \"publish = false\" in {:?}.{}",
                     krate,
                     initial_crate,
                     krate,
-                    details.manifest_path
+                    details.manifest_path,
+                    get_crate_debug_description(crates_debug_descriptions, krate)
                 ));
             }
         }
@@ -478,6 +522,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 .collect::<Vec<_>>();
             validate_crates(
                 crates,
+                crates_debug_descriptions,
                 initial_crate,
                 if krate == initial_crate {
                     None
@@ -494,7 +539,15 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     }
     for krate in &selected_crates {
         info!("Validating crate {krate}");
-        validate_crates(&crates, krate, None, krate, &crates_to_exclude, &[])?;
+        validate_crates(
+            &crates,
+            &crates_debug_descriptions,
+            krate,
+            None,
+            krate,
+            &crates_to_exclude,
+            &[],
+        )?;
     }
 
     if stop_at_step == Some(StepToStopAt::Validation) {
