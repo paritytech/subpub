@@ -6,20 +6,14 @@ use std::{
 use anyhow::Context;
 
 pub fn read_toml<P: AsRef<Path>>(path: P) -> anyhow::Result<toml_edit::Document> {
-    let toml_string = read_to_string(&path).with_context(|| {
+    let content = read_to_string(&path)
+        .with_context(|| format!("Failed to read file {:?}", path.as_ref().as_os_str()))?;
+    let toml = content.parse::<toml_edit::Document>().with_context(|| {
         format!(
-            "Cannot read the Cargo.toml at {:?}",
+            "Failed to parse file as TOML: {:?}",
             path.as_ref().as_os_str()
         )
     })?;
-    let toml = toml_string
-        .parse::<toml_edit::Document>()
-        .with_context(|| {
-            format!(
-                "Cannot parse the Cargo.toml at {:?}",
-                path.as_ref().as_os_str()
-            )
-        })?;
     Ok(toml)
 }
 
@@ -30,7 +24,7 @@ pub fn write_toml<P: AsRef<Path>>(path: P, toml: &toml_edit::Document) -> anyhow
     }
     fs::write(&path, content).with_context(|| {
         format!(
-            "Cannot save the updated Cargo.toml at {:?}",
+            "Failed to write contents to {:?}",
             path.as_ref().as_os_str()
         )
     })?;

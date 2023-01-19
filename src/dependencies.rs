@@ -49,25 +49,28 @@ pub fn edit_all_dependency_sections<
     Ok(())
 }
 
-pub fn write_dependency_version<P: AsRef<Path>>(
-    toml_path: P,
-    dependency: &str,
-    version: &semver::Version,
-    // Removing the dependencies' paths is useful for verifying that they can be
-    // consumed from the registry after publishing.
-    remove_dependency_path: bool,
+#[allow(clippy::too_many_arguments)]
+pub fn write_dependency_field_value<P: AsRef<Path>, S: AsRef<str>>(
+    manifest_path: P,
+    deps: &[S],
+    fields_to_remove: &[&str],
+    field: &str,
+    field_value: &str,
+    overwrite_str_value: bool,
 ) -> anyhow::Result<()> {
-    let mut toml = read_toml(&toml_path)?;
+    let mut manifest = read_toml(&manifest_path)?;
 
-    fn visit<P: AsRef<Path>>(
+    fn visit<P: AsRef<Path>, S: AsRef<str>>(
         item: &mut toml_edit::Item,
-        version: &semver::Version,
-        dep: &str,
+        deps: &[S],
         dep_key_display: &str,
         manifest_path: P,
-        remove_dependency_path: bool,
+        fields_to_remove: &[&str],
+        field: &str,
+        field_value: &str,
+        overwrite_str_value: bool,
     ) -> anyhow::Result<()> {
-        let deps = item.as_table_like_mut().with_context(|| {
+        let deps_tbl = item.as_table_like_mut().with_context(|| {
             format!(
                 ".{} should be table-like in {:?}",
                 dep_key_display,
@@ -75,77 +78,55 @@ pub fn write_dependency_version<P: AsRef<Path>>(
             )
         })?;
 
-        for (key, value) in deps.iter_mut() {
-            if key == dep {
-                if value.is_str() {
-                    *value = toml_edit::value(version.to_string());
-                } else {
-                    let item = value.as_table_like_mut().with_context(|| {
-                        format!(
-                            ".{}.{} should be a string or table-like in {:?}",
-                            dep_key_display,
-                            key,
-                            manifest_path.as_ref().as_os_str()
-                        )
-                    })?;
-                    if item.get("workspace").is_some() {
-                        return Err(
-                            anyhow!(
-                                ".workspace is not supported for dependencies, but it's used for .{}.{} in {:?}",
-                                dep_key_display,
-                                key,
-                                manifest_path.as_ref().as_os_str()
-                            )
-                        );
-                    }
-                    item.insert("version", toml_edit::value(version.to_string()));
-                    if remove_dependency_path {
-                        item.remove("path");
-                    }
-                }
-            } else {
-                let item = if value.as_str().is_some() {
-                    continue;
-                } else {
-                    value.as_table_like_mut().with_context(|| {
-                        format!(
-                            ".{}.{} should be a string or table-like in {:?}",
-                            dep_key_display,
-                            key,
-                            manifest_path.as_ref().as_os_str()
-                        )
-                    })?
-                };
-                let pkg = if let Some(pkg) = item.get("package") {
-                    pkg
-                } else {
-                    continue;
-                };
-                if let Some(pkg) = pkg.as_str() {
-                    if pkg == dep {
-                        if item.get("workspace").is_some() {
-                            return Err(
-                                 anyhow!(
-                                    ".workspace is not supported for dependencies, but it's used for .{}.{} in {:?}",
-                                    dep_key_display,
-                                    key,
-                                    manifest_path.as_ref().as_os_str()
-                                )
-                            );
-                        }
-                        item.insert("version", toml_edit::value(version.to_string()));
-                        if remove_dependency_path {
-                            item.remove("path");
-                        }
-                    }
-                } else {
+        for (key, value) in deps_tbl.iter_mut() {
+            if let Some(value) = value.as_table_like_mut() {
+                if value.get("workspace").is_some() {
                     return Err(anyhow!(
-                        "{}.{}.package should be a string in {:?}",
+                        ".{}.{}.workspace is not supported in {:?}",
                         dep_key_display,
                         key,
                         manifest_path.as_ref().as_os_str()
                     ));
                 }
+                if let Some(pkg) = value.get("package") {
+                    let pkg = pkg.as_str().with_context(|| {
+                        format!(
+                            ".{}.{}.package should be a string in {:?}",
+                            dep_key_display,
+                            key,
+                            manifest_path.as_ref().as_os_str()
+                        )
+                    })?;
+                    if deps.iter().any(|dep| pkg == dep.as_ref()) {
+                        value.insert(field, toml_edit::value(field_value));
+                        for fields_to_remove in fields_to_remove {
+                            value.remove(fields_to_remove);
+                        }
+                    }
+                } else if deps.iter().any(|dep| dep.as_ref() == key.get()) {
+                    value.insert(field, toml_edit::value(field_value));
+                    for fields_to_remove in fields_to_remove {
+                        value.remove(fields_to_remove);
+                    }
+                }
+            } else if let Some(version) = value.as_str() {
+                if deps.iter().any(|dep| dep.as_ref() == key.get()) {
+                    if overwrite_str_value {
+                        *value = toml_edit::value(field_value);
+                    } else {
+                        let mut tbl = toml_edit::InlineTable::new();
+                        tbl.insert("version", version.into());
+                        tbl.insert(field, field_value.into());
+                        *value = toml_edit::Item::Value(toml_edit::Value::InlineTable(tbl));
+                    }
+                }
+            } else {
+                return Err(anyhow!(
+                    ".{}.{} should be a string or table-like in {:?}",
+                    dep_key_display,
+                    key,
+                    manifest_path.as_ref().as_os_str()
+                ));
             }
         }
 
@@ -153,19 +134,21 @@ pub fn write_dependency_version<P: AsRef<Path>>(
     }
 
     for dep_key in CrateDependencyKey::iter() {
-        edit_all_dependency_sections(&mut toml, dep_key, |item, _, dep_key_display| {
+        edit_all_dependency_sections(&mut manifest, dep_key, |item, _, dep_key_display| {
             visit(
                 item,
-                version,
-                dependency,
+                deps,
                 dep_key_display,
-                &toml_path,
-                remove_dependency_path,
+                &manifest_path,
+                fields_to_remove,
+                field,
+                field_value,
+                overwrite_str_value,
             )
         })?;
     }
 
-    write_toml(toml_path, &toml)?;
+    write_toml(manifest_path, &manifest)?;
 
     Ok(())
 }

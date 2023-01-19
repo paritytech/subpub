@@ -30,7 +30,9 @@ use tempfile::TempDir;
 use tracing::{info, span, Level};
 
 use crate::{
-    dependencies::{edit_all_dependency_sections, write_dependency_version, CrateDependencyKey},
+    dependencies::{
+        edit_all_dependency_sections, write_dependency_field_value, CrateDependencyKey,
+    },
     external::{self, cargo::PublishError},
     git::*,
     toml::{read_toml, write_toml},
@@ -177,9 +179,11 @@ impl CrateDetails {
         }
 
         for key in CrateDependencyKey::iter() {
-            edit_all_dependency_sections(&mut manifest, key, |item, _, dep_key_display| {
-                visit(item, registry, dep_key_display, &self.manifest_path)
-            })?;
+            if key != CrateDependencyKey::DevDependencies {
+                edit_all_dependency_sections(&mut manifest, key, |item, _, dep_key_display| {
+                    visit(item, registry, dep_key_display, &self.manifest_path)
+                })?;
+            }
         }
 
         self.write_toml(&manifest)?;
@@ -190,16 +194,20 @@ impl CrateDetails {
     /// Set any references to the dependency provided to the version given.
     pub fn write_dependency_version(
         &self,
-        dependency: &str,
+        dep: &str,
         version: &Version,
-        remove_dependency_path: bool,
+        // Removing the dependencies' paths is useful for verifying that they can be
+        // consumed from the registry after publishing.
+        remove_dep_path: bool,
     ) -> anyhow::Result<()> {
-        if self.all_deps().any(|dep| dep == dependency) {
-            write_dependency_version(
+        if self.all_deps().any(|self_dep| self_dep == dep) {
+            write_dependency_field_value(
                 &self.manifest_path,
-                dependency,
-                version,
-                remove_dependency_path,
+                &[dep],
+                if remove_dep_path { &["path"] } else { &[] },
+                "version",
+                &version.to_string(),
+                true,
             )?;
         }
         Ok(())
