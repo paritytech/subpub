@@ -36,15 +36,15 @@ pub fn edit_all_dependency_sections<
     F: FnMut(&mut toml_edit::Item, &CrateDependencyKey, &str) -> anyhow::Result<T>,
 >(
     document: &mut toml_edit::Document,
-    dep_key: CrateDependencyKey,
+    dep_key: &CrateDependencyKey,
     mut f: F,
 ) -> anyhow::Result<()> {
     let dep_key_display = dep_key.to_string();
     if let Some(item) = document.get_mut(&dep_key_display) {
-        f(item, &dep_key, &dep_key_display)?;
+        f(item, dep_key, &dep_key_display)?;
     }
     for item in get_target_dependency_sections_mut(document, &dep_key_display) {
-        f(item, &dep_key, &dep_key_display)?;
+        f(item, dep_key, &dep_key_display)?;
     }
     Ok(())
 }
@@ -134,7 +134,7 @@ pub fn write_dependency_field_value<P: AsRef<Path>, S: AsRef<str>>(
     }
 
     for dep_key in CrateDependencyKey::iter() {
-        edit_all_dependency_sections(&mut manifest, dep_key, |item, _, dep_key_display| {
+        edit_all_dependency_sections(&mut manifest, &dep_key, |item, _, dep_key_display| {
             visit(
                 item,
                 deps,

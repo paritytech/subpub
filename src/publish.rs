@@ -587,15 +587,15 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    if let Ok(registry) = env::var("SPUB_REGISTRY") {
-        for (_, details) in crates.crates_map.iter() {
-            details.set_registry(&registry)?
-        }
-    }
-
     for (dep, version) in set_dependency_versions {
         for (_, details) in crates.crates_map.iter() {
             details.write_dependency_version(&dep, &version, true)?;
+        }
+    }
+
+    if let Ok(registry) = env::var("SPUB_REGISTRY") {
+        for (_, details) in crates.crates_map.iter() {
+            details.set_registry(&registry)?
         }
     }
 

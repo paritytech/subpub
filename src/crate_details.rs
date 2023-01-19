@@ -145,6 +145,7 @@ impl CrateDetails {
         fn visit(
             item: &mut toml_edit::Item,
             registry: &str,
+            dep_key: &CrateDependencyKey,
             dep_key_display: &str,
             manifest_path: &PathBuf,
         ) -> anyhow::Result<()> {
@@ -169,8 +170,10 @@ impl CrateDetails {
                         )
                     })?;
                     item.insert("registry", toml_edit::value(registry.to_string()));
-                    for key in &["git", "branch", "tag", "rev"] {
-                        item.remove(key);
+                    if *dep_key != CrateDependencyKey::DevDependencies {
+                        for key in &["git", "branch", "tag", "rev"] {
+                            item.remove(key);
+                        }
                     }
                 }
             }
@@ -178,12 +181,16 @@ impl CrateDetails {
             Ok(())
         }
 
-        for key in CrateDependencyKey::iter() {
-            if key != CrateDependencyKey::DevDependencies {
-                edit_all_dependency_sections(&mut manifest, key, |item, _, dep_key_display| {
-                    visit(item, registry, dep_key_display, &self.manifest_path)
-                })?;
-            }
+        for dep_key in CrateDependencyKey::iter() {
+            edit_all_dependency_sections(&mut manifest, &dep_key, |item, _, dep_key_display| {
+                visit(
+                    item,
+                    registry,
+                    &dep_key,
+                    dep_key_display,
+                    &self.manifest_path,
+                )
+            })?;
         }
 
         self.write_toml(&manifest)?;
