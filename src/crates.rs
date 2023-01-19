@@ -183,6 +183,7 @@ impl Crates {
         }
 
         if let Ok(crates_committed_file) = env::var("SPUB_CRATES_COMMITTED_FILE") {
+            let mut did_warn_of_polling = false;
             loop {
                 let crates_committed =
                     fs::read_to_string(&crates_committed_file).with_context(|| {
@@ -196,8 +197,11 @@ impl Crates {
                         return Ok(());
                     }
                 }
-                info!("Polling $SPUB_CRATES_COMMITTED_FILE for crate {krate}");
-                thread::sleep(Duration::from_secs(2));
+                if !did_warn_of_polling {
+                    did_warn_of_polling = true;
+                    info!("Polling $SPUB_CRATES_COMMITTED_FILE for crate {krate}");
+                }
+                thread::sleep(Duration::from_millis(128));
             }
         };
 
