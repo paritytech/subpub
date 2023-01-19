@@ -170,9 +170,6 @@ impl CrateDetails {
                         )
                     })?;
                     item.insert("registry", toml_edit::value(registry.to_string()));
-                    for key in &["git", "branch", "tag", "rev"] {
-                        item.remove(key);
-                    }
                 }
             }
 
