@@ -170,10 +170,8 @@ impl CrateDetails {
                         )
                     })?;
                     item.insert("registry", toml_edit::value(registry.to_string()));
-                    if *dep_key != CrateDependencyKey::DevDependencies {
-                        for key in &["git", "branch", "tag", "rev"] {
-                            item.remove(key);
-                        }
+                    for key in &["git", "branch", "tag", "rev"] {
+                        item.remove(key);
                     }
                 }
             }
