@@ -109,7 +109,8 @@ pub fn git_checkpoint_revert<P: AsRef<Path>>(root: P) -> anyhow::Result<()> {
                 .status()?;
             if !status.success() {
                 return Err(anyhow!(
-                    "Failed to revert checkpoint commit. Command failed (exit code {:?}): {:?}",
+                    "Failed to revert checkpoint commit in {:?}. Command failed (exit code {:?}): {:?}",
+                    root.as_ref(),
                     status.code(),
                     cmd
                 ));
