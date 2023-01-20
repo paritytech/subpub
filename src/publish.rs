@@ -597,11 +597,11 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         }
     }
 
-    // if let Ok(registry) = env::var("SPUB_REGISTRY") {
-    //     for (_, details) in crates.crates_map.iter() {
-    //         details.set_registry(&registry)?
-    //     }
-    // }
+    if let Ok(registry) = env::var("SPUB_REGISTRY") {
+        for (_, details) in crates.crates_map.iter() {
+            details.set_registry(&registry)?
+        }
+    }
 
     let crates_to_verify = {
         let mut crates_to_verify = if opts.verify_none {
