@@ -570,26 +570,32 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         Ok(())
     }
 
-    let mut has_validation_failed = false;
-
-    for krate in &selected_crates {
-        info!("Validating crate {krate}");
-        if let Err(err) = validate_crates(
-            &crates,
-            &crates_debug_descriptions,
-            krate,
-            None,
-            krate,
-            &crates_to_exclude,
-            &[],
-        ) {
-            eprintln!("{}", err);
-            has_validation_failed = true;
+    let crates_validation_errors = {
+        let mut crates_validation_errors: HashMap<&String, String> = HashMap::new();
+        for krate in &selected_crates {
+            info!("Validating crate {krate}");
+            if let Err(err) = validate_crates(
+                &crates,
+                &crates_debug_descriptions,
+                krate,
+                None,
+                krate,
+                &crates_to_exclude,
+                &[],
+            ) {
+                crates_validation_errors.insert(krate, err.to_string());
+            }
         }
-    }
-
-    if has_validation_failed {
-        return Err(anyhow!("Validation failed"));
+        crates_validation_errors
+    };
+    if !crates_validation_errors.is_empty() {
+        for (krate, error) in crates_validation_errors {
+            info!(
+                "Validation of crate {} failed due to error: {}",
+                krate, error
+            );
+        }
+        return Err(anyhow!("Crates validation failed"));
     }
 
     if stop_at_step == Some(StepToStopAt::Validation) {
