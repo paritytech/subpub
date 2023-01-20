@@ -161,7 +161,9 @@ impl CrateDetails {
                             dep_key_display, key, manifest_path
                         )
                     })?;
-                    item.insert("registry", toml_edit::value(registry.to_string()));
+                    if item.get("git").is_none() {
+                        item.insert("registry", toml_edit::value(registry.to_string()));
+                    }
                 }
             }
 
