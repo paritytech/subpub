@@ -589,7 +589,11 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
     for (dep, version) in set_dependency_versions {
         for (_, details) in crates.crates_map.iter() {
-            details.write_dependency_version(&dep, &version, true)?;
+            details.write_dependency_version(
+                &dep,
+                &version,
+                &["git", "branch", "rev", "tag", "path"],
+            )?;
         }
     }
 
@@ -674,7 +678,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                     .crates_map
                     .get(prev_crate)
                     .with_context(|| format!("Crate not found: {prev_crate}"))?;
-                details.write_dependency_version(prev_crate, &prev_crate_details.version, false)?;
+                details.write_dependency_version(prev_crate, &prev_crate_details.version, &[])?;
             }
             Ok(())
         })??;
@@ -745,7 +749,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                         .get(krate)
                         .with_context(|| format!("Crate not found: {krate}"))?;
                     for (_, other_details) in crates.crates_map.iter() {
-                        other_details.write_dependency_version(krate, &details.version, false)?;
+                        other_details.write_dependency_version(krate, &details.version, &[])?;
                     }
                 }
 
@@ -824,7 +828,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
             with_git_checkpoint(&opts.root, GitCheckpoint::Save, || -> anyhow::Result<()> {
                 for (_, details) in crates.crates_map.iter() {
-                    details.write_dependency_version(krate, &crate_version, true)?;
+                    details.write_dependency_version(krate, &crate_version, &["path"])?;
                 }
                 Ok(())
             })??;
@@ -876,7 +880,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 .get(krate)
                 .with_context(|| format!("Crate not found: {krate}"))?;
             for (_, other_details) in crates.crates_map.iter() {
-                other_details.write_dependency_version(krate, &details.version, false)?;
+                other_details.write_dependency_version(krate, &details.version, &[])?;
             }
         }
 

@@ -126,13 +126,6 @@ impl CrateDetails {
         Ok(())
     }
 
-    pub fn all_deps(&self) -> impl Iterator<Item = &String> {
-        self.deps
-            .iter()
-            .chain(self.dev_deps.iter())
-            .chain(self.build_deps.iter())
-    }
-
     pub fn deps_to_publish(&self) -> impl Iterator<Item = &String> {
         self.deps.iter()
     }
@@ -145,7 +138,6 @@ impl CrateDetails {
         fn visit(
             item: &mut toml_edit::Item,
             registry: &str,
-            dep_key: &CrateDependencyKey,
             dep_key_display: &str,
             manifest_path: &PathBuf,
         ) -> anyhow::Result<()> {
@@ -178,13 +170,7 @@ impl CrateDetails {
 
         for dep_key in CrateDependencyKey::iter() {
             edit_all_dependency_sections(&mut manifest, &dep_key, |item, _, dep_key_display| {
-                visit(
-                    item,
-                    registry,
-                    &dep_key,
-                    dep_key_display,
-                    &self.manifest_path,
-                )
+                visit(item, registry, dep_key_display, &self.manifest_path)
             })?;
         }
 
@@ -198,14 +184,12 @@ impl CrateDetails {
         &self,
         dep: &str,
         version: &Version,
-        // Removing the dependencies' paths is useful for verifying that they can be
-        // consumed from the registry after publishing.
-        remove_dep_path: bool,
+        fields_to_remove: &[&str],
     ) -> anyhow::Result<()> {
         write_dependency_field_value(
             &self.manifest_path,
             &[dep],
-            if remove_dep_path { &["path"] } else { &[] },
+            fields_to_remove,
             "version",
             &version.to_string(),
             true,
