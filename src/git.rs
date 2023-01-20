@@ -99,6 +99,7 @@ pub fn git_checkpoint_revert<P: AsRef<Path>>(root: P) -> anyhow::Result<()> {
         let last_commit_msg = String::from_utf8_lossy(&output.stdout[..]);
         let last_commit_msg = last_commit_msg.trim();
         if last_commit_msg == CHECKPOINT_REVERT {
+            let pre_fs = std::fs::metadata(root.as_ref().join(".git").join("index.lock"));
             let mut cmd = Command::new("git");
             let status = cmd
                 .current_dir(&root)
@@ -109,7 +110,8 @@ pub fn git_checkpoint_revert<P: AsRef<Path>>(root: P) -> anyhow::Result<()> {
                 .status()?;
             if !status.success() {
                 return Err(anyhow!(
-                    "Failed to revert checkpoint commit in {:?}. Command failed (exit code {:?}): {:?}",
+                    "Failed to revert checkpoint commit in {:?}. {:?}. Command failed (exit code {:?}): {:?}",
+                    pre_fs,
                     root.as_ref(),
                     status.code(),
                     cmd
