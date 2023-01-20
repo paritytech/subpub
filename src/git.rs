@@ -100,17 +100,17 @@ pub fn git_checkpoint_revert<P: AsRef<Path>>(root: P) -> anyhow::Result<()> {
         let last_commit_msg = last_commit_msg.trim();
         if last_commit_msg == CHECKPOINT_REVERT {
             let mut cmd = Command::new("git");
-            if !cmd
+            let status = cmd
                 .current_dir(&root)
                 .arg("reset")
                 .arg("--quiet")
                 .arg("--hard")
                 .arg("HEAD~1")
-                .status()?
-                .success()
-            {
+                .status()?;
+            if !status.success() {
                 return Err(anyhow!(
-                    "Failed to revert checkpoint commit. Command failed: {:?}",
+                    "Failed to revert checkpoint commit. Command failed (exit code {:?}): {:?}",
+                    status.code(),
                     cmd
                 ));
             }
