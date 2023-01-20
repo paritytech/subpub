@@ -30,11 +30,8 @@ use tempfile::TempDir;
 use tracing::{info, span, Level};
 
 use crate::{
-    dependencies::{
-        write_dependency_field_value, CrateDependencyKey,
-    },
+    dependencies::{write_dependency_field_value, CrateDependencyKey},
     external::{self, cargo::PublishError},
-    git::*,
     toml::{read_toml, write_toml},
     version::{
         maybe_bump_for_breaking_change, maybe_bump_for_compatible_change, VersionBumpHeuristic,
@@ -151,7 +148,7 @@ impl CrateDetails {
         Ok(())
     }
 
-    pub fn tweak_deps_for_publishing<P: AsRef<Path>>(&self, root: P) -> anyhow::Result<()> {
+    pub fn tweak_deps_for_publishing(&self) -> anyhow::Result<()> {
         /*
            Visit dev-dependencies and strip their `version` field before
            publishing. Reasoning: Since 1.40 (rust-lang/cargo#7333), cargo will
@@ -283,17 +280,13 @@ impl CrateDetails {
         }
 
         if needs_toml_write {
-            with_git_checkpoint(
-                &root,
-                GitCheckpoint::RevertLater,
-                || -> anyhow::Result<()> { self.write_toml(&manifest) },
-            )??;
+            self.write_toml(&manifest)?;
         }
 
         Ok(())
     }
 
-    pub fn tweak_readme_for_publishing<P: AsRef<Path>>(&self, root: P) -> anyhow::Result<()> {
+    pub fn tweak_readme_for_publishing(&self) -> anyhow::Result<()> {
         // In case a crate does NOT define a `readme` field in its `Cargo.toml`,
         // `cargo publish` assumes, without first checking, that a `README.md`
         // file exists beside `Cargo.toml`. Publishing will fail in case the
@@ -307,44 +300,31 @@ impl CrateDetails {
                 .with_context(|| format!("Failed to find parent dir of {:?}", &self.manifest_path))?
                 .join("README.md");
             if fs::metadata(crate_readme).is_err() {
-                with_git_checkpoint(
-                    &root,
-                    GitCheckpoint::RevertLater,
-                    || -> anyhow::Result<()> {
-                        fs::write(
-                            crate_readme,
-                            format!(
-                                "# {}\n\nAuto-generated README.md for publishing to crates.io",
-                                &self.name
-                            ),
-                        )
-                        .with_context(|| {
-                            format!("Failed to generate sample README at {:?}", crate_readme)
-                        })
-                    },
-                )??;
+                fs::write(
+                    crate_readme,
+                    format!(
+                        "# {}\n\nAuto-generated README.md for publishing to crates.io",
+                        &self.name
+                    ),
+                )?;
             }
         }
         Ok(())
     }
 
-    pub fn tweak_description_for_publishing<P: AsRef<Path>>(&self, root: P) -> anyhow::Result<()> {
+    pub fn tweak_description_for_publishing(&self) -> anyhow::Result<()> {
+        let mut manifest = read_toml(&self.manifest_path)?;
         if self.description.is_none() {
-            let mut manifest = read_toml(&self.manifest_path)?;
             manifest["package"]["description"] = toml_edit::value(&self.name);
-            with_git_checkpoint(
-                &root,
-                GitCheckpoint::RevertLater,
-                || -> anyhow::Result<()> { write_toml(&self.manifest_path, &manifest) },
-            )??;
+            self.write_toml(&manifest)?;
         }
         Ok(())
     }
 
-    pub fn prepare_for_publish<P: AsRef<Path>>(&self, root: P) -> anyhow::Result<()> {
-        self.tweak_deps_for_publishing(&root)?;
-        self.tweak_readme_for_publishing(&root)?;
-        self.tweak_description_for_publishing(&root)?;
+    pub fn prepare_for_publish(&self) -> anyhow::Result<()> {
+        self.tweak_deps_for_publishing()?;
+        self.tweak_readme_for_publishing()?;
+        self.tweak_description_for_publishing()?;
         Ok(())
     }
 
@@ -376,7 +356,7 @@ impl CrateDetails {
         }
     }
 
-    pub fn needs_publishing<P: AsRef<Path>>(&self, root: P) -> anyhow::Result<bool> {
+    pub fn needs_publishing(&self) -> anyhow::Result<bool> {
         info!(
             "Comparing crate {} against crates.io to see if it needs to be published",
             self.name
@@ -404,7 +384,7 @@ impl CrateDetails {
         };
 
         info!("Generating .crate file");
-        self.prepare_for_publish(&root)?;
+        self.prepare_for_publish()?;
         let mut cmd = Command::new("cargo");
         if !cmd
             .arg("package")
@@ -423,7 +403,6 @@ impl CrateDetails {
                 cmd
             ));
         };
-        git_checkpoint_revert(&root)?;
 
         let pkg_path = target_dir
             .path()

@@ -28,7 +28,6 @@ use tracing::info;
 use crate::{
     crate_details::CrateDetails,
     external::{self, cargo::PublishError, crates_io::CratesIoIndexConfiguration},
-    git::*,
 };
 
 pub type CrateName = String;
@@ -98,7 +97,7 @@ impl Crates {
         let should_verify = crates_to_verify.get(krate).is_some();
 
         info!("Preparing crate {krate} for publishing");
-        details.prepare_for_publish(&self.root)?;
+        details.prepare_for_publish()?;
 
         if let Some(last_publish_instant) = last_publish_instant {
             if let Some(after_publish_delay) = after_publish_delay {
@@ -151,8 +150,6 @@ impl Crates {
                 }
             }
         }
-
-        git_checkpoint_revert(&self.root)?;
 
         info!("Waiting for crate {} to be available on crates.io", krate);
         // Don't return until the crate has finished being published; it won't

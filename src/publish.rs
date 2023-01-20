@@ -18,7 +18,7 @@ use crate::{
         cargo::{cargo_check_crate, cargo_update_workspace},
         crates_io::{self, CratesIoIndexConfiguration},
     },
-    git::{git_hard_reset, git_head_sha, with_git_checkpoint, GitCheckpoint},
+    git::{git_hard_reset, git_head_sha},
     publish::crates_io::CratesIoCrateVersion,
     version::VersionBumpHeuristic,
 };
@@ -634,22 +634,18 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             if opts.no_version_adjustment {
                 false
             } else if let Some(set_version) = publish_versions.get(sel_crate) {
-                with_git_checkpoint(&opts.root, GitCheckpoint::Save, || -> anyhow::Result<()> {
-                    let details = crates
-                        .crates_map
-                        .get_mut(sel_crate)
-                        .with_context(|| format!("Crate not found: {sel_crate}"))?;
-                    details.write_own_version(set_version.to_owned())
-                })??;
+                let details = crates
+                    .crates_map
+                    .get_mut(sel_crate)
+                    .with_context(|| format!("Crate not found: {sel_crate}"))?;
+                details.write_own_version(set_version.to_owned())?;
                 false
             } else if let Some(pre_bump_version) = pre_bump_versions.get(sel_crate) {
-                with_git_checkpoint(&opts.root, GitCheckpoint::Save, || -> anyhow::Result<()> {
-                    let details = crates
-                        .crates_map
-                        .get_mut(sel_crate)
-                        .with_context(|| format!("Crate not found: {sel_crate}"))?;
-                    details.write_own_version(pre_bump_version.to_owned())
-                })??;
+                let details = crates
+                    .crates_map
+                    .get_mut(sel_crate)
+                    .with_context(|| format!("Crate not found: {sel_crate}"))?;
+                details.write_own_version(pre_bump_version.to_owned())?;
                 true
             } else {
                 true
@@ -658,23 +654,20 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
         info!("Processing crate");
 
-        with_git_checkpoint(&opts.root, GitCheckpoint::Save, || -> anyhow::Result<()> {
-            let details = crates
-                .crates_map
-                .get(sel_crate)
-                .with_context(|| format!("Crate not found: {sel_crate}"))?;
-            for prev_crate in &publish_order {
-                if prev_crate == sel_crate {
-                    break;
-                }
-                let prev_crate_details = crates
-                    .crates_map
-                    .get(prev_crate)
-                    .with_context(|| format!("Crate not found: {prev_crate}"))?;
-                details.write_dependency_version(prev_crate, &prev_crate_details.version, &[])?;
+        let details = crates
+            .crates_map
+            .get(sel_crate)
+            .with_context(|| format!("Crate not found: {sel_crate}"))?;
+        for prev_crate in &publish_order {
+            if prev_crate == sel_crate {
+                break;
             }
-            Ok(())
-        })??;
+            let prev_crate_details = crates
+                .crates_map
+                .get(prev_crate)
+                .with_context(|| format!("Crate not found: {prev_crate}"))?;
+            details.write_dependency_version(prev_crate, &prev_crate_details.version, &[])?;
+        }
 
         let crates_to_publish = crates.what_needs_publishing(sel_crate, &publish_order)?;
 
@@ -750,56 +743,57 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                     .crates_map
                     .get_mut(krate)
                     .with_context(|| format!("Crate not found: {krate}"))?;
-                if details.needs_publishing(&opts.root)? {
+                if details.needs_publishing()? {
                     match adjust_version {
                         AdjustVersion::BasedOnPreviousVersions(prev_versions) => {
-                            with_git_checkpoint(
-                                &opts.root,
-                                GitCheckpoint::Save,
-                                || -> anyhow::Result<()> {
-                                    let bump_heuristic = if opts
-                                        .crates_to_bump_majorly
-                                        .iter()
-                                        .any(|some_crate| some_crate == krate)
-                                    {
-                                        VersionBumpHeuristic::Breaking
-                                    } else if opts
-                                        .crates_to_bump_compatibly
-                                        .iter()
-                                        .any(|some_crate| some_crate == krate)
-                                    {
-                                        VersionBumpHeuristic::Compatible
-                                    } else if let Some(dep_bumped_compatibly) =
-                                        details.deps_to_publish().find(|dep| {
-                                            crate_bump_heuristic.get(dep)
-                                                == Some(&VersionBumpHeuristic::Compatible)
-                                        })
-                                    {
-                                        if let Some(dep_bumped_breakingly) =
-                                            details.deps_to_publish().find(|dep| {
-                                                crate_bump_heuristic.get(dep)
-                                                    == Some(&VersionBumpHeuristic::Breaking)
-                                            })
-                                        {
-                                            info!("`{}` and `{}` are dependencies of `{}`; `{}` was bumped with a compatible change, but `{}` was bumped with a breaking change, therefore `{}` will be bumped with a breaking change as well", dep_bumped_compatibly, dep_bumped_breakingly, krate, dep_bumped_compatibly, dep_bumped_breakingly, krate);
-                                            VersionBumpHeuristic::Breaking
-                                        } else {
-                                            VersionBumpHeuristic::Compatible
-                                        }
-                                    } else {
-                                        VersionBumpHeuristic::Breaking
-                                    };
-                                    details.maybe_bump_version(
-                                        prev_versions
-                                            .into_iter()
-                                            .map(|prev_version| prev_version.version)
-                                            .collect(),
-                                        &bump_heuristic,
-                                    )?;
-                                    crate_bump_heuristic.insert(krate, bump_heuristic);
-                                    Ok(())
-                                },
-                            )??;
+                            let bump_heuristic = if opts
+                                .crates_to_bump_majorly
+                                .iter()
+                                .any(|some_crate| some_crate == krate)
+                            {
+                                VersionBumpHeuristic::Breaking
+                            } else if opts
+                                .crates_to_bump_compatibly
+                                .iter()
+                                .any(|some_crate| some_crate == krate)
+                            {
+                                VersionBumpHeuristic::Compatible
+                            } else if let Some(dep_bumped_compatibly) =
+                                details.deps_to_publish().find(|dep| {
+                                    crate_bump_heuristic.get(dep)
+                                        == Some(&VersionBumpHeuristic::Compatible)
+                                })
+                            {
+                                if let Some(dep_bumped_with_breaking_change) =
+                                    details.deps_to_publish().find(|dep| {
+                                        crate_bump_heuristic.get(dep)
+                                            == Some(&VersionBumpHeuristic::Breaking)
+                                    })
+                                {
+                                    info!(
+                                        "`{}` and `{}` are dependencies of `{}`; `{}` was bumped with a compatible change, but `{}` was bumped with a breaking change, therefore `{}` will be bumped with a breaking change as well",
+                                        dep_bumped_compatibly,
+                                        dep_bumped_with_breaking_change,
+                                        krate,
+                                        dep_bumped_compatibly,
+                                        dep_bumped_with_breaking_change,
+                                        krate
+                                    );
+                                    VersionBumpHeuristic::Breaking
+                                } else {
+                                    VersionBumpHeuristic::Compatible
+                                }
+                            } else {
+                                VersionBumpHeuristic::Breaking
+                            };
+                            details.maybe_bump_version(
+                                prev_versions
+                                    .into_iter()
+                                    .map(|prev_version| prev_version.version)
+                                    .collect(),
+                                &bump_heuristic,
+                            )?;
+                            crate_bump_heuristic.insert(krate, bump_heuristic);
                         }
                         AdjustVersion::No => (),
                     }
@@ -819,12 +813,9 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 }
             };
 
-            with_git_checkpoint(&opts.root, GitCheckpoint::Save, || -> anyhow::Result<()> {
-                for (_, details) in crates.crates_map.iter() {
-                    details.write_dependency_version(krate, &crate_version, &["path"])?;
-                }
-                Ok(())
-            })??;
+            for (_, details) in crates.crates_map.iter() {
+                details.write_dependency_version(krate, &crate_version, &["path"])?;
+            }
 
             processed_crates.insert(krate);
         }
