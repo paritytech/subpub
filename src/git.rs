@@ -1,4 +1,4 @@
-use std::{path::Path, process::Command};
+use std::{fs, path::Path, process::Command};
 
 use anyhow::anyhow;
 
@@ -23,6 +23,13 @@ pub fn git_head_sha<P: AsRef<Path>>(root: P) -> anyhow::Result<String> {
 }
 
 pub fn git_hard_reset<P: AsRef<Path>>(root: P, initial_commit: &str) -> anyhow::Result<()> {
+    // A left-over index.lock file might block us from resetting to the
+    // initial_commit, so handle it prior to attempting the reset.
+    let git_index_lock_path = root.as_ref().join(".git").join("index.lock");
+    if fs::metadata(&git_index_lock_path).is_ok() {
+        fs::remove_file(&git_index_lock_path)?;
+    }
+
     let mut cmd = Command::new("git");
     if !cmd
         .current_dir(&root)
