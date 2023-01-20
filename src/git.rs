@@ -1,6 +1,7 @@
 use std::{path::Path, process::Command};
 
 use anyhow::anyhow;
+use tracing::info;
 
 const CHECKPOINT_SAVE: &str = "[subpub] CHECKPOINT_SAVE";
 const CHECKPOINT_REVERT: &str = "[subpub] CHECKPOINT_REVERT";
@@ -90,7 +91,7 @@ pub fn git_checkpoint_revert<P: AsRef<Path>>(root: P) -> anyhow::Result<()> {
             .output()?;
         if !output.status.success() {
             return Err(anyhow!(
-                "Failed to get the last commit's message for {:?}. Command failed: {:?}",
+                "Failed to get the last commit's message in {:?}. Command failed: {:?}",
                 root.as_ref(),
                 cmd
             ));
@@ -99,28 +100,42 @@ pub fn git_checkpoint_revert<P: AsRef<Path>>(root: P) -> anyhow::Result<()> {
         let last_commit_msg = String::from_utf8_lossy(&output.stdout[..]);
         let last_commit_msg = last_commit_msg.trim();
         if last_commit_msg == CHECKPOINT_REVERT {
-            let pre_fs = std::fs::metadata(root.as_ref().join(".git").join("index.lock"));
-            let mut cmd = Command::new("git");
-            let status = cmd
-                .current_dir(&root)
-                .arg("reset")
-                .arg("--quiet")
-                .arg("--hard")
-                .arg("HEAD~1")
-                .status()?;
-            if !status.success() {
-                return Err(anyhow!(
-                    "Failed to revert checkpoint commit in {:?}. {:?}. Command failed (exit code {:?}): {:?}",
-                    pre_fs,
-                    root.as_ref(),
-                    status.code(),
-                    cmd
-                ));
+            let mut showed_message_before_retry = false;
+            loop {
+                let mut cmd = Command::new("git");
+                let status = cmd
+                    .current_dir(&root)
+                    .arg("reset")
+                    .arg("--quiet")
+                    .arg("--hard")
+                    .arg("HEAD~1")
+                    .status()?;
+                // TODO: figure out why this git command is sometimes
+                // interrupted by a signal on CI
+                if let Some(exit_code) = status.code() {
+                    if status.success() {
+                        break;
+                    } else {
+                        return Err(anyhow!(
+                            "Failed to revert checkpoint commit in {:?}. Command failed (exit code {:?}): {:?}",
+                            root.as_ref(),
+                            exit_code,
+                            cmd
+                        ));
+                    }
+                } else if !showed_message_before_retry {
+                    info!(
+                        "Retrying to revert temporary commits in {:?}",
+                        root.as_ref()
+                    );
+                    showed_message_before_retry = true;
+                }
             }
         } else {
             break;
         }
     }
+
     Ok(())
 }
 

@@ -31,7 +31,7 @@ use tracing::{info, span, Level};
 
 use crate::{
     dependencies::{
-        edit_all_dependency_sections, write_dependency_field_value, CrateDependencyKey,
+        write_dependency_field_value, CrateDependencyKey,
     },
     external::{self, cargo::PublishError},
     git::*,
