@@ -569,9 +569,12 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
         Ok(())
     }
+
+    let mut has_validation_failed = false;
+
     for krate in &selected_crates {
         info!("Validating crate {krate}");
-        validate_crates(
+        if let Err(err) = validate_crates(
             &crates,
             &crates_debug_descriptions,
             krate,
@@ -579,7 +582,14 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             krate,
             &crates_to_exclude,
             &[],
-        )?;
+        ) {
+            eprintln!("{}", err);
+            has_validation_failed = true;
+        }
+    }
+
+    if has_validation_failed {
+        return Err(anyhow!("Validation failed"));
     }
 
     if stop_at_step == Some(StepToStopAt::Validation) {
