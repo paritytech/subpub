@@ -51,6 +51,7 @@ pub struct CrateDetails {
     pub should_be_published: bool,
     pub manifest_path: PathBuf,
     pub readme: Option<PathBuf>,
+    pub description: Option<String>,
 }
 
 impl CrateDetails {
@@ -65,13 +66,14 @@ impl CrateDetails {
             should_be_published: true,
             manifest_path: PathBuf::new(),
             readme: None,
+            description: Some("Placeholder description"),
         }
     }
 
     pub fn load(pkg: &Package) -> anyhow::Result<CrateDetails> {
         let manifest_path = &pkg.manifest_path;
 
-        let toml: toml_edit::Document = read_toml(manifest_path)?;
+        let manifest = read_toml(manifest_path)?;
 
         let mut build_deps = HashSet::new();
         let mut dev_deps = HashSet::new();
@@ -80,17 +82,17 @@ impl CrateDetails {
             let key_name = &key.to_string();
             match key {
                 CrateDependencyKey::Dependencies => {
-                    for item in get_all_dependency_sections(&toml, key_name) {
+                    for item in get_all_dependency_sections(&manifest, key_name) {
                         deps.extend(filter_path_dependencies(manifest_path, key_name, item)?)
                     }
                 }
                 CrateDependencyKey::DevDependencies => {
-                    for item in get_all_dependency_sections(&toml, key_name) {
+                    for item in get_all_dependency_sections(&manifest, key_name) {
                         dev_deps.extend(filter_path_dependencies(manifest_path, key_name, item)?)
                     }
                 }
                 CrateDependencyKey::BuildDependencies => {
-                    for item in get_all_dependency_sections(&toml, key_name) {
+                    for item in get_all_dependency_sections(&manifest, key_name) {
                         build_deps.extend(filter_path_dependencies(manifest_path, key_name, item)?)
                     }
                 }
@@ -111,6 +113,7 @@ impl CrateDetails {
             manifest_path: pkg.manifest_path.clone().into(),
             should_be_published,
             readme: pkg.readme.as_ref().map(|readme| readme.clone().into()),
+            description: pkg.description.clone(),
         })
     }
 
@@ -128,57 +131,6 @@ impl CrateDetails {
 
     pub fn deps_to_publish(&self) -> impl Iterator<Item = &String> {
         self.deps.iter()
-    }
-
-    pub fn set_registry<S: AsRef<str>>(&self, registry: S) -> anyhow::Result<()> {
-        let registry = registry.as_ref();
-
-        let mut manifest = self.read_manifest()?;
-
-        fn visit(
-            item: &mut toml_edit::Item,
-            registry: &str,
-            dep_key_display: &str,
-            manifest_path: &PathBuf,
-        ) -> anyhow::Result<()> {
-            let deps = item.as_table_like_mut().with_context(|| {
-                format!(
-                    ".{} should be table-like in {:?}",
-                    dep_key_display, manifest_path
-                )
-            })?;
-
-            for (key, value) in deps.iter_mut() {
-                if let Some(version) = value.as_str() {
-                    let mut tbl = toml_edit::InlineTable::new();
-                    tbl.insert("version", version.into());
-                    tbl.insert("registry", registry.into());
-                    *value = toml_edit::Item::Value(toml_edit::Value::InlineTable(tbl));
-                } else {
-                    let item = value.as_table_like_mut().with_context(|| {
-                        format!(
-                            ".{}.{} should be a string or table-like in {:?}",
-                            dep_key_display, key, manifest_path
-                        )
-                    })?;
-                    if item.get("git").is_none() {
-                        item.insert("registry", toml_edit::value(registry.to_string()));
-                    }
-                }
-            }
-
-            Ok(())
-        }
-
-        for dep_key in CrateDependencyKey::iter() {
-            edit_all_dependency_sections(&mut manifest, &dep_key, |item, _, dep_key_display| {
-                visit(item, registry, dep_key_display, &self.manifest_path)
-            })?;
-        }
-
-        self.write_toml(&manifest)?;
-
-        Ok(())
     }
 
     /// Set any references to the dependency provided to the version given.
@@ -376,9 +328,23 @@ impl CrateDetails {
         Ok(())
     }
 
+    pub fn tweak_description_for_publishing<P: AsRef<Path>>(&self, root: P) -> anyhow::Result<()> {
+        if self.description.is_none() {
+            let mut manifest = read_toml(&self.manifest_path)?;
+            manifest["package"]["description"] = toml_edit::value(&self.name);
+            with_git_checkpoint(
+                &root,
+                GitCheckpoint::RevertLater,
+                || -> anyhow::Result<()> { write_toml(&self.manifest_path, &manifest) },
+            )??;
+        }
+        Ok(())
+    }
+
     pub fn prepare_for_publish<P: AsRef<Path>>(&self, root: P) -> anyhow::Result<()> {
         self.tweak_deps_for_publishing(&root)?;
         self.tweak_readme_for_publishing(&root)?;
+        self.tweak_description_for_publishing(&root)?;
         Ok(())
     }
 
