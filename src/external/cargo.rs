@@ -63,7 +63,7 @@ pub fn publish_crate<P: AsRef<Path>>(
     verify: bool,
 ) -> Result<(), PublishError> {
     let mut cmd = Command::new("cargo");
-    cmd.arg("publish").arg("-v");
+    cmd.arg("publish");
 
     if let Ok(registry) = env::var("SPUB_REGISTRY") {
         cmd.env("CARGO_REGISTRY_DEFAULT", &registry)
