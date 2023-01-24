@@ -78,18 +78,34 @@ pub fn write_dependency_field_value<P: AsRef<Path>, S: AsRef<str>>(
             )
         })?;
 
+        fn edit_tablelike_dep<P: AsRef<Path>>(
+            key: &toml_edit::KeyMut,
+            value: &mut dyn toml_edit::TableLike,
+            dep_key_display: &str,
+            manifest_path: P,
+            field: &str,
+            field_value: &str,
+            fields_to_remove: &[&str],
+        ) -> anyhow::Result<()> {
+            if value.get("workspace").is_some() {
+                return Err(anyhow!(
+                    ".{}.{}.workspace is not supported in {:?}",
+                    dep_key_display,
+                    key,
+                    manifest_path.as_ref().as_os_str()
+                ));
+            }
+            value.insert(field, toml_edit::value(field_value));
+            for fields_to_remove in fields_to_remove {
+                value.remove(fields_to_remove);
+            }
+            Ok(())
+        }
+
         let mut modified = false;
 
         for (key, value) in deps_tbl.iter_mut() {
             if let Some(value) = value.as_table_like_mut() {
-                if value.get("workspace").is_some() {
-                    return Err(anyhow!(
-                        ".{}.{}.workspace is not supported in {:?}",
-                        dep_key_display,
-                        key,
-                        manifest_path.as_ref().as_os_str()
-                    ));
-                }
                 if let Some(pkg) = value.get("package") {
                     let pkg = pkg.as_str().with_context(|| {
                         format!(
@@ -100,17 +116,27 @@ pub fn write_dependency_field_value<P: AsRef<Path>, S: AsRef<str>>(
                         )
                     })?;
                     if deps.iter().any(|dep| pkg == dep.as_ref()) {
-                        value.insert(field, toml_edit::value(field_value));
-                        for fields_to_remove in fields_to_remove {
-                            value.remove(fields_to_remove);
-                        }
+                        edit_tablelike_dep(
+                            &key,
+                            value,
+                            dep_key_display,
+                            &manifest_path,
+                            field,
+                            field_value,
+                            fields_to_remove,
+                        )?;
                         modified = true;
                     }
                 } else if deps.iter().any(|dep| dep.as_ref() == key.get()) {
-                    value.insert(field, toml_edit::value(field_value));
-                    for fields_to_remove in fields_to_remove {
-                        value.remove(fields_to_remove);
-                    }
+                    edit_tablelike_dep(
+                        &key,
+                        value,
+                        dep_key_display,
+                        &manifest_path,
+                        field,
+                        field_value,
+                        fields_to_remove,
+                    )?;
                     modified = true;
                 }
             } else if let Some(version) = value.as_str() {
