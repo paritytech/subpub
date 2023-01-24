@@ -30,7 +30,9 @@ use tempfile::TempDir;
 use tracing::{info, span, Level};
 
 use crate::{
-    dependencies::{write_dependency_field_value, ManifestDependencyKey},
+    dependencies::{
+        write_dependency_field_value, ManifestDependencyKey, WriteDependencyValueFieldType,
+    },
     external::{self, cargo::PublishError},
     toml::{read_toml, write_toml},
     version::{
@@ -145,7 +147,7 @@ impl CrateDetails {
                 fields_to_remove,
                 "version",
                 &version.to_string(),
-                true,
+                WriteDependencyValueFieldType::Version,
             )?;
         }
         Ok(())

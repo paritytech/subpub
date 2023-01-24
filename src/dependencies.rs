@@ -57,6 +57,11 @@ pub fn edit_all_dependency_sections<
     Ok(())
 }
 
+#[derive(PartialEq, Eq)]
+pub enum WriteDependencyValueFieldType {
+    Version,
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn write_dependency_field_value<P: AsRef<Path>, S: AsRef<str>>(
     manifest_path: P,
@@ -64,7 +69,7 @@ pub fn write_dependency_field_value<P: AsRef<Path>, S: AsRef<str>>(
     fields_to_remove: &[&str],
     field: &str,
     field_value: &str,
-    overwrite_str_value: bool,
+    field_type: WriteDependencyValueFieldType,
 ) -> anyhow::Result<()> {
     let mut manifest = read_toml(&manifest_path)?;
 
@@ -76,7 +81,7 @@ pub fn write_dependency_field_value<P: AsRef<Path>, S: AsRef<str>>(
         fields_to_remove: &[&str],
         field: &str,
         field_value: &str,
-        overwrite_str_value: bool,
+        field_type: &WriteDependencyValueFieldType,
     ) -> anyhow::Result<bool> {
         let deps_tbl = item.as_table_like_mut().with_context(|| {
             format!(
@@ -124,7 +129,7 @@ pub fn write_dependency_field_value<P: AsRef<Path>, S: AsRef<str>>(
                 }
             } else if let Some(version) = value.as_str() {
                 if deps.iter().any(|dep| dep.as_ref() == key.get()) {
-                    if overwrite_str_value {
+                    if *field_type == WriteDependencyValueFieldType::Version {
                         *value = toml_edit::value(field_value);
                     } else {
                         let mut tbl = toml_edit::InlineTable::new();
@@ -159,7 +164,7 @@ pub fn write_dependency_field_value<P: AsRef<Path>, S: AsRef<str>>(
                 fields_to_remove,
                 field,
                 field_value,
-                overwrite_str_value,
+                &field_type,
             )?;
             Ok(())
         })?;
@@ -176,7 +181,7 @@ pub fn write_dependency_field_value<P: AsRef<Path>, S: AsRef<str>>(
                 fields_to_remove,
                 field,
                 field_value,
-                overwrite_str_value,
+                &field_type,
             )?;
         }
     }
