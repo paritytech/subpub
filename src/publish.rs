@@ -611,6 +611,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     for (dep, version) in set_dependency_versions {
         for (_, details) in crates.crates_map.iter() {
             details.write_dependency_version(
+                &opts.root,
                 &dep,
                 &version,
                 &["git", "branch", "rev", "tag", "path"],
@@ -688,7 +689,12 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 .crates_map
                 .get(prev_crate)
                 .with_context(|| format!("Crate not found: {prev_crate}"))?;
-            details.write_dependency_version(prev_crate, &prev_crate_details.version, &[])?;
+            details.write_dependency_version(
+                &opts.root,
+                prev_crate,
+                &prev_crate_details.version,
+                &[],
+            )?;
         }
 
         let crates_to_publish = crates.what_needs_publishing(sel_crate, &publish_order)?;
@@ -757,7 +763,12 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                         .get(krate)
                         .with_context(|| format!("Crate not found: {krate}"))?;
                     for (_, other_details) in crates.crates_map.iter() {
-                        other_details.write_dependency_version(krate, &details.version, &[])?;
+                        other_details.write_dependency_version(
+                            &opts.root,
+                            krate,
+                            &details.version,
+                            &[],
+                        )?;
                     }
                 }
 
@@ -837,7 +848,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             };
 
             for (_, details) in crates.crates_map.iter() {
-                details.write_dependency_version(krate, &crate_version, &["path"])?;
+                details.write_dependency_version(&opts.root, krate, &crate_version, &["path"])?;
             }
 
             processed_crates.insert(krate);
@@ -887,7 +898,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 .get(krate)
                 .with_context(|| format!("Crate not found: {krate}"))?;
             for (_, other_details) in crates.crates_map.iter() {
-                other_details.write_dependency_version(krate, &details.version, &[])?;
+                other_details.write_dependency_version(&opts.root, krate, &details.version, &[])?;
             }
         }
 

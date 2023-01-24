@@ -30,7 +30,7 @@ use tempfile::TempDir;
 use tracing::{info, span, Level};
 
 use crate::{
-    dependencies::{write_dependency_field_value, CrateDependencyKey},
+    dependencies::{write_dependency_field_value, ManifestDependencyKey},
     external::{self, cargo::PublishError},
     toml::{read_toml, write_toml},
     version::{
@@ -75,20 +75,20 @@ impl CrateDetails {
         let mut build_deps = HashSet::new();
         let mut dev_deps = HashSet::new();
         let mut deps = HashSet::new();
-        for key in CrateDependencyKey::iter() {
+        for key in ManifestDependencyKey::iter() {
             let key_name = &key.to_string();
             match key {
-                CrateDependencyKey::Dependencies => {
+                ManifestDependencyKey::Dependencies => {
                     for item in get_all_dependency_sections(&manifest, key_name) {
                         deps.extend(filter_path_dependencies(manifest_path, key_name, item)?)
                     }
                 }
-                CrateDependencyKey::DevDependencies => {
+                ManifestDependencyKey::DevDependencies => {
                     for item in get_all_dependency_sections(&manifest, key_name) {
                         dev_deps.extend(filter_path_dependencies(manifest_path, key_name, item)?)
                     }
                 }
-                CrateDependencyKey::BuildDependencies => {
+                ManifestDependencyKey::BuildDependencies => {
                     for item in get_all_dependency_sections(&manifest, key_name) {
                         build_deps.extend(filter_path_dependencies(manifest_path, key_name, item)?)
                     }
@@ -131,20 +131,23 @@ impl CrateDetails {
     }
 
     /// Set any references to the dependency provided to the version given.
-    pub fn write_dependency_version(
+    pub fn write_dependency_version<P: AsRef<Path>>(
         &self,
+        root: P,
         dep: &str,
         version: &Version,
         fields_to_remove: &[&str],
     ) -> anyhow::Result<()> {
-        write_dependency_field_value(
-            &self.manifest_path,
-            &[dep],
-            fields_to_remove,
-            "version",
-            &version.to_string(),
-            true,
-        )?;
+        for manifest_path in &[&root.as_ref().join("Cargo.toml"), &self.manifest_path] {
+            write_dependency_field_value(
+                manifest_path,
+                &[dep],
+                fields_to_remove,
+                "version",
+                &version.to_string(),
+                true,
+            )?;
+        }
         Ok(())
     }
 
@@ -220,7 +223,7 @@ impl CrateDetails {
         let mut manifest = self.read_manifest()?;
         let mut needs_toml_write = false;
 
-        let dev_deps_key = CrateDependencyKey::DevDependencies.to_string();
+        let dev_deps_key = ManifestDependencyKey::DevDependencies.to_string();
 
         // Visit [dev-dependencies]
         if let Some(item) = manifest.get_mut(&dev_deps_key) {

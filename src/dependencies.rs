@@ -5,8 +5,16 @@ use strum::{EnumIter, EnumString, IntoEnumIterator};
 
 use crate::toml::{read_toml, write_toml};
 
+/// Keys of dependencies from the workspace table in Cargo.toml
+#[derive(EnumString, strum::Display, PartialEq, Eq)]
+pub enum WorkspaceManifestDependencyKey {
+    #[strum(to_string = "dependencies")]
+    Dependencies,
+}
+
+/// Keys for tables of dependencies from Cargo.toml
 #[derive(EnumString, strum::Display, EnumIter, PartialEq, Eq)]
-pub enum CrateDependencyKey {
+pub enum ManifestDependencyKey {
     #[strum(to_string = "build-dependencies")]
     BuildDependencies,
     #[strum(to_string = "dependencies")]
@@ -33,10 +41,10 @@ fn get_target_dependency_sections_mut<'a>(
 
 pub fn edit_all_dependency_sections<
     T,
-    F: FnMut(&mut toml_edit::Item, &CrateDependencyKey, &str) -> anyhow::Result<T>,
+    F: FnMut(&mut toml_edit::Item, &ManifestDependencyKey, &str) -> anyhow::Result<T>,
 >(
     document: &mut toml_edit::Document,
-    dep_key: &CrateDependencyKey,
+    dep_key: &ManifestDependencyKey,
     mut f: F,
 ) -> anyhow::Result<()> {
     let dep_key_display = dep_key.to_string();
@@ -78,28 +86,21 @@ pub fn write_dependency_field_value<P: AsRef<Path>, S: AsRef<str>>(
             )
         })?;
 
-        fn edit_tablelike_dep<P: AsRef<Path>>(
-            key: &toml_edit::KeyMut,
+        fn edit_tablelike_dep(
             value: &mut dyn toml_edit::TableLike,
-            dep_key_display: &str,
-            manifest_path: P,
             field: &str,
             field_value: &str,
             fields_to_remove: &[&str],
-        ) -> anyhow::Result<()> {
+        ) -> bool {
             if value.get("workspace").is_some() {
-                return Err(anyhow!(
-                    ".{}.{}.workspace is not supported in {:?}",
-                    dep_key_display,
-                    key,
-                    manifest_path.as_ref().as_os_str()
-                ));
+                value.insert(field, toml_edit::value(field_value));
+                for fields_to_remove in fields_to_remove {
+                    value.remove(fields_to_remove);
+                }
+                true
+            } else {
+                false
             }
-            value.insert(field, toml_edit::value(field_value));
-            for fields_to_remove in fields_to_remove {
-                value.remove(fields_to_remove);
-            }
-            Ok(())
         }
 
         let mut modified = false;
@@ -116,28 +117,10 @@ pub fn write_dependency_field_value<P: AsRef<Path>, S: AsRef<str>>(
                         )
                     })?;
                     if deps.iter().any(|dep| pkg == dep.as_ref()) {
-                        edit_tablelike_dep(
-                            &key,
-                            value,
-                            dep_key_display,
-                            &manifest_path,
-                            field,
-                            field_value,
-                            fields_to_remove,
-                        )?;
-                        modified = true;
+                        modified |= edit_tablelike_dep(value, field, field_value, fields_to_remove);
                     }
                 } else if deps.iter().any(|dep| dep.as_ref() == key.get()) {
-                    edit_tablelike_dep(
-                        &key,
-                        value,
-                        dep_key_display,
-                        &manifest_path,
-                        field,
-                        field_value,
-                        fields_to_remove,
-                    )?;
-                    modified = true;
+                    modified |= edit_tablelike_dep(value, field, field_value, fields_to_remove);
                 }
             } else if let Some(version) = value.as_str() {
                 if deps.iter().any(|dep| dep.as_ref() == key.get()) {
@@ -166,7 +149,7 @@ pub fn write_dependency_field_value<P: AsRef<Path>, S: AsRef<str>>(
 
     let mut modified = false;
 
-    for dep_key in CrateDependencyKey::iter() {
+    for dep_key in ManifestDependencyKey::iter() {
         edit_all_dependency_sections(&mut manifest, &dep_key, |item, _, dep_key_display| {
             modified |= visit(
                 item,
@@ -180,6 +163,22 @@ pub fn write_dependency_field_value<P: AsRef<Path>, S: AsRef<str>>(
             )?;
             Ok(())
         })?;
+    }
+
+    if let Some(workspace) = manifest.get_mut("workspace") {
+        let dep_key_display = WorkspaceManifestDependencyKey::Dependencies.to_string();
+        if let Some(deps_tbl) = workspace.get_mut(&dep_key_display) {
+            modified |= visit(
+                deps_tbl,
+                deps,
+                &format!("workspace.{}", dep_key_display),
+                &manifest_path,
+                fields_to_remove,
+                field,
+                field_value,
+                overwrite_str_value,
+            )?;
+        }
     }
 
     if modified {
