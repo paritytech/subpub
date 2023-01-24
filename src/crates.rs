@@ -80,6 +80,7 @@ impl Crates {
         Ok(Crates { root, crates_map })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn publish(
         &self,
         krate: &String,
@@ -88,6 +89,7 @@ impl Crates {
         last_publish_instant: &mut Option<Instant>,
         index_conf: Option<&CratesIoIndexConfiguration>,
         clear_cargo_home: Option<&String>,
+        post_publish_cleanup_dirs: &[String],
     ) -> anyhow::Result<()> {
         let details = self
             .crates_map
@@ -148,6 +150,12 @@ impl Crates {
                 PublishError::Any(err) => {
                     return Err(err);
                 }
+            }
+        }
+
+        for cleanup_dir in post_publish_cleanup_dirs {
+            if fs::metadata(cleanup_dir).is_ok() {
+                fs::remove_dir_all(cleanup_dir)?;
             }
         }
 
