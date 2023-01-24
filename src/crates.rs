@@ -23,6 +23,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Context};
+use glob::glob;
 use tracing::info;
 
 use crate::{
@@ -154,8 +155,12 @@ impl Crates {
         }
 
         for cleanup_dir in post_publish_cleanup_dirs {
-            if fs::metadata(cleanup_dir).is_ok() {
-                fs::remove_dir_all(cleanup_dir)?;
+            for entry in (glob(cleanup_dir)?).flatten() {
+                if entry.is_dir() {
+                    let _ = fs::remove_dir_all(entry);
+                } else {
+                    let _ = fs::remove_file(entry);
+                }
             }
         }
 
