@@ -24,7 +24,7 @@ use std::{
 
 use anyhow::{anyhow, Context};
 use glob::glob;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::{
     crate_details::CrateDetails,
@@ -90,7 +90,7 @@ impl Crates {
         last_publish_instant: &mut Option<Instant>,
         index_conf: Option<&CratesIoIndexConfiguration>,
         clear_cargo_home: Option<&String>,
-        post_publish_cleanup_dirs: &[String],
+        post_publish_cleanup_glob: &[String],
     ) -> anyhow::Result<()> {
         let details = self
             .crates_map
@@ -154,12 +154,20 @@ impl Crates {
             }
         }
 
-        for cleanup_dir in post_publish_cleanup_dirs {
-            for entry in (glob(cleanup_dir)?).flatten() {
+        for cleanup_glob in post_publish_cleanup_glob {
+            for entry in (glob(cleanup_glob)?).flatten() {
                 if entry.is_dir() {
-                    let _ = fs::remove_dir_all(entry);
-                } else {
-                    let _ = fs::remove_file(entry);
+                    if let Err(err) = fs::remove_dir_all(&entry) {
+                        warn!(
+                            "Directory could not be cleaned up: {:?}\nError: {:?}",
+                            entry, err
+                        );
+                    }
+                } else if let Err(err) = fs::remove_file(&entry) {
+                    warn!(
+                        "File could not be cleaned up: {:?}\nError: {:?}",
+                        entry, err
+                    );
                 }
             }
         }

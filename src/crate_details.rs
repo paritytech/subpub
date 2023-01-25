@@ -132,7 +132,6 @@ impl CrateDetails {
         self.deps.iter()
     }
 
-    /// Set any references to the dependency provided to the version given.
     pub fn write_dependency_version<P: AsRef<Path>>(
         &self,
         root: P,

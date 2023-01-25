@@ -158,10 +158,10 @@ pub struct PublishOpts {
     set_dependency_versions: Vec<String>,
 
     #[clap(
-        long = "post-publish-cleanup-dir",
-        help = "Defines the directories which should be cleaned up after publishing crates. Can be specified multiple times."
+        long = "post-publish-cleanup-glob",
+        help = "Defines the glob patterns for files or directories which should be cleaned up after publishing crates. Can be specified multiple times."
     )]
-    post_publish_cleanup_dirs: Vec<String>,
+    post_publish_cleanup_glob: Vec<String>,
 }
 
 #[derive(EnumString, strum::Display, PartialEq, Eq)]
@@ -838,7 +838,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                         &mut last_publish_instant,
                         index_conf.as_ref(),
                         opts.clear_cargo_home.as_ref(),
-                        &opts.post_publish_cleanup_dirs,
+                        &opts.post_publish_cleanup_glob,
                     )?;
                     version
                 } else {
