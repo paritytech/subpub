@@ -2,6 +2,7 @@ use std::path::Path;
 
 use anyhow::{anyhow, Context};
 use strum::{EnumIter, EnumString, IntoEnumIterator};
+use tracing::info;
 
 use crate::toml::{read_toml, write_toml};
 
@@ -180,6 +181,7 @@ pub fn write_dependency_field<P: AsRef<Path>, S: AsRef<str>>(
             // toml_edit where this code path is hit even if deps_tbl == None,
             // therefore this extra condition is actually necessary
             if deps_tbl.is_table_like() {
+                info!("!!! {:?}", deps_tbl);
                 modified |= visit(
                     deps_tbl,
                     deps,
