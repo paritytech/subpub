@@ -9,7 +9,7 @@ license = "GPL-3.0"
 anyhow = "1.0.55"
 clap = { version = "3.1.2", features = ["derive"] }
 semver = "1.0.6"
-toml_edit = "0.13.4"
+toml_edit = "0.18.0"
 walkdir = "2.3.2"
 reqwest = { version = "0.11", features = ["blocking", "json"] }
 serde = { version = "1.0.136", features = ["derive"] }
