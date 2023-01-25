@@ -2,7 +2,7 @@ use std::path::Path;
 
 use anyhow::{anyhow, Context};
 use strum::{EnumIter, EnumString, IntoEnumIterator};
-use tracing::info;
+
 
 use crate::toml::{read_toml, write_toml};
 
@@ -176,17 +176,18 @@ pub fn write_dependency_field<P: AsRef<Path>, S: AsRef<str>>(
     if let Some(workspace) = manifest.get_mut("workspace") {
         let dep_key_display = WorkspaceManifestDependencyKey::Dependencies.to_string();
         if let Some(deps_tbl) = workspace.get_mut(&dep_key_display) {
-            info!("!!! {}.{} {:?}", "workspace", dep_key_display, deps_tbl);
-            modified |= visit(
-                deps_tbl,
-                deps,
-                &format!("workspace.{}", dep_key_display),
-                &manifest_path,
-                fields_to_remove,
-                field,
-                field_value,
-                &field_type,
-            )?;
+            if deps_tbl.is_table_like() {
+                modified |= visit(
+                    deps_tbl,
+                    deps,
+                    &format!("workspace.{}", dep_key_display),
+                    &manifest_path,
+                    fields_to_remove,
+                    field,
+                    field_value,
+                    &field_type,
+                )?;
+            }
         }
     }
 
