@@ -2,7 +2,6 @@ use std::path::Path;
 
 use anyhow::{anyhow, Context};
 use strum::{EnumIter, EnumString, IntoEnumIterator};
-use tracing::info;
 
 use crate::toml::{read_toml, write_toml};
 
@@ -59,7 +58,7 @@ pub fn edit_all_dependency_sections<
 }
 
 #[derive(PartialEq, Eq)]
-pub enum WriteDependencyValueFieldType {
+pub enum DependencyFieldType {
     Version,
 }
 
@@ -70,7 +69,7 @@ pub fn write_dependency_field<P: AsRef<Path>, S: AsRef<str>>(
     fields_to_remove: &[&str],
     field: &str,
     field_value: &str,
-    field_type: WriteDependencyValueFieldType,
+    field_type: DependencyFieldType,
 ) -> anyhow::Result<()> {
     let mut manifest = read_toml(&manifest_path)?;
 
@@ -82,8 +81,12 @@ pub fn write_dependency_field<P: AsRef<Path>, S: AsRef<str>>(
         fields_to_remove: &[&str],
         field: &str,
         field_value: &str,
-        field_type: &WriteDependencyValueFieldType,
+        field_type: &DependencyFieldType,
     ) -> anyhow::Result<bool> {
+        if item.is_none() {
+            return Ok(false);
+        }
+
         let deps_tbl = item.as_table_like_mut().with_context(|| {
             format!(
                 ".{} should be table-like in {:?}",
@@ -132,7 +135,7 @@ pub fn write_dependency_field<P: AsRef<Path>, S: AsRef<str>>(
                 }
             } else if let Some(version) = value.as_str() {
                 if deps.iter().any(|dep| dep.as_ref() == key.get()) {
-                    if *field_type == WriteDependencyValueFieldType::Version {
+                    if *field_type == DependencyFieldType::Version {
                         *value = toml_edit::value(field_value);
                     } else {
                         let mut tbl = toml_edit::InlineTable::new();
@@ -176,23 +179,16 @@ pub fn write_dependency_field<P: AsRef<Path>, S: AsRef<str>>(
     if let Some(workspace) = manifest.get_mut("workspace") {
         let dep_key_display = WorkspaceManifestDependencyKey::Dependencies.to_string();
         if let Some(deps_tbl) = workspace.get_mut(&dep_key_display) {
-            // This check looks redundant since `visit` also checks for
-            // table-like items, however it seems like there's a bug in
-            // toml_edit where this code path is hit even if deps_tbl == None,
-            // therefore this extra condition is actually necessary
-            if deps_tbl.is_table_like() {
-                info!("!!! {:?}", deps_tbl);
-                modified |= visit(
-                    deps_tbl,
-                    deps,
-                    &format!("workspace.{}", dep_key_display),
-                    &manifest_path,
-                    fields_to_remove,
-                    field,
-                    field_value,
-                    &field_type,
-                )?;
-            }
+            modified |= visit(
+                deps_tbl,
+                deps,
+                &format!("workspace.{}", dep_key_display),
+                &manifest_path,
+                fields_to_remove,
+                field,
+                field_value,
+                &field_type,
+            )?;
         }
     }
 

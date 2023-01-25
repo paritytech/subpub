@@ -1,12 +1,9 @@
-use std::{
-    fs::{self, read_to_string},
-    path::Path,
-};
+use std::{fs, path::Path};
 
 use anyhow::Context;
 
 pub fn read_toml<P: AsRef<Path>>(path: P) -> anyhow::Result<toml_edit::Document> {
-    let content = read_to_string(&path)
+    let content = fs::read_to_string(&path)
         .with_context(|| format!("Failed to read file {:?}", path.as_ref().as_os_str()))?;
     let toml = content.parse::<toml_edit::Document>().with_context(|| {
         format!(
