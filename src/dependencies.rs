@@ -2,6 +2,7 @@ use std::path::Path;
 
 use anyhow::{anyhow, Context};
 use strum::{EnumIter, EnumString, IntoEnumIterator};
+use tracing::info;
 
 use crate::toml::{read_toml, write_toml};
 
@@ -63,7 +64,7 @@ pub enum WriteDependencyValueFieldType {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn write_dependency_field_value<P: AsRef<Path>, S: AsRef<str>>(
+pub fn write_dependency_field<P: AsRef<Path>, S: AsRef<str>>(
     manifest_path: P,
     deps: &[S],
     fields_to_remove: &[&str],
@@ -97,14 +98,16 @@ pub fn write_dependency_field_value<P: AsRef<Path>, S: AsRef<str>>(
             field_value: &str,
             fields_to_remove: &[&str],
         ) -> bool {
+            // Workspace dependencies are skipped here because they're handled
+            // further down
             if value.get("workspace").is_some() {
+                false
+            } else {
                 value.insert(field, toml_edit::value(field_value));
                 for fields_to_remove in fields_to_remove {
                     value.remove(fields_to_remove);
                 }
                 true
-            } else {
-                false
             }
         }
 
@@ -173,6 +176,7 @@ pub fn write_dependency_field_value<P: AsRef<Path>, S: AsRef<str>>(
     if let Some(workspace) = manifest.get_mut("workspace") {
         let dep_key_display = WorkspaceManifestDependencyKey::Dependencies.to_string();
         if let Some(deps_tbl) = workspace.get_mut(&dep_key_display) {
+            info!("!!! {}.{} {:?}", "workspace", dep_key_display, deps_tbl);
             modified |= visit(
                 deps_tbl,
                 deps,

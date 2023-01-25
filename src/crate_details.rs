@@ -31,7 +31,7 @@ use tracing::{info, span, Level};
 
 use crate::{
     dependencies::{
-        write_dependency_field_value, ManifestDependencyKey, WriteDependencyValueFieldType,
+        write_dependency_field, ManifestDependencyKey, WriteDependencyValueFieldType,
     },
     external::{self, cargo::PublishError},
     toml::{read_toml, write_toml},
@@ -140,7 +140,7 @@ impl CrateDetails {
         fields_to_remove: &[&str],
     ) -> anyhow::Result<()> {
         for manifest_path in &[&root.as_ref().join("Cargo.toml"), &self.manifest_path] {
-            write_dependency_field_value(
+            write_dependency_field(
                 manifest_path,
                 &[dep],
                 fields_to_remove,
