@@ -175,16 +175,22 @@ pub fn write_dependency_field<P: AsRef<Path>, S: AsRef<str>>(
     if let Some(workspace) = manifest.get_mut("workspace") {
         let dep_key_display = WorkspaceManifestDependencyKey::Dependencies.to_string();
         if let Some(deps_tbl) = workspace.get_mut(&dep_key_display) {
-            modified |= visit(
-                deps_tbl,
-                deps,
-                &format!("workspace.{}", dep_key_display),
-                &manifest_path,
-                fields_to_remove,
-                field,
-                field_value,
-                &field_type,
-            )?;
+            // This check looks redundant since `visit` also checks for
+            // table-like items, however it seems like there's a bug in
+            // toml_edit where this code path is hit even if deps_tbl == None,
+            // therefore this extra condition is actually necessary
+            if deps_tbl.is_table_like() {
+                modified |= visit(
+                    deps_tbl,
+                    deps,
+                    &format!("workspace.{}", dep_key_display),
+                    &manifest_path,
+                    fields_to_remove,
+                    field,
+                    field_value,
+                    &field_type,
+                )?;
+            }
         }
     }
 
