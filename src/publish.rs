@@ -627,6 +627,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         } else {
             HashSet::from_iter(opts.verify_only.iter())
         };
+
         if let Some(verify_from) = opts.verify_from {
             let mut keep = false;
             for krate in &publish_order {
@@ -638,6 +639,42 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 }
             }
         }
+
+        if opts.include_crates_dependents {
+            loop {
+                let mut progressed = false;
+
+                let included_crates = crates_to_verify
+                    .iter()
+                    .map(|krate| krate.to_owned())
+                    .collect::<Vec<_>>();
+                for included_crate in included_crates {
+                    for krate in &publish_order {
+                        let details = crates
+                            .crates_map
+                            .get(krate)
+                            .with_context(|| format!("Crate not found: {krate}"))?;
+                        if details.should_be_published
+                            && details.deps_to_publish().any(|dep| dep == included_crate)
+                        {
+                            let inserted = crates_to_verify.insert(krate);
+                            if inserted {
+                                info!(
+                                    "Including crate {} because it depends on {}",
+                                    krate, included_crate
+                                );
+                            }
+                            progressed |= inserted;
+                        }
+                    }
+                }
+
+                if !progressed {
+                    break;
+                }
+            }
+        }
+
         crates_to_verify
     };
 
