@@ -22,10 +22,9 @@ use std::{
 };
 
 use anyhow::{anyhow, Context};
-use cargo_metadata::Package;
+use cargo_metadata::{DependencyKind, Package};
 use external::crates_io::CratesIoCrateVersion;
 use semver::Version;
-use strum::IntoEnumIterator;
 use tempfile::TempDir;
 use tracing::{info, span, Level};
 
@@ -63,38 +62,36 @@ impl CrateDetails {
             should_be_published: true,
             manifest_path: PathBuf::new(),
             readme: None,
-            description: Some("Placeholder description"),
+            description: Some("Placeholder description".into()),
         }
     }
 
     pub fn load(pkg: &Package) -> anyhow::Result<CrateDetails> {
-        let manifest_path = &pkg.manifest_path;
+        let path_deps = pkg.dependencies.iter().filter(|dep| dep.path.is_some());
 
-        let manifest = read_toml(manifest_path)?;
-
-        let mut build_deps = HashSet::new();
-        let mut dev_deps = HashSet::new();
-        let mut deps = HashSet::new();
-        for key in ManifestDependencyKey::iter() {
-            let key_name = &key.to_string();
-            match key {
-                ManifestDependencyKey::Dependencies => {
-                    for item in get_all_dependency_sections(&manifest, key_name) {
-                        deps.extend(filter_path_dependencies(manifest_path, key_name, item)?)
-                    }
-                }
-                ManifestDependencyKey::DevDependencies => {
-                    for item in get_all_dependency_sections(&manifest, key_name) {
-                        dev_deps.extend(filter_path_dependencies(manifest_path, key_name, item)?)
-                    }
-                }
-                ManifestDependencyKey::BuildDependencies => {
-                    for item in get_all_dependency_sections(&manifest, key_name) {
-                        build_deps.extend(filter_path_dependencies(manifest_path, key_name, item)?)
-                    }
-                }
+        let deps = HashSet::from_iter(path_deps.clone().filter_map(|dep| {
+            if dep.kind == DependencyKind::Normal {
+                Some(dep.name.clone())
+            } else {
+                None
             }
-        }
+        }));
+
+        let dev_deps = HashSet::from_iter(path_deps.clone().filter_map(|dep| {
+            if dep.kind == DependencyKind::Development {
+                Some(dep.name.clone())
+            } else {
+                None
+            }
+        }));
+
+        let build_deps = HashSet::from_iter(path_deps.clone().filter_map(|dep| {
+            if dep.kind == DependencyKind::Build {
+                Some(dep.name.clone())
+            } else {
+                None
+            }
+        }));
 
         let should_be_published = match pkg.publish.as_ref() {
             Some(registries) => !registries.is_empty(),
@@ -484,94 +481,6 @@ impl CrateDetails {
     }
 }
 
-/// An iterator that hands back all "dependencies"/"dev-dependencies"/"build-dependencies" (according to the
-/// label provided), by looking in the top level `[label]` section as well as any `[target.'foo'.label]` sections.
-fn get_all_dependency_sections<'a>(
-    document: &'a toml_edit::Document,
-    label: &'a str,
-) -> impl Iterator<Item = &'a toml_edit::Item> + 'a {
-    let target = document
-        .get("target")
-        .and_then(|t| t.as_table_like())
-        .into_iter()
-        .flat_map(|t| {
-            // For each item of the "target" table, see if we can find a `label` section in it.
-            t.iter()
-                .flat_map(|(_name, item)| item.as_table_like())
-                .flat_map(|t| t.get(label))
-        });
-
-    document.get(label).into_iter().chain(target)
-}
-
-/// Given a path to some dependencies in a TOML file, pull out the package names
-/// for any path based dependencies (ie dependencies in the same workspace).
-fn filter_path_dependencies<P: AsRef<Path>>(
-    toml_path: P,
-    key_name: &str,
-    item: &toml_edit::Item,
-) -> anyhow::Result<HashSet<String>> {
-    let item = match item.as_table() {
-        Some(item) => item,
-        None => return Err(anyhow!("dependencies should be a TOML table.")),
-    };
-
-    let mut deps = HashSet::new();
-    for (key, val) in item {
-        let val = match val.as_table_like() {
-            Some(val) => val,
-            None => {
-                if val.is_str() {
-                    continue;
-                } else {
-                    return Err(anyhow!(
-                        "{} {} in {:?} should be specified as a string or table",
-                        key_name,
-                        key,
-                        toml_path.as_ref(),
-                    ));
-                }
-            }
-        };
-
-        // Ignore any dependency without a "path" (not a workspace dep
-        // if it doesn't point to another crate via a path).
-        let path = match val.get("path") {
-            Some(path) => path,
-            None => continue,
-        };
-
-        // Expect path to be a string. Error if it's not.
-        path.as_str().ok_or_else(|| {
-            anyhow!(
-                ".path field of {} {} in {:?} is not a string",
-                key_name,
-                key,
-                toml_path.as_ref()
-            )
-        })?;
-
-        // What is the actual package name?
-        let package_name = val
-            .get("package")
-            .map(|package| {
-                package.as_str().map(|s| s.to_string()).ok_or_else(|| {
-                    anyhow!(
-                        ".package field of {} {} in {:?} is not a string",
-                        key_name,
-                        key,
-                        toml_path.as_ref()
-                    )
-                })
-            })
-            .unwrap_or_else(|| Ok(key.to_string()))?;
-
-        deps.insert(package_name);
-    }
-
-    Ok(deps)
-}
-
 #[cfg(all(test, any(feature = "test-1", feature = "test-2", feature = "test-3")))]
 mod tests {
     use super::*;
@@ -647,7 +556,18 @@ pub fn add(left: usize, right: usize) -> usize {
             true
         );
 
-        let details = CrateDetails::load(tmp_dir.path().join("Cargo.toml")).unwrap();
+        let workspace_meta = cargo_metadata::MetadataCommand::new()
+            .current_dir(tmp_dir.path())
+            .exec()
+            .unwrap();
+
+        let pkg = workspace_meta
+            .packages
+            .iter()
+            .find(|pkg| pkg.name == "lib")
+            .unwrap();
+
+        let details = CrateDetails::load(pkg).unwrap();
 
         (tmp_dir, details)
     }
@@ -655,21 +575,21 @@ pub fn add(left: usize, right: usize) -> usize {
     #[test]
     #[cfg(feature = "test-1")]
     pub fn test_crate_not_published_if_unchanged() {
-        let (tmp_dir, details) = setup_details();
-        assert_eq!(details.needs_publishing(&tmp_dir).unwrap(), false);
+        let (_tmp_dir, details) = setup_details();
+        assert_eq!(details.needs_publishing().unwrap(), false);
     }
 
     #[test]
     #[cfg(feature = "test-2")]
     pub fn test_crate_published_if_changed() {
-        let (tmp_dir, details) = setup_details();
-        assert_eq!(details.needs_publishing(&tmp_dir).unwrap(), true);
+        let (_tmp_dir, details) = setup_details();
+        assert_eq!(details.needs_publishing().unwrap(), true);
     }
 
     #[test]
     #[cfg(feature = "test-3")]
     pub fn test_crate_published_if_unpublished() {
-        let (tmp_dir, details) = setup_details();
-        assert_eq!(details.needs_publishing(&tmp_dir).unwrap(), true);
+        let (_tmp_dir, details) = setup_details();
+        assert_eq!(details.needs_publishing().unwrap(), true);
     }
 }
