@@ -31,6 +31,7 @@ use tracing::{info, span, Level};
 use crate::{
     dependencies::{write_dependency_field, DependencyFieldType, ManifestDependencyKey},
     external::{self, cargo::PublishError},
+    testing::TestEnvironment,
     toml::{read_toml, write_toml},
     version::{
         maybe_bump_for_breaking_change, maybe_bump_for_compatible_change, VersionBumpHeuristic,
@@ -51,7 +52,7 @@ pub struct CrateDetails {
 }
 
 impl CrateDetails {
-    #[cfg(feature = "test-0")]
+    #[cfg(test)]
     pub fn new_for_testing(name: String) -> Self {
         Self {
             name,
@@ -355,7 +356,10 @@ impl CrateDetails {
         }
     }
 
-    pub fn needs_publishing(&self) -> anyhow::Result<bool> {
+    pub fn needs_publishing(
+        &self,
+        test_enviroment: Option<TestEnvironment>,
+    ) -> anyhow::Result<bool> {
         info!(
             "Comparing crate {} against crates.io to see if it needs to be published",
             self.name
@@ -383,19 +387,23 @@ impl CrateDetails {
         };
 
         info!("Generating .crate file");
+
         self.prepare_for_publish()?;
+
         let mut cmd = Command::new("cargo");
-        if !cmd
-            .arg("package")
+        cmd.arg("package")
+            .arg("--quiet")
             .arg("--manifest-path")
             .arg(&self.manifest_path)
             .arg("--no-verify")
             .arg("--allow-dirty")
             .arg("--target-dir")
-            .arg(target_dir.path())
-            .status()?
-            .success()
-        {
+            .arg(target_dir.path());
+        if test_enviroment.is_some() {
+            cmd.arg("--quiet");
+        }
+
+        if !cmd.status()?.success() {
             return Err(anyhow!(
                 "Failed to package crate {}. Command failed: {:?}",
                 &self.name,
@@ -412,24 +420,28 @@ impl CrateDetails {
         fn get_cratesio_bytes(
             name: &str,
             version: &semver::Version,
-            #[allow(unused_variables)] pkg_bytes: &[u8],
+            pkg_bytes: &[u8],
+            test_enviroment: Option<TestEnvironment>,
         ) -> anyhow::Result<Option<Vec<u8>>> {
-            #[cfg(test)]
-            {
-                external::crates_io::download_crate_for_testing(name, version, pkg_bytes)
-            }
-            #[cfg(not(test))]
-            {
+            if let Some(test_enviroment) = test_enviroment {
+                external::crates_io::download_crate_for_testing(
+                    name,
+                    version,
+                    pkg_bytes,
+                    test_enviroment,
+                )
+            } else {
                 external::crates_io::download_crate(name, version)
             }
         }
-        let cratesio_bytes =
-            if let Some(bytes) = get_cratesio_bytes(&self.name, &self.version, &pkg_bytes)? {
-                bytes
-            } else {
-                info!("The crate is not published to crates.io");
-                return Ok(true);
-            };
+        let cratesio_bytes = if let Some(bytes) =
+            get_cratesio_bytes(&self.name, &self.version, &pkg_bytes, test_enviroment)?
+        {
+            bytes
+        } else {
+            info!("The crate is not published to crates.io");
+            return Ok(true);
+        };
 
         if cratesio_bytes == pkg_bytes {
             info!(
@@ -481,25 +493,22 @@ impl CrateDetails {
     }
 }
 
-#[cfg(all(test, any(feature = "test-1", feature = "test-2", feature = "test-3")))]
+#[cfg(test)]
 mod tests {
     use super::*;
 
     fn setup_details() -> (TempDir, CrateDetails) {
         let tmp_dir = tempfile::tempdir().unwrap();
 
-        assert_eq!(
-            {
-                let mut cmd = Command::new("git");
-                cmd.current_dir(&tmp_dir)
-                    .arg("init")
-                    .arg("--quiet")
-                    .status()
-                    .unwrap()
-                    .success()
-            },
-            true
-        );
+        assert!({
+            let mut cmd = Command::new("git");
+            cmd.current_dir(&tmp_dir)
+                .arg("init")
+                .arg("--quiet")
+                .status()
+                .unwrap()
+                .success()
+        });
 
         fs::write(
             tmp_dir.path().join("Cargo.toml"),
@@ -529,32 +538,27 @@ pub fn add(left: usize, right: usize) -> usize {
         )
         .unwrap();
 
-        assert_eq!(
-            {
-                let mut cmd = Command::new("git");
-                cmd.current_dir(&tmp_dir)
-                    .arg("add")
-                    .arg(".")
-                    .status()
-                    .unwrap()
-                    .success()
-            },
-            true
-        );
-        assert_eq!(
-            {
-                let mut cmd = Command::new("git");
-                cmd.current_dir(&tmp_dir)
-                    .arg("commit")
-                    .arg("--quiet")
-                    .arg("--message")
-                    .arg("initial commit")
-                    .status()
-                    .unwrap()
-                    .success()
-            },
-            true
-        );
+        assert!({
+            let mut cmd = Command::new("git");
+            cmd.current_dir(&tmp_dir)
+                .arg("add")
+                .arg(".")
+                .status()
+                .unwrap()
+                .success()
+        });
+
+        assert!({
+            let mut cmd = Command::new("git");
+            cmd.current_dir(&tmp_dir)
+                .arg("commit")
+                .arg("--quiet")
+                .arg("--message")
+                .arg("initial commit")
+                .status()
+                .unwrap()
+                .success()
+        });
 
         let workspace_meta = cargo_metadata::MetadataCommand::new()
             .current_dir(tmp_dir.path())
@@ -573,23 +577,26 @@ pub fn add(left: usize, right: usize) -> usize {
     }
 
     #[test]
-    #[cfg(feature = "test-1")]
     pub fn test_crate_not_published_if_unchanged() {
         let (_tmp_dir, details) = setup_details();
-        assert_eq!(details.needs_publishing().unwrap(), false);
+        assert!(!details
+            .needs_publishing(Some(TestEnvironment::CrateNotPublishedIfUnchanged))
+            .unwrap(),);
     }
 
     #[test]
-    #[cfg(feature = "test-2")]
     pub fn test_crate_published_if_changed() {
         let (_tmp_dir, details) = setup_details();
-        assert_eq!(details.needs_publishing().unwrap(), true);
+        assert!(details
+            .needs_publishing(Some(TestEnvironment::CratePublishedIfChanged))
+            .unwrap(),);
     }
 
     #[test]
-    #[cfg(feature = "test-3")]
-    pub fn test_crate_published_if_unpublished() {
+    pub fn test_crate_published_if_not_published() {
         let (_tmp_dir, details) = setup_details();
-        assert_eq!(details.needs_publishing().unwrap(), true);
+        assert!(details
+            .needs_publishing(Some(TestEnvironment::CratePublishedIfNotPublished))
+            .unwrap(),);
     }
 }

@@ -18,7 +18,7 @@ use std::env;
 
 use anyhow::{anyhow, Context};
 
-use crate::git::git_remote_head_sha;
+use crate::{git::git_remote_head_sha, testing::TestEnvironment};
 
 pub fn does_crate_exist(name: &str, version: &semver::Version) -> anyhow::Result<bool> {
     let client = reqwest::blocking::Client::new();
@@ -108,7 +108,6 @@ pub fn crate_versions<Name: AsRef<str>>(name: Name) -> anyhow::Result<Vec<Crates
         .collect()
 }
 
-#[cfg(not(test))]
 pub fn download_crate(name: &str, version: &semver::Version) -> anyhow::Result<Option<Vec<u8>>> {
     let client = reqwest::blocking::Client::new();
     let version = version.to_string();
@@ -137,29 +136,16 @@ pub fn download_crate(name: &str, version: &semver::Version) -> anyhow::Result<O
     }
 }
 
-#[cfg(test)]
 pub fn download_crate_for_testing(
     _: &str,
     _: &semver::Version,
-    #[allow(unused_variables)] pkg_bytes: &[u8],
+    pkg_bytes: &[u8],
+    test_enviroment: TestEnvironment,
 ) -> anyhow::Result<Option<Vec<u8>>> {
-    #[cfg(feature = "test-1")]
-    {
-        return Ok(Some(pkg_bytes.to_vec()));
-    }
-    #[cfg(feature = "test-2")]
-    {
-        return Ok(Some(vec![]));
-    }
-    #[cfg(feature = "test-3")]
-    {
-        return Ok(None);
-    }
-    #[allow(unreachable_code)]
-    {
-        Err(anyhow::anyhow!(
-            "download_crate_for_testing is not set up for this test suite"
-        ))
+    match test_enviroment {
+        TestEnvironment::CrateNotPublishedIfUnchanged => Ok(Some(pkg_bytes.to_vec())),
+        TestEnvironment::CratePublishedIfChanged => Ok(Some(vec![])),
+        TestEnvironment::CratePublishedIfNotPublished => Ok(None),
     }
 }
 
@@ -262,7 +248,6 @@ fn get_cratesio_index_metadata_url(index_url: &str, head_sha: &str, krate: &str)
 }
 
 #[test]
-#[cfg(feature = "test-0")]
 fn test_get_cratesio_index_url() {
     let index_url = "https://raw.githubusercontent.com/rust-lang/crates.io-index";
     let head_sha = "d90b3649f26334dc4026112ba8208993cbd88116";

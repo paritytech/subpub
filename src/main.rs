@@ -22,6 +22,7 @@ mod git;
 mod publish;
 mod toml;
 mod version;
+mod testing;
 
 use std::{env, io};
 

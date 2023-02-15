@@ -813,7 +813,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                     .crates_map
                     .get_mut(krate)
                     .with_context(|| format!("Crate not found: {krate}"))?;
-                if details.needs_publishing()? {
+                if details.needs_publishing(None)? {
                     match adjust_version {
                         AdjustVersion::BasedOnPreviousVersions(prev_versions) => {
                             let bump_heuristic = if opts
@@ -998,7 +998,6 @@ fn get_publish_order(details: &HashMap<CrateName, CrateDetails>) -> Vec<String> 
 }
 
 #[test]
-#[cfg(feature = "test-0")]
 fn test_get_publish_order() {
     use std::collections::HashMap;
 

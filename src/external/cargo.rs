@@ -153,7 +153,6 @@ pub fn cargo_check_crate<P: AsRef<Path>>(manifest_path: P) -> anyhow::Result<()>
 }
 
 #[test]
-#[cfg(feature = "test-0")]
 fn test_detect_spurious_network_error() {
     let full_error_msg = "
 Updating crates.io index
@@ -174,7 +173,6 @@ Caused by:
 }
 
 #[test]
-#[cfg(feature = "test-0")]
 fn test_detect_rate_limit_error() {
     let full_error_msg = "
 Updating crates.io index
