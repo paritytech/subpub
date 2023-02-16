@@ -140,18 +140,6 @@ pub fn cargo_update_workspace<P: AsRef<Path>>(root: P) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn cargo_check_crate<P: AsRef<Path>>(manifest_path: P) -> anyhow::Result<()> {
-    let mut cmd = Command::new("cargo");
-    cmd.arg("check")
-        .arg("--quiet")
-        .arg("--manifest-path")
-        .arg(manifest_path.as_ref());
-    if !cmd.status()?.success() {
-        return Err(anyhow!("Failed to check crate. Command failed: {:?}", cmd));
-    };
-    Ok(())
-}
-
 #[test]
 fn test_detect_spurious_network_error() {
     let full_error_msg = "

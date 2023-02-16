@@ -15,7 +15,7 @@ use crate::{
     crate_details::CrateDetails,
     crates::{CrateName, Crates},
     external::{
-        cargo::{cargo_check_crate, cargo_update_workspace},
+        cargo::cargo_update_workspace,
         crates_io::{self, CratesIoIndexConfiguration},
     },
     git::{git_hard_reset, git_head_sha},
@@ -892,29 +892,6 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         }
 
         processed_crates.insert(sel_crate);
-    }
-
-    if opts.post_check {
-        let ordered_processed_crates = publish_order
-            .iter()
-            .filter(|krate| processed_crates.get(krate).is_some())
-            .collect::<Vec<_>>();
-        info!(
-            "Processed the following crates (ordered by publishing order): {}",
-            ordered_processed_crates
-                .iter()
-                .map(|krate| (*krate).into())
-                .collect::<Vec<String>>()
-                .join(", ")
-        );
-        for krate in ordered_processed_crates {
-            info!("Checking crate {krate}");
-            let details = crates
-                .crates_map
-                .get(krate)
-                .with_context(|| format!("Crate not found: {krate}"))?;
-            cargo_check_crate(&details.manifest_path)?;
-        }
     }
 
     if opts.for_pull_request {
