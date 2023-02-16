@@ -519,7 +519,7 @@ mod tests {
         let src_dir = project_dir.path().join("src");
         fs::create_dir(&src_dir).unwrap();
         fs::write(
-            &src_dir.join("main.rs"),
+            src_dir.join("main.rs"),
             r#"
             pub fn add(left: usize, right: usize) -> usize {
                 left + right

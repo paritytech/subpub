@@ -1,5 +1,5 @@
 check-style:
-  cargo fmt --all -- --check
+  cargo +nightly fmt --all -- --check
 
 lint:
   cargo clippy --all-targets --workspace -- -Dwarnings

@@ -18,7 +18,7 @@ jobs:
         with:
           toolchain: stable
 
-      # Put this AFTER installing Rust because the cache uses the current rustc
+      # Put this AFTER installing Rust because the action uses the current rustc
       # version as its cache key
       - name: Cache Rust
         uses: Swatinem/rust-cache@359a70e43a0bb8a13953b04a90f76428b4959bb6 # v2.2.0
