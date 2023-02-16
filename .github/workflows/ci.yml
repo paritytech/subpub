@@ -13,10 +13,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Install Rust
+      - name: Install Rust stable
         uses: dtolnay/rust-toolchain@55c7845fad90d0ae8b2e83715cb900e5e861e8cb # stable branch
         with:
           toolchain: stable
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@55c7845fad90d0ae8b2e83715cb900e5e861e8cb # stable branch
+        with:
+          toolchain: nightly
 
       # Put this AFTER installing Rust because the action uses the current rustc
       # version as its cache key
