@@ -113,12 +113,10 @@ impl CrateDetails {
     }
 
     pub fn write_own_version(&mut self, new_version: Version) -> anyhow::Result<()> {
-        // Load TOML file and update the version in that.
         let mut manifest = self.read_manifest()?;
         manifest["package"]["version"] = toml_edit::value(new_version.to_string());
         self.write_toml(&manifest)?;
 
-        // If that worked, save the in-memory version too
         self.version = new_version;
 
         Ok(())
@@ -154,8 +152,8 @@ impl CrateDetails {
            publishing. Reasoning: Since 1.40 (rust-lang/cargo#7333), cargo will
            strip dev-dependencies that don't have a version. This removes the
            need to manually strip dev-dependencies when publishing a crate that
-           has circular dev-dependencies. (i.e., this works as a workaround of
-           rust-lang/cargo#4242).
+           has circular dev-dependencies (i.e. this is a workaround for
+           https://github.com/rust-lang/cargo/issues/4242).
            Taken from https://github.com/rust-lang/futures-rs/pull/2305.
         */
         fn visit<P: AsRef<Path>>(
@@ -356,10 +354,7 @@ impl CrateDetails {
         }
     }
 
-    pub fn needs_publishing(
-        &self,
-        test_enviroment: Option<TestEnvironment>,
-    ) -> anyhow::Result<bool> {
+    pub fn needs_publishing(&self, test_env: Option<TestEnvironment>) -> anyhow::Result<bool> {
         info!(
             "Comparing crate {} against crates.io to see if it needs to be published",
             self.name
@@ -399,7 +394,7 @@ impl CrateDetails {
             .arg("--allow-dirty")
             .arg("--target-dir")
             .arg(target_dir.path());
-        if test_enviroment.is_some() {
+        if test_env.is_some() {
             cmd.arg("--quiet");
         }
 
@@ -421,21 +416,16 @@ impl CrateDetails {
             name: &str,
             version: &semver::Version,
             pkg_bytes: &[u8],
-            test_enviroment: Option<TestEnvironment>,
+            test_env: Option<TestEnvironment>,
         ) -> anyhow::Result<Option<Vec<u8>>> {
-            if let Some(test_enviroment) = test_enviroment {
-                external::crates_io::download_crate_for_testing(
-                    name,
-                    version,
-                    pkg_bytes,
-                    test_enviroment,
-                )
+            if let Some(test_env) = test_env {
+                external::crates_io::download_crate_for_testing(name, version, pkg_bytes, test_env)
             } else {
                 external::crates_io::download_crate(name, version)
             }
         }
         let cratesio_bytes = if let Some(bytes) =
-            get_cratesio_bytes(&self.name, &self.version, &pkg_bytes, test_enviroment)?
+            get_cratesio_bytes(&self.name, &self.version, &pkg_bytes, test_env)?
         {
             bytes
         } else {
@@ -498,11 +488,11 @@ mod tests {
     use super::*;
 
     fn setup_details() -> (TempDir, CrateDetails) {
-        let tmp_dir = tempfile::tempdir().unwrap();
+        let project_dir = tempfile::tempdir().unwrap();
 
         assert!({
             let mut cmd = Command::new("git");
-            cmd.current_dir(&tmp_dir)
+            cmd.current_dir(&project_dir)
                 .arg("init")
                 .arg("--quiet")
                 .status()
@@ -511,36 +501,36 @@ mod tests {
         });
 
         fs::write(
-            tmp_dir.path().join("Cargo.toml"),
+            project_dir.path().join("Cargo.toml"),
             r#"
-[package]
-name = "lib"
-version = "0.1.0"
-edition = "2021"
-description = "placeholder"
-license = "Apache-2.0"
-documentation = "https://en.wikipedia.org/wiki/HTTP_404"
-homepage = "https://en.wikipedia.org/wiki/HTTP_404"
-repository = "https://en.wikipedia.org/wiki/HTTP_404"
+            [package]
+            name = "lib"
+            version = "0.1.0"
+            edition = "2021"
+            description = "placeholder"
+            license = "Apache-2.0"
+            documentation = "https://en.wikipedia.org/wiki/HTTP_404"
+            homepage = "https://en.wikipedia.org/wiki/HTTP_404"
+            repository = "https://en.wikipedia.org/wiki/HTTP_404"
             "#,
         )
         .unwrap();
 
-        let src_dir = tmp_dir.path().join("src");
+        let src_dir = project_dir.path().join("src");
         fs::create_dir(&src_dir).unwrap();
         fs::write(
             &src_dir.join("main.rs"),
             r#"
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
+            pub fn add(left: usize, right: usize) -> usize {
+                left + right
+            }
             "#,
         )
         .unwrap();
 
         assert!({
             let mut cmd = Command::new("git");
-            cmd.current_dir(&tmp_dir)
+            cmd.current_dir(&project_dir)
                 .arg("add")
                 .arg(".")
                 .status()
@@ -550,7 +540,7 @@ pub fn add(left: usize, right: usize) -> usize {
 
         assert!({
             let mut cmd = Command::new("git");
-            cmd.current_dir(&tmp_dir)
+            cmd.current_dir(&project_dir)
                 .arg("commit")
                 .arg("--quiet")
                 .arg("--message")
@@ -561,7 +551,7 @@ pub fn add(left: usize, right: usize) -> usize {
         });
 
         let workspace_meta = cargo_metadata::MetadataCommand::new()
-            .current_dir(tmp_dir.path())
+            .current_dir(project_dir.path())
             .exec()
             .unwrap();
 
@@ -573,7 +563,7 @@ pub fn add(left: usize, right: usize) -> usize {
 
         let details = CrateDetails::load(pkg).unwrap();
 
-        (tmp_dir, details)
+        (project_dir, details)
     }
 
     #[test]

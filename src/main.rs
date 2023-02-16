@@ -20,9 +20,9 @@ mod dependencies;
 mod external;
 mod git;
 mod publish;
+mod testing;
 mod toml;
 mod version;
-mod testing;
 
 use std::{env, io};
 

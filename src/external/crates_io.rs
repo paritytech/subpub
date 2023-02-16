@@ -140,9 +140,9 @@ pub fn download_crate_for_testing(
     _: &str,
     _: &semver::Version,
     pkg_bytes: &[u8],
-    test_enviroment: TestEnvironment,
+    test_env: TestEnvironment,
 ) -> anyhow::Result<Option<Vec<u8>>> {
-    match test_enviroment {
+    match test_env {
         TestEnvironment::CrateNotPublishedIfUnchanged => Ok(Some(pkg_bytes.to_vec())),
         TestEnvironment::CratePublishedIfChanged => Ok(Some(vec![])),
         TestEnvironment::CratePublishedIfNotPublished => Ok(None),
