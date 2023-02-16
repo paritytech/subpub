@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     branches:
-      - "*"
+      - master
   pull_request:
 
 jobs:
@@ -29,4 +29,4 @@ jobs:
         run: cargo install just --version 1.13.0
 
       - name: Check the code
-        run: just all-checks
+        run: just --verbose all-checks
