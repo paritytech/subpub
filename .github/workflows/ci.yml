@@ -7,7 +7,7 @@ on:
   pull_request:
 
 jobs:
-  reserve-crate:
+  checks:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -25,7 +25,7 @@ jobs:
         with:
           cache-on-failure: "true"
 
-      - name: Install cargo-generate
+      - name: Install dependencies
         run: cargo install just --version 1.13.0
 
       - name: Check the code
