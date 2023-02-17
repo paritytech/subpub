@@ -27,8 +27,9 @@ use glob::glob;
 use tracing::{info, warn};
 
 use crate::{
+    cargo::PublishError,
     crate_details::CrateDetails,
-    external::{self, cargo::PublishError, crates_io::CratesIoIndexConfiguration},
+    crates_io::{self, CratesIoIndexConfiguration},
 };
 
 pub type CrateName = String;
@@ -174,8 +175,8 @@ impl Crates {
 
         info!("Waiting for crate {} to be available on crates.io", krate);
         // Don't return until the crate has finished being published; it won't
-        // be immediately visible on crates.io, so wait until it shows up.
-        while !external::crates_io::does_crate_exist(krate, &details.version)? {
+        // be immediately visible on crates.io, so wait until it shows up
+        while !crates_io::does_crate_exist(krate, &details.version)? {
             thread::sleep(Duration::from_millis(1536))
         }
 
@@ -184,11 +185,7 @@ impl Crates {
                 "Waiting for crate {} to be available in the registry",
                 krate
             );
-            while !external::crates_io::does_crate_exist_in_cratesio_index(
-                index_conf,
-                krate,
-                &details.version,
-            )? {
+            while !crates_io::is_crate_indexed(index_conf, krate, &details.version)? {
                 thread::sleep(Duration::from_millis(1536))
             }
         }

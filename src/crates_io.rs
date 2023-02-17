@@ -191,7 +191,7 @@ pub struct CratesIoIndexConfiguration<'a> {
     pub repository: &'a String,
 }
 
-pub fn does_crate_exist_in_cratesio_index(
+pub fn is_crate_indexed(
     index_conf: &CratesIoIndexConfiguration,
     krate: &str,
     version: &semver::Version,

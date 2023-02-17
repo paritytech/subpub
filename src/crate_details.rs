@@ -23,14 +23,15 @@ use std::{
 
 use anyhow::{anyhow, Context};
 use cargo_metadata::{DependencyKind, Package};
-use external::crates_io::CratesIoCrateVersion;
+use crates_io::CratesIoCrateVersion;
 use semver::Version;
 use tempfile::TempDir;
 use tracing::{info, span, Level};
 
 use crate::{
-    dependencies::{write_dependency_field, DependencyFieldType, ManifestDependencyKey},
-    external::{self, cargo::PublishError},
+    cargo::{self, PublishError},
+    crates_io,
+    dependencies::{write_dependency_field, CrateManifestDependencyKey, DependencyFieldType},
     testing::TestEnvironment,
     toml::{read_toml, write_toml},
     version::{
@@ -115,10 +116,8 @@ impl CrateDetails {
     pub fn write_own_version(&mut self, new_version: Version) -> anyhow::Result<()> {
         let mut manifest = self.read_manifest()?;
         manifest["package"]["version"] = toml_edit::value(new_version.to_string());
-        self.write_toml(&manifest)?;
-
+        self.write_manifest(&manifest)?;
         self.version = new_version;
-
         Ok(())
     }
 
@@ -133,7 +132,8 @@ impl CrateDetails {
         version: &Version,
         fields_to_remove: &[&str],
     ) -> anyhow::Result<()> {
-        for manifest_path in &[&root.as_ref().join("Cargo.toml"), &self.manifest_path] {
+        let workspace_manifest = root.as_ref().join("Cargo.toml");
+        for manifest_path in &[&workspace_manifest, &self.manifest_path] {
             write_dependency_field(
                 manifest_path,
                 &[dep],
@@ -216,11 +216,10 @@ impl CrateDetails {
         }
 
         let mut manifest = self.read_manifest()?;
-        let mut needs_toml_write = false;
-
-        let dev_deps_key = ManifestDependencyKey::DevDependencies.to_string();
+        let mut should_update_manifest = false;
 
         // Visit [dev-dependencies]
+        let dev_deps_key = CrateManifestDependencyKey::DevDependencies.to_string();
         if let Some(item) = manifest.get_mut(&dev_deps_key) {
             let item = item.as_table_like_mut().with_context(|| {
                 format!(
@@ -231,7 +230,8 @@ impl CrateDetails {
             })?;
             for dev_dep in &self.dev_deps {
                 if !self.deps_to_publish().any(|dep| dep == dev_dep) {
-                    needs_toml_write |= visit(item, &dev_deps_key, dev_dep, &self.manifest_path)?;
+                    should_update_manifest |=
+                        visit(item, &dev_deps_key, dev_dep, &self.manifest_path)?;
                 }
             }
         }
@@ -265,7 +265,7 @@ impl CrateDetails {
                     })?;
                     for dev_dep in &self.dev_deps {
                         if !self.deps_to_publish().any(|dep| dep == dev_dep) {
-                            needs_toml_write |= visit(
+                            should_update_manifest |= visit(
                                 dev_deps_tbl,
                                 &dev_deps_tbl_path,
                                 dev_dep,
@@ -277,8 +277,8 @@ impl CrateDetails {
             }
         }
 
-        if needs_toml_write {
-            self.write_toml(&manifest)?;
+        if should_update_manifest {
+            self.write_manifest(&manifest)?;
         }
 
         Ok(())
@@ -314,7 +314,7 @@ impl CrateDetails {
         let mut manifest = read_toml(&self.manifest_path)?;
         if self.description.is_none() {
             manifest["package"]["description"] = toml_edit::value(&self.name);
-            self.write_toml(&manifest)?;
+            self.write_manifest(&manifest)?;
         }
         Ok(())
     }
@@ -327,7 +327,7 @@ impl CrateDetails {
     }
 
     pub fn publish(&self, verify: bool) -> Result<(), PublishError> {
-        external::cargo::publish_crate(&self.name, &self.manifest_path, verify)
+        cargo::publish_crate(&self.name, &self.manifest_path, verify)
     }
 
     pub fn adjust_version(
@@ -419,9 +419,9 @@ impl CrateDetails {
             test_env: Option<TestEnvironment>,
         ) -> anyhow::Result<Option<Vec<u8>>> {
             if let Some(test_env) = test_env {
-                external::crates_io::download_crate_for_testing(name, version, pkg_bytes, test_env)
+                crates_io::download_crate_for_testing(name, version, pkg_bytes, test_env)
             } else {
-                external::crates_io::download_crate(name, version)
+                crates_io::download_crate(name, version)
             }
         }
         let cratesio_bytes = if let Some(bytes) =
@@ -450,10 +450,10 @@ impl CrateDetails {
 
     pub fn maybe_bump_version(
         &mut self,
-        prev_versions: Vec<semver::Version>,
-        bump_mode: &VersionBumpHeuristic,
+        prev_versions: Vec<Version>,
+        bump_heuristic: &VersionBumpHeuristic,
     ) -> anyhow::Result<bool> {
-        let new_version = match bump_mode {
+        let new_version = match bump_heuristic {
             VersionBumpHeuristic::Breaking => {
                 maybe_bump_for_breaking_change(prev_versions, self.version.clone())
             }
@@ -478,8 +478,8 @@ impl CrateDetails {
         read_toml(&self.manifest_path)
     }
 
-    fn write_toml(&self, toml: &toml_edit::Document) -> anyhow::Result<()> {
-        write_toml(&self.manifest_path, toml)
+    fn write_manifest(&self, new_manifest: &toml_edit::Document) -> anyhow::Result<()> {
+        write_toml(&self.manifest_path, new_manifest)
     }
 }
 

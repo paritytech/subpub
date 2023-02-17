@@ -12,14 +12,11 @@ use strum::EnumString;
 use tracing::{info, span, Level};
 
 use crate::{
+    cargo::cargo_update_workspace,
     crate_details::CrateDetails,
     crates::{CrateName, Crates},
-    external::{
-        cargo::cargo_update_workspace,
-        crates_io::{self, CratesIoIndexConfiguration},
-    },
+    crates_io::{self, CratesIoIndexConfiguration},
     git::{git_hard_reset, git_head_sha},
-    publish::crates_io::CratesIoCrateVersion,
     version::VersionBumpHeuristic,
 };
 
@@ -770,103 +767,72 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
         for krate in crates_to_publish {
             let crate_version = {
-                enum AdjustVersion {
-                    BasedOnPreviousVersions(Vec<CratesIoCrateVersion>),
-                    No,
-                }
-                let adjust_version = if should_adjust_version {
-                    let prev_versions = crates_io::crate_versions(krate)?;
-                    AdjustVersion::BasedOnPreviousVersions(prev_versions)
-                } else {
-                    AdjustVersion::No
-                };
-
-                let did_adjust_version = {
-                    match adjust_version {
-                        AdjustVersion::BasedOnPreviousVersions(ref prev_versions) => {
-                            let details = crates
-                                .crates_map
-                                .get_mut(krate)
-                                .with_context(|| format!("Crate not found: {krate}"))?;
-                            details.adjust_version(prev_versions)?
-                        }
-                        AdjustVersion::No => false,
-                    }
-                };
-
-                if did_adjust_version {
-                    let details = crates
-                        .crates_map
-                        .get(krate)
-                        .with_context(|| format!("Crate not found: {krate}"))?;
-                    for (_, other_details) in crates.crates_map.iter() {
-                        other_details.write_dependency_version(
-                            &opts.root,
-                            krate,
-                            &details.version,
-                            &[],
-                        )?;
-                    }
-                }
-
                 let details = crates
                     .crates_map
                     .get_mut(krate)
                     .with_context(|| format!("Crate not found: {krate}"))?;
+
+                let version_adjustment = if should_adjust_version {
+                    let prev_versions = crates_io::crate_versions(krate)?;
+                    let did_adjust = details.adjust_version(&prev_versions)?;
+                    Some((did_adjust, prev_versions))
+                } else {
+                    None
+                };
+
                 if details.needs_publishing(None)? {
-                    match adjust_version {
-                        AdjustVersion::BasedOnPreviousVersions(prev_versions) => {
-                            let bump_heuristic = if opts
-                                .crates_to_bump_majorly
-                                .iter()
-                                .any(|some_crate| some_crate == krate)
-                            {
-                                VersionBumpHeuristic::Breaking
-                            } else if opts
-                                .crates_to_bump_compatibly
-                                .iter()
-                                .any(|some_crate| some_crate == krate)
-                            {
-                                VersionBumpHeuristic::Compatible
-                            } else if let Some(dep_bumped_compatibly) =
+                    if let Some((true, prev_versions)) = version_adjustment {
+                        let bump_heuristic = if opts
+                            .crates_to_bump_majorly
+                            .iter()
+                            .any(|some_crate| some_crate == krate)
+                        {
+                            VersionBumpHeuristic::Breaking
+                        } else if opts
+                            .crates_to_bump_compatibly
+                            .iter()
+                            .any(|some_crate| some_crate == krate)
+                        {
+                            VersionBumpHeuristic::Compatible
+                        } else if let Some(dep_bumped_compatibly) =
+                            details.deps_to_publish().find(|dep| {
+                                crate_bump_heuristic.get(dep)
+                                    == Some(&VersionBumpHeuristic::Compatible)
+                            })
+                        {
+                            // Dependencies only default to being bumped
+                            // compatibly if all of their dependencies were also
+                            // bumped compatibly
+                            if let Some(dep_bumped_with_breaking_change) =
                                 details.deps_to_publish().find(|dep| {
                                     crate_bump_heuristic.get(dep)
-                                        == Some(&VersionBumpHeuristic::Compatible)
+                                        == Some(&VersionBumpHeuristic::Breaking)
                                 })
                             {
-                                if let Some(dep_bumped_with_breaking_change) =
-                                    details.deps_to_publish().find(|dep| {
-                                        crate_bump_heuristic.get(dep)
-                                            == Some(&VersionBumpHeuristic::Breaking)
-                                    })
-                                {
-                                    info!(
-                                        "`{}` and `{}` are dependencies of `{}`; `{}` was bumped with a compatible change, but `{}` was bumped with a breaking change, therefore `{}` will be bumped with a breaking change as well",
-                                        dep_bumped_compatibly,
-                                        dep_bumped_with_breaking_change,
-                                        krate,
-                                        dep_bumped_compatibly,
-                                        dep_bumped_with_breaking_change,
-                                        krate
-                                    );
-                                    VersionBumpHeuristic::Breaking
-                                } else {
-                                    VersionBumpHeuristic::Compatible
-                                }
-                            } else {
+                                info!(
+                                    "`{}` and `{}` are dependencies of `{}`; `{}` was bumped with a compatible change, but `{}` was bumped with a breaking change, therefore `{}` will be bumped with a breaking change as well",
+                                    dep_bumped_compatibly,
+                                    dep_bumped_with_breaking_change,
+                                    krate,
+                                    dep_bumped_compatibly,
+                                    dep_bumped_with_breaking_change,
+                                    krate
+                                );
                                 VersionBumpHeuristic::Breaking
-                            };
-                            details.maybe_bump_version(
-                                prev_versions
-                                    .into_iter()
-                                    .map(|prev_version| prev_version.version)
-                                    .collect(),
-                                &bump_heuristic,
-                            )?;
-                            crate_bump_heuristic.insert(krate, bump_heuristic);
-                        }
-                        AdjustVersion::No => (),
+                            } else {
+                                VersionBumpHeuristic::Compatible
+                            }
+                        } else {
+                            VersionBumpHeuristic::Breaking
+                        };
+
+                        details.maybe_bump_version(
+                            prev_versions.into_iter().map(|vers| vers.version).collect(),
+                            &bump_heuristic,
+                        )?;
+                        crate_bump_heuristic.insert(krate, bump_heuristic);
                     }
+
                     let version = details.version.clone();
                     crates.publish(
                         krate,

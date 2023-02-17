@@ -14,10 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with subpub.  If not, see <http://www.gnu.org/licenses/>.
 
+mod cargo;
 mod crate_details;
 mod crates;
+mod crates_io;
 mod dependencies;
-mod external;
 mod git;
 mod publish;
 mod testing;

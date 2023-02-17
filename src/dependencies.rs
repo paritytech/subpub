@@ -5,16 +5,16 @@ use strum::{EnumIter, EnumString, IntoEnumIterator};
 
 use crate::toml::{read_toml, write_toml};
 
-/// Keys of dependencies from the workspace table in Cargo.toml
+/// Keys of dependencies from the workspace table in the workspace's Cargo.toml
 #[derive(EnumString, strum::Display, PartialEq, Eq)]
 pub enum WorkspaceManifestDependencyKey {
     #[strum(to_string = "dependencies")]
     Dependencies,
 }
 
-/// Keys for tables of dependencies from Cargo.toml
+/// Keys for tables of dependencies in the crates' Cargo.toml
 #[derive(EnumString, strum::Display, EnumIter, PartialEq, Eq)]
-pub enum ManifestDependencyKey {
+pub enum CrateManifestDependencyKey {
     #[strum(to_string = "build-dependencies")]
     BuildDependencies,
     #[strum(to_string = "dependencies")]
@@ -34,17 +34,17 @@ fn get_target_dependency_sections_mut<'a>(
         .flat_map(|t| {
             // For each item of the "target" table, see if we can find a `label` section in it.
             t.iter_mut()
-                .flat_map(|(_name, item)| item.as_table_like_mut())
+                .flat_map(|(_, item)| item.as_table_like_mut())
                 .flat_map(|t| t.get_mut(label))
         })
 }
 
 pub fn edit_all_dependency_sections<
     T,
-    F: FnMut(&mut toml_edit::Item, &ManifestDependencyKey, &str) -> anyhow::Result<T>,
+    F: FnMut(&mut toml_edit::Item, &CrateManifestDependencyKey, &str) -> anyhow::Result<T>,
 >(
     document: &mut toml_edit::Document,
-    dep_key: &ManifestDependencyKey,
+    dep_key: &CrateManifestDependencyKey,
     mut f: F,
 ) -> anyhow::Result<()> {
     let dep_key_display = dep_key.to_string();
@@ -101,8 +101,9 @@ pub fn write_dependency_field<P: AsRef<Path>, S: AsRef<str>>(
             field_value: &str,
             fields_to_remove: &[&str],
         ) -> bool {
-            // Workspace dependencies are skipped here because they're handled
-            // further down
+            // Workspace dependencies are skipped at crates' manifests because
+            // they're handled at the workspace's manifest (entries in the
+            // latter do not have a .workspace field)
             if value.get("workspace").is_some() {
                 false
             } else {
@@ -160,7 +161,7 @@ pub fn write_dependency_field<P: AsRef<Path>, S: AsRef<str>>(
 
     let mut modified = false;
 
-    for dep_key in ManifestDependencyKey::iter() {
+    for dep_key in CrateManifestDependencyKey::iter() {
         edit_all_dependency_sections(&mut manifest, &dep_key, |item, _, dep_key_display| {
             modified |= visit(
                 item,
