@@ -1,3 +1,6 @@
+test:
+  cargo test
+
 check-style:
   cargo fmt --all -- --check
 
@@ -10,4 +13,4 @@ typecheck:
 check-installation:
   cargo install --quiet --path . --root target
 
-all-checks: check-style lint typecheck check-installation
+all-checks: typecheck check-style lint test check-installation
