@@ -14,7 +14,7 @@ use tracing::{info, span, Level};
 use crate::{
     cargo::cargo_update_workspace,
     crate_details::CrateDetails,
-    crates::{CrateName, Crates},
+    crates::{CrateName, CratesWorkspace},
     crates_io::{self, CratesIoIndexConfiguration},
     git::{git_hard_reset, git_head_sha},
     version::VersionBumpHeuristic,
@@ -291,9 +291,9 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
     let initial_commit = git_head_sha(&opts.root)?;
 
-    let mut crates = Crates::load_workspace_crates(opts.root.clone())?;
+    let mut workspace = CratesWorkspace::load(opts.root.clone())?;
 
-    let publish_order = get_publish_order(&crates.crates_map);
+    let publish_order = get_publish_order(&workspace.crates);
     info!(
         "If we were to publish all crates, it would happen in this order: {}",
         publish_order
@@ -303,8 +303,8 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             .join(", ")
     );
 
-    let unordered_crates = crates
-        .crates_map
+    let unordered_crates = workspace
+        .crates
         .keys()
         .filter(|krate| !publish_order.iter().any(|ord_crate| ord_crate == *krate))
         .collect::<Vec<_>>();
@@ -332,8 +332,8 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 .collect::<Vec<_>>();
             for excluded_crate in excluded_crates {
                 for krate in &publish_order {
-                    let details = crates
-                        .crates_map
+                    let details = workspace
+                        .crates
                         .get(krate)
                         .with_context(|| format!("Crate not found: {krate}"))?;
                     if details.deps_to_publish().any(|dep| dep == excluded_crate) {
@@ -375,7 +375,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 {
                     return None;
                 }
-                if let Some(details) = crates.crates_map.get(krate) {
+                if let Some(details) = workspace.crates.get(krate) {
                     if details.should_be_published {
                         Some(Ok(krate))
                     } else {
@@ -403,8 +403,8 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                         if crates_to_exclude.get(krate).is_some() {
                             continue;
                         }
-                        let details = crates
-                            .crates_map
+                        let details = workspace
+                            .crates
                             .get(krate)
                             .with_context(|| format!("Crate not found: {krate}"))?;
                         if details.should_be_published
@@ -467,7 +467,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     );
 
     fn validate_crates(
-        crates: &Crates,
+        workspace: &CratesWorkspace,
         crates_debug_descriptions: &HashMap<String, String>,
         initial_crate: &String,
         parent_crate: Option<&String>,
@@ -515,8 +515,8 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             }
         }
 
-        let details = crates
-            .crates_map
+        let details = workspace
+            .crates
             .get(krate)
             .with_context(|| format!("Crate not found: {krate}"))?;
         if !details.should_be_published {
@@ -556,7 +556,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 .chain(vec![krate].into_iter())
                 .collect::<Vec<_>>();
             validate_crates(
-                crates,
+                workspace,
                 crates_debug_descriptions,
                 initial_crate,
                 if krate == initial_crate {
@@ -578,7 +578,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
         for krate in &selected_crates {
             info!("Validating crate {krate}");
             if let Err(err) = validate_crates(
-                &crates,
+                &workspace,
                 &crates_debug_descriptions,
                 krate,
                 None,
@@ -606,7 +606,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
     }
 
     for (dep, version) in set_dependency_versions {
-        for (_, details) in crates.crates_map.iter() {
+        for (_, details) in workspace.crates.iter() {
             details.write_dependency_version(
                 &opts.root,
                 &dep,
@@ -647,8 +647,8 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                     .collect::<Vec<_>>();
                 for included_crate in included_crates {
                     for krate in &publish_order {
-                        let details = crates
-                            .crates_map
+                        let details = workspace
+                            .crates
                             .get(krate)
                             .with_context(|| format!("Crate not found: {krate}"))?;
                         if details.should_be_published
@@ -691,15 +691,15 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             if opts.no_version_adjustment {
                 false
             } else if let Some(set_version) = publish_versions.get(sel_crate) {
-                let details = crates
-                    .crates_map
+                let details = workspace
+                    .crates
                     .get_mut(sel_crate)
                     .with_context(|| format!("Crate not found: {sel_crate}"))?;
                 details.write_own_version(set_version.to_owned())?;
                 false
             } else if let Some(pre_bump_version) = pre_bump_versions.get(sel_crate) {
-                let details = crates
-                    .crates_map
+                let details = workspace
+                    .crates
                     .get_mut(sel_crate)
                     .with_context(|| format!("Crate not found: {sel_crate}"))?;
                 details.write_own_version(pre_bump_version.to_owned())?;
@@ -711,16 +711,16 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
         info!("Processing crate");
 
-        let details = crates
-            .crates_map
+        let details = workspace
+            .crates
             .get(sel_crate)
             .with_context(|| format!("Crate not found: {sel_crate}"))?;
         for prev_crate in &publish_order {
             if prev_crate == sel_crate {
                 break;
             }
-            let prev_crate_details = crates
-                .crates_map
+            let prev_crate_details = workspace
+                .crates
                 .get(prev_crate)
                 .with_context(|| format!("Crate not found: {prev_crate}"))?;
             details.write_dependency_version(
@@ -731,7 +731,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             )?;
         }
 
-        let crates_to_publish = crates.what_needs_publishing(sel_crate, &publish_order)?;
+        let crates_to_publish = workspace.what_needs_publishing(sel_crate, &publish_order)?;
 
         if crates_to_publish.is_empty() {
             info!("Crate does not need to be published");
@@ -767,8 +767,8 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
         for krate in crates_to_publish {
             let crate_version = {
-                let details = crates
-                    .crates_map
+                let details = workspace
+                    .crates
                     .get_mut(krate)
                     .with_context(|| format!("Crate not found: {krate}"))?;
 
@@ -834,7 +834,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                     }
 
                     let version = details.version.clone();
-                    crates.publish(
+                    workspace.publish(
                         krate,
                         &crates_to_verify,
                         opts.after_publish_delay.as_ref(),
@@ -850,7 +850,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 }
             };
 
-            for (_, details) in crates.crates_map.iter() {
+            for (_, details) in workspace.crates.iter() {
                 details.write_dependency_version(&opts.root, krate, &crate_version, &["path"])?;
             }
 
@@ -867,17 +867,17 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
         for krate in processed_crates {
             {
-                let details = crates
-                    .crates_map
+                let details = workspace
+                    .crates
                     .get_mut(krate)
                     .with_context(|| format!("Crate not found: {krate}"))?;
                 details.write_own_version(details.version.clone())?;
             }
-            let details = crates
-                .crates_map
+            let details = workspace
+                .crates
                 .get(krate)
                 .with_context(|| format!("Crate not found: {krate}"))?;
-            for (_, other_details) in crates.crates_map.iter() {
+            for (_, other_details) in workspace.crates.iter() {
                 other_details.write_dependency_version(&opts.root, krate, &details.version, &[])?;
             }
         }

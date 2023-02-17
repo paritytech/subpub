@@ -34,13 +34,13 @@ use crate::{
 
 pub type CrateName = String;
 #[derive(Debug, Clone)]
-pub struct Crates {
+pub struct CratesWorkspace {
     pub root: PathBuf,
-    pub crates_map: HashMap<CrateName, CrateDetails>,
+    pub crates: HashMap<CrateName, CrateDetails>,
 }
 
-impl Crates {
-    pub fn load_workspace_crates(root: PathBuf) -> anyhow::Result<Crates> {
+impl CratesWorkspace {
+    pub fn load(root: PathBuf) -> anyhow::Result<CratesWorkspace> {
         let workspace_meta = cargo_metadata::MetadataCommand::new()
             .current_dir(&root)
             .exec()
@@ -79,7 +79,10 @@ impl Crates {
             }
         }
 
-        Ok(Crates { root, crates_map })
+        Ok(CratesWorkspace {
+            root,
+            crates: crates_map,
+        })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -94,7 +97,7 @@ impl Crates {
         post_publish_cleanup_glob: &[String],
     ) -> anyhow::Result<()> {
         let details = self
-            .crates_map
+            .crates
             .get(krate)
             .with_context(|| format!("Crate not found: {krate}"))?;
 
@@ -230,20 +233,20 @@ impl Crates {
     ) -> anyhow::Result<Vec<&'a String>> {
         let mut registered_crates: HashSet<&str> = HashSet::new();
         fn register_crates<'b>(
-            crates: &'b Crates,
+            workspace: &'b CratesWorkspace,
             registered_crates: &mut HashSet<&'b str>,
             krate: &'b str,
         ) -> anyhow::Result<()> {
             if registered_crates.get(krate).is_none() {
                 registered_crates.insert(krate);
 
-                let details = crates
-                    .crates_map
+                let details = workspace
+                    .crates
                     .get(krate)
                     .with_context(|| format!("Crate not found: {krate}"))?;
 
                 for dep in details.deps_to_publish() {
-                    register_crates(crates, registered_crates, dep)?;
+                    register_crates(workspace, registered_crates, dep)?;
                 }
             }
             Ok(())

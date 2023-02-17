@@ -16,6 +16,7 @@
 
 use std::cmp::Ordering;
 
+use semver::Prerelease;
 pub use semver::Version;
 
 #[derive(PartialEq, Eq)]
@@ -26,8 +27,8 @@ pub enum VersionBumpHeuristic {
 
 /// Bumps a version for the purpose of signifying a breaking change
 fn bump_for_breaking_change(mut version: Version) -> Version {
-    if version.pre != semver::Prerelease::EMPTY {
-        version.pre = semver::Prerelease::EMPTY;
+    if version.pre != Prerelease::EMPTY {
+        version.pre = Prerelease::EMPTY;
     } else if version.major == 0 {
         version.minor += 1;
         version.patch = 0;
@@ -41,8 +42,6 @@ fn bump_for_breaking_change(mut version: Version) -> Version {
 
 #[test]
 fn test_bump_for_breaking_change() {
-    use semver::Prerelease;
-
     // Reference: https://semver.org
 
     // Patch version is bumped to minor
@@ -89,10 +88,10 @@ pub fn maybe_bump_for_breaking_change(
             bump_for_breaking_change(max_version)
         })
         .or_else(|| {
-            if current_version.pre == semver::Prerelease::EMPTY {
+            if current_version.pre == Prerelease::EMPTY {
                 None
             } else {
-                current_version.pre = semver::Prerelease::EMPTY;
+                current_version.pre = Prerelease::EMPTY;
                 Some(current_version)
             }
         })
@@ -100,8 +99,6 @@ pub fn maybe_bump_for_breaking_change(
 
 #[test]
 fn test_maybe_bump_for_breaking_change() {
-    use semver::Prerelease;
-
     // Picks the highest version among (previous versions + the current version)
     // when previous versions have the highest version
     assert_eq!(

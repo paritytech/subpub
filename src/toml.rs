@@ -14,8 +14,8 @@ pub fn read_toml<P: AsRef<Path>>(path: P) -> anyhow::Result<toml_edit::Document>
     Ok(toml)
 }
 
-pub fn write_toml<P: AsRef<Path>>(path: P, toml: &toml_edit::Document) -> anyhow::Result<()> {
-    let mut content = toml.to_string();
+pub fn write_toml<P: AsRef<Path>>(path: P, doc: &toml_edit::Document) -> anyhow::Result<()> {
+    let mut content = doc.to_string();
     if !content.ends_with('\n') {
         content.push('\n');
     }
