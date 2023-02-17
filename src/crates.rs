@@ -18,6 +18,7 @@ use std::{
     collections::{HashMap, HashSet},
     env, fs,
     path::PathBuf,
+    process::Command,
     thread,
     time::{Duration, Instant},
 };
@@ -86,7 +87,7 @@ impl CratesWorkspace {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn publish(
+    pub fn publish_crate(
         &self,
         krate: &String,
         crates_to_verify: &HashSet<&String>,
@@ -257,5 +258,23 @@ impl CratesWorkspace {
             .iter()
             .filter(|krate| registered_crates.iter().any(|reg_crate| reg_crate == krate))
             .collect())
+    }
+
+    pub fn update(&self) -> anyhow::Result<()> {
+        let mut cmd = Command::new("cargo");
+        let status = cmd
+            .current_dir(&self.root)
+            .arg("update")
+            .arg("--quiet")
+            .arg("--workspace")
+            .status()?;
+        if !status.success() {
+            return Err(anyhow!(
+                "Failed to update workspace of {:?}. Command failed: {:?}",
+                &self.root,
+                cmd
+            ));
+        }
+        Ok(())
     }
 }

@@ -93,6 +93,25 @@ impl From<io::Error> for PublishError {
     }
 }
 
+const DEV_DEPS_TROUBLESHOOT_HINT: &str = "
+Note: dev-dependencies are stripped before publishing. This might cause errors
+during pre-publish verification in case a dev-dependency is used for a cargo
+feature. If you run into errors such as:
+
+    error: failed to parse manifest at `/path/to/Cargo.toml`
+    Caused by:
+      feature `bar` includes `foo/benchmarks`, but `foo` is not a dependency
+
+Or:
+
+    error[XXX]: unresolved import `foo::bar`
+
+Assuming that the crate works fine locally, the error occurs because `foo` is a
+dev-dependency, which was stripped before publishing. You can work around that
+by using `foo` conditionally behind a feature flag or by promoting `foo` to a
+normal dependency.
+";
+
 pub fn publish_crate<P: AsRef<Path>>(
     krate: &str,
     manifest_path: P,
@@ -136,42 +155,5 @@ pub fn publish_crate<P: AsRef<Path>>(
         }
     }
 
-    Ok(())
-}
-
-const DEV_DEPS_TROUBLESHOOT_HINT: &str = "
-Note: dev-dependencies are stripped before publishing. This might cause errors
-during pre-publish verification in case a dev-dependency is used for a cargo
-feature. If you run into errors such as:
-
-    error: failed to parse manifest at `/path/to/Cargo.toml`
-    Caused by:
-      feature `bar` includes `foo/benchmarks`, but `foo` is not a dependency
-
-Or:
-
-    error[XXX]: unresolved import `foo::bar`
-
-Assuming that the crate works fine locally, the error occurs because `foo` is a
-dev-dependency, which was stripped before publishing. You can work around that
-by using `foo` conditionally behind a feature flag or by promoting `foo` to a
-normal dependency.
-";
-
-pub fn cargo_update_workspace<P: AsRef<Path>>(root: P) -> anyhow::Result<()> {
-    let mut cmd = Command::new("cargo");
-    let status = cmd
-        .current_dir(&root)
-        .arg("update")
-        .arg("--quiet")
-        .arg("--workspace")
-        .status()?;
-    if !status.success() {
-        return Err(anyhow!(
-            "Failed to update workspace of {:?}. Command failed: {:?}",
-            root.as_ref(),
-            cmd
-        ));
-    }
     Ok(())
 }

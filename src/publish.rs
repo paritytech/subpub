@@ -12,7 +12,6 @@ use strum::EnumString;
 use tracing::{info, span, Level};
 
 use crate::{
-    cargo::cargo_update_workspace,
     crate_details::CrateDetails,
     crates::{CrateName, CratesWorkspace},
     crates_io::{self, CratesIoCrateVersion, CratesIoIndexConfiguration},
@@ -611,6 +610,10 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                 &opts.root,
                 &dep,
                 &version,
+                // The following fields relate to dependency consumption from
+                // outside of the registry. They're removed such that the crate
+                // is always unambiguously consumed from the registry (by its
+                // version).
                 &["git", "branch", "rev", "tag", "path"],
             )?;
         }
@@ -767,30 +770,30 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
 
         for krate in crates_to_publish {
             enum VersionAdjustment {
-                BasedOnPreviousVersions(Vec<CratesIoCrateVersion>),
+                BasedOnPublishedVersions(Vec<CratesIoCrateVersion>),
                 No,
             }
             let version_adjustment = if should_adjust_version {
                 let prev_versions = crates_io::crate_versions(krate)?;
-                VersionAdjustment::BasedOnPreviousVersions(prev_versions)
+                VersionAdjustment::BasedOnPublishedVersions(prev_versions)
             } else {
                 VersionAdjustment::No
             };
 
-            let did_adjust_version = {
+            let was_version_adjusted = {
                 match version_adjustment {
-                    VersionAdjustment::BasedOnPreviousVersions(ref prev_versions) => {
+                    VersionAdjustment::BasedOnPublishedVersions(ref published_versions) => {
                         let details = workspace
                             .crates
                             .get_mut(krate)
                             .with_context(|| format!("Crate not found: {krate}"))?;
-                        details.adjust_version(prev_versions)?
+                        details.adjust_version(published_versions)?
                     }
                     VersionAdjustment::No => false,
                 }
             };
 
-            if did_adjust_version {
+            if was_version_adjusted {
                 let details = workspace
                     .crates
                     .get(krate)
@@ -810,9 +813,10 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                     .crates
                     .get_mut(krate)
                     .with_context(|| format!("Crate not found: {krate}"))?;
+
                 if details.needs_publishing(None)? {
                     match version_adjustment {
-                        VersionAdjustment::BasedOnPreviousVersions(prev_versions) => {
+                        VersionAdjustment::BasedOnPublishedVersions(published_versions) => {
                             let bump_heuristic = if opts
                                 .crates_to_bump_majorly
                                 .iter()
@@ -858,7 +862,10 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                             };
 
                             details.maybe_bump_version(
-                                prev_versions.into_iter().map(|vers| vers.version).collect(),
+                                published_versions
+                                    .into_iter()
+                                    .map(|vers| vers.version)
+                                    .collect(),
                                 &bump_heuristic,
                             )?;
                             crate_bump_heuristic.insert(krate, bump_heuristic);
@@ -867,7 +874,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
                     }
 
                     let version = details.version.clone();
-                    workspace.publish(
+                    workspace.publish_crate(
                         krate,
                         &crates_to_verify,
                         opts.after_publish_delay.as_ref(),
@@ -884,7 +891,15 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             };
 
             for (_, details) in workspace.crates.iter() {
-                details.write_dependency_version(&opts.root, krate, &crate_version, &["path"])?;
+                details.write_dependency_version(
+                    &opts.root,
+                    krate,
+                    &crate_version,
+                    // Remove the path field from dependency declarations which
+                    // point to the newly-published crate such that we force the
+                    // it to be consumed from the registry instead of locally
+                    &["path"],
+                )?;
             }
 
             processed_crates.insert(krate);
@@ -915,7 +930,7 @@ pub fn publish(opts: PublishOpts) -> anyhow::Result<()> {
             }
         }
 
-        cargo_update_workspace(&opts.root)?;
+        workspace.update()?;
     }
 
     Ok(())
