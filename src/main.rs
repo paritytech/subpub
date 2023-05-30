@@ -16,12 +16,12 @@
 
 mod crate_details;
 mod crates;
-mod version;
 mod external;
+mod version;
 
-use clap::{ Parser, Subcommand };
-use std::path::PathBuf;
+use clap::{Parser, Subcommand};
 use crates::Crates;
+use std::path::PathBuf;
 
 /// Release crates and their dependencies from a workspace
 #[derive(Parser, Debug)]
@@ -57,7 +57,7 @@ enum Command {
     #[clap(long_about = PREPARE_FOR_PUBLISH_HELP)]
     PrepareForPublish(CommonOpts),
     #[clap(long_about = DO_PUBLISH_HELP)]
-    DoPublish(CommonOpts)
+    DoPublish(CommonOpts),
 }
 
 #[derive(Parser, Debug)]
@@ -135,7 +135,7 @@ fn prepare_for_publish(opts: CommonOpts) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn do_publish(opts: CommonOpts) -> anyhow::Result<()>  {
+fn do_publish(opts: CommonOpts) -> anyhow::Result<()> {
     // Run the logic first, and then print the various details, so that
     // our logging is all nicely separated from our output.
     let crates = Crates::load_crates_in_workspace(opts.path)?;
