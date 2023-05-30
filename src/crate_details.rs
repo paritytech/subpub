@@ -30,6 +30,8 @@ pub struct CrateDetails {
     pub deps: HashSet<String>,
     pub build_deps: HashSet<String>,
     pub dev_deps: HashSet<String>,
+    /// Known versions from crates.io.
+    pub known_versions: HashSet<Version>,
 
     // Modifying the files on disk can only be done through the interface below.
     toml_path: PathBuf,
@@ -81,6 +83,8 @@ impl CrateDetails {
             deps,
             dev_deps,
             build_deps,
+            // we'll populate this later.
+            known_versions: Default::default(),
             toml_path: path,
         })
     }
@@ -283,7 +287,7 @@ impl CrateDetails {
     }
 
     /// Does this create need a version bump in order to be published?
-    pub fn needs_version_bump_to_publish(&self) -> anyhow::Result<bool> {
+    pub fn needs_version_bump_to_publish(&mut self) -> anyhow::Result<bool> {
         if self.version.pre != semver::Prerelease::EMPTY {
             // If prerelease eg `-dev`, we'll want to bump.
             return Ok(true);
@@ -291,8 +295,8 @@ impl CrateDetails {
 
         // Does the current version of this crate exist on crates.io?
         // If so, we need to bump the current version.
-        let known_versions = external::crates_io::get_known_crate_versions(&self.name)?;
-        Ok(known_versions.contains(&self.version))
+        self.known_versions = external::crates_io::get_known_crate_versions(&self.name)?;
+        Ok(self.known_versions.contains(&self.version))
     }
 
     fn read_toml(&self) -> anyhow::Result<toml_edit::Document> {

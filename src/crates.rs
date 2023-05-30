@@ -135,8 +135,11 @@ impl Crates {
     }
 
     /// Does a crate need a version bump in order to publish?
-    pub fn does_crate_version_need_bumping_to_publish(&self, name: &str) -> anyhow::Result<bool> {
-        let details = match self.details.get(name) {
+    pub fn does_crate_version_need_bumping_to_publish(
+        &mut self,
+        name: &str,
+    ) -> anyhow::Result<bool> {
+        let details = match self.details.get_mut(name) {
             Some(details) => details,
             None => anyhow::bail!("Crate '{name}' not found"),
         };
@@ -156,7 +159,18 @@ impl Crates {
         };
 
         let old_version = details.version.clone();
-        let new_version = bump_for_breaking_change(old_version.clone());
+        // Check if the `Cargo.toml` contained an outdate version, if so
+        // use the latest available on crates.io.
+        let mut latest_version = &old_version;
+        for version in &details.known_versions {
+            if version > latest_version {
+                latest_version = version;
+            }
+        }
+        if latest_version != &old_version {
+            println!("Crate '{name}' version {old_version} does not match crates.io version {latest_version}");
+        }
+        let new_version = bump_for_breaking_change(latest_version.clone());
 
         // Bump the crate version:
         details.write_own_version(new_version.clone())?;
