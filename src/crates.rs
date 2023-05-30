@@ -161,16 +161,21 @@ impl Crates {
         let old_version = details.version.clone();
         // Check if the `Cargo.toml` contained an outdate version, if so
         // use the latest available on crates.io.
-        let mut latest_version = &old_version;
-        for version in &details.known_versions {
-            if version > latest_version {
-                latest_version = version;
+        let new_version = {
+            let mut latest_version = &old_version;
+            let known_versions = details.known_versions.get()?;
+            for version in &*known_versions {
+                if version > latest_version {
+                    latest_version = version;
+                }
             }
-        }
-        if latest_version != &old_version {
-            println!("Crate '{name}' version {old_version} does not match crates.io version {latest_version}");
-        }
-        let new_version = bump_for_breaking_change(latest_version.clone());
+
+            if latest_version != &old_version {
+                println!("Crate '{name}' version {old_version} does not match crates.io version {latest_version}");
+            }
+
+            bump_for_breaking_change(latest_version.clone())
+        };
 
         // Bump the crate version:
         details.write_own_version(new_version.clone())?;

@@ -17,6 +17,7 @@
 use crate::external;
 use anyhow::{anyhow, Context};
 use semver::Version;
+use std::cell::{Ref, RefCell};
 use std::collections::HashSet;
 use std::{
     io::{Cursor, Read},
@@ -31,7 +32,7 @@ pub struct CrateDetails {
     pub build_deps: HashSet<String>,
     pub dev_deps: HashSet<String>,
     /// Known versions from crates.io.
-    pub known_versions: HashSet<Version>,
+    pub known_versions: CrateVersions,
 
     // Modifying the files on disk can only be done through the interface below.
     toml_path: PathBuf,
@@ -78,13 +79,12 @@ impl CrateDetails {
         }
 
         Ok(CrateDetails {
-            name,
+            name: name.clone(),
             version,
             deps,
             dev_deps,
             build_deps,
-            // we'll populate this later.
-            known_versions: Default::default(),
+            known_versions: CrateVersions::new(name),
             toml_path: path,
         })
     }
@@ -295,8 +295,8 @@ impl CrateDetails {
 
         // Does the current version of this crate exist on crates.io?
         // If so, we need to bump the current version.
-        self.known_versions = external::crates_io::get_known_crate_versions(&self.name)?;
-        Ok(self.known_versions.contains(&self.version))
+        let known_versions = self.known_versions.get()?;
+        Ok(known_versions.contains(&self.version))
     }
 
     fn read_toml(&self) -> anyhow::Result<toml_edit::Document> {
@@ -435,4 +435,34 @@ fn are_contents_equal<A: Read, B: Read>(mut a: A, mut b: B) -> anyhow::Result<bo
     // }
 
     Ok(a_vec == b_vec)
+}
+
+#[derive(Debug, Clone)]
+pub struct CrateVersions {
+    name: String,
+    versions: RefCell<Option<HashSet<Version>>>,
+}
+
+impl CrateVersions {
+    pub fn new(name: String) -> Self {
+        CrateVersions {
+            name,
+            versions: Default::default(),
+        }
+    }
+
+    /// Get the versions from crates.io.
+    pub fn get(&self) -> anyhow::Result<Ref<'_, HashSet<Version>>> {
+        // Ensure the scope of `RefMut` does not overlap with `Ref` below.
+        {
+            let mut versions = self.versions.borrow_mut();
+            if versions.is_none() {
+                *versions = Some(external::crates_io::get_known_crate_versions(&self.name)?);
+            }
+        }
+
+        Ok(Ref::map(self.versions.borrow(), |opt| {
+            opt.as_ref().expect("versions populated above; qed")
+        }))
+    }
 }
