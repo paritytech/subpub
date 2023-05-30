@@ -292,7 +292,7 @@ fn crate_cargo_tomls(root: PathBuf) -> Vec<PathBuf> {
             entry
                 .file_name()
                 .to_str()
-                .map(|s| !s.starts_with(".") && s != "target")
+                .map(|s| !s.starts_with('.') && s != "target")
                 .unwrap_or(false)
         })
         // Ignore errors

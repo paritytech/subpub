@@ -27,7 +27,7 @@ pub use semver::Version;
 ///
 /// Return the new version.
 pub fn bump_for_breaking_change(version: Version) -> Version {
-    let mut new_version = version.clone();
+    let mut new_version = version;
 
     if new_version.pre != semver::Prerelease::EMPTY {
         // Remove pre-release tag like `-dev` if present

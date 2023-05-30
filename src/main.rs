@@ -95,8 +95,8 @@ fn prepare_for_publish(opts: CommonOpts) -> anyhow::Result<()> {
     let mut no_need_to_bump = vec![];
     let mut bump_these = vec![];
     for name in &publish_these {
-        if crates.does_crate_version_need_bumping_to_publish(&name)? {
-            let (old_version, new_version) = crates.bump_crate_version_for_breaking_change(&name)?;
+        if crates.does_crate_version_need_bumping_to_publish(name)? {
+            let (old_version, new_version) = crates.bump_crate_version_for_breaking_change(name)?;
             bump_these.push((name, old_version, new_version));
         } else {
             no_need_to_bump.push(name);
@@ -144,7 +144,7 @@ fn do_publish(opts: CommonOpts) -> anyhow::Result<()>  {
     // Check that no versions need bumping.
     let mut bump_these = vec![];
     for name in &publish_these {
-        if crates.does_crate_version_need_bumping_to_publish(&name)? {
+        if crates.does_crate_version_need_bumping_to_publish(name)? {
             bump_these.push(&**name);
         }
     }

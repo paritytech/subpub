@@ -286,7 +286,7 @@ impl CrateDetails {
 
     fn write_toml(&self, toml: &toml_edit::Document) -> anyhow::Result<()> {
         let name = &self.name;
-        std::fs::write(&self.toml_path, &toml.to_string())
+        std::fs::write(&self.toml_path, toml.to_string())
             .with_context(|| format!("Cannot save the updated Cargo.toml for {name}"))?;
         Ok(())
     }

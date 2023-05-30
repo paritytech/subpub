@@ -38,7 +38,7 @@ where
 pub fn publish_crate(root: &Path, package: &str) -> anyhow::Result<()> {
     let mut cmd = Command::new("cargo");
 
-    cmd.current_dir(&root)
+    cmd.current_dir(root)
         .arg("publish")
         .arg("-p")
         .arg(package)
