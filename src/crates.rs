@@ -241,7 +241,7 @@ impl Crates {
         // build deps but ignore dev deps, since those are irrelevant for publishing.
         // We need to wait until we have our entire sub-tree to do this, built above.
 
-        fn populate_dependees<'a>(all: &'a Crates, tree: &mut HashMap<String, Details<'a>>) {
+        fn populate_deps<'a>(all: &'a Crates, tree: &mut HashMap<String, Details<'a>>) {
             let crates_in_sub_tree: HashSet<String> = tree.keys().cloned().collect();
             for (name, details) in tree.iter_mut() {
                 let dependees = all.dependees.get(name).expect("should exist");
@@ -254,7 +254,7 @@ impl Crates {
                     .collect();
             }
         }
-        populate_dependees(self, &mut tree);
+        populate_deps(self, &mut tree);
 
         // Step 3: work out which of the crates in this graph need publishing. We work
         // from the deepest dependencies up, and for each dependency we find that needs
