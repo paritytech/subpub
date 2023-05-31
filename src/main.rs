@@ -16,12 +16,12 @@
 
 mod crate_details;
 mod crates;
-mod version;
 mod external;
+mod version;
 
-use clap::{ Parser, Subcommand };
-use std::path::PathBuf;
+use clap::{Parser, Subcommand};
 use crates::Crates;
+use std::path::PathBuf;
 
 /// Release crates and their dependencies from a workspace
 #[derive(Parser, Debug)]
@@ -57,7 +57,7 @@ enum Command {
     #[clap(long_about = PREPARE_FOR_PUBLISH_HELP)]
     PrepareForPublish(CommonOpts),
     #[clap(long_about = DO_PUBLISH_HELP)]
-    DoPublish(CommonOpts)
+    DoPublish(CommonOpts),
 }
 
 #[derive(Parser, Debug)]
@@ -95,8 +95,8 @@ fn prepare_for_publish(opts: CommonOpts) -> anyhow::Result<()> {
     let mut no_need_to_bump = vec![];
     let mut bump_these = vec![];
     for name in &publish_these {
-        if crates.does_crate_version_need_bumping_to_publish(&name)? {
-            let (old_version, new_version) = crates.bump_crate_version_for_breaking_change(&name)?;
+        if crates.does_crate_version_need_bumping_to_publish(name)? {
+            let (old_version, new_version) = crates.bump_crate_version_for_breaking_change(name)?;
             bump_these.push((name, old_version, new_version));
         } else {
             no_need_to_bump.push(name);
@@ -135,16 +135,16 @@ fn prepare_for_publish(opts: CommonOpts) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn do_publish(opts: CommonOpts) -> anyhow::Result<()>  {
+fn do_publish(opts: CommonOpts) -> anyhow::Result<()> {
     // Run the logic first, and then print the various details, so that
     // our logging is all nicely separated from our output.
-    let crates = Crates::load_crates_in_workspace(opts.path)?;
+    let mut crates = Crates::load_crates_in_workspace(opts.path)?;
     let publish_these = crates.what_needs_publishing(opts.crates.clone())?;
 
     // Check that no versions need bumping.
     let mut bump_these = vec![];
     for name in &publish_these {
-        if crates.does_crate_version_need_bumping_to_publish(&name)? {
+        if crates.does_crate_version_need_bumping_to_publish(name)? {
             bump_these.push(&**name);
         }
     }

@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with subpub.  If not, see <http://www.gnu.org/licenses/>.
 
+use anyhow::Context;
 use serde::Deserialize;
 use std::collections::HashSet;
-use anyhow::Context;
 
 const CRATES_API: &str = "https://crates.io/api/v1";
 
@@ -31,7 +31,10 @@ pub fn does_crate_exist(name: &str, version: &semver::Version) -> anyhow::Result
     if !res.status().is_success() {
         // We get a 200 back even if we ask for crates/versions that don't exist,
         // so a non-200 means something worse went wrong.
-        anyhow::bail!("Non-200 status trying to connect to {url} ({})", res.status());
+        anyhow::bail!(
+            "Non-200 status trying to connect to {url} ({})",
+            res.status()
+        );
     }
 
     #[allow(unused)]
@@ -42,7 +45,7 @@ pub fn does_crate_exist(name: &str, version: &semver::Version) -> anyhow::Result
     #[allow(unused)]
     #[derive(serde::Deserialize)]
     struct SuccessfulResponseVersion {
-        num: String
+        num: String,
     }
 
     // If the JSON response body looks like a successful one, we found
@@ -55,7 +58,10 @@ pub fn does_crate_exist(name: &str, version: &semver::Version) -> anyhow::Result
 }
 
 /// Download a crate from crates.io.
-pub fn try_download_crate(name: &str, version: &semver::Version) -> anyhow::Result<Option<Vec<u8>>> {
+pub fn try_download_crate(
+    name: &str,
+    version: &semver::Version,
+) -> anyhow::Result<Option<Vec<u8>>> {
     let client = reqwest::blocking::Client::new();
     let version = version.to_string();
     let res = client.get(format!("{CRATES_API}/crates/{name}/{version}/download"))
@@ -74,16 +80,20 @@ pub fn try_download_crate(name: &str, version: &semver::Version) -> anyhow::Resu
 pub fn get_known_crate_versions(name: &str) -> anyhow::Result<HashSet<semver::Version>> {
     #[derive(Deserialize)]
     struct Response {
-        versions: Vec<VersionInfo>
+        versions: Vec<VersionInfo>,
     }
     #[derive(Deserialize)]
     struct VersionInfo {
-        num: String
+        num: String,
     }
 
     let client = reqwest::blocking::Client::new();
-    let res = client.get(format!("{CRATES_API}/crates/{name}"))
-        .header("User-Agent", "Called from https://github.com/paritytech/subpub for checking crate versions")
+    let res = client
+        .get(format!("{CRATES_API}/crates/{name}"))
+        .header(
+            "User-Agent",
+            "Called from https://github.com/paritytech/subpub for checking crate versions",
+        )
         .send()
         .with_context(|| format!("Cannot get details for {name}"))?;
 
@@ -95,10 +105,8 @@ pub fn get_known_crate_versions(name: &str) -> anyhow::Result<HashSet<semver::Ve
     response
         .versions
         .into_iter()
-        .map(|v|
-                semver::Version::parse(&v.num)
-                    .with_context(|| "Cannot parse response into Version")
-        )
+        .map(|v| {
+            semver::Version::parse(&v.num).with_context(|| "Cannot parse response into Version")
+        })
         .collect()
 }
-

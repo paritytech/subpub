@@ -14,11 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with subpub.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{path::{Path, PathBuf}, io::{Read, Cursor}};
+use crate::external;
 use anyhow::{anyhow, Context};
 use semver::Version;
+use std::cell::{Ref, RefCell};
 use std::collections::HashSet;
-use crate::external;
+use std::{
+    io::{Cursor, Read},
+    path::{Path, PathBuf},
+};
 
 #[derive(Debug, Clone)]
 pub struct CrateDetails {
@@ -27,6 +31,8 @@ pub struct CrateDetails {
     pub deps: HashSet<String>,
     pub build_deps: HashSet<String>,
     pub dev_deps: HashSet<String>,
+    /// Known versions from crates.io.
+    pub known_versions: CrateVersions,
 
     // Modifying the files on disk can only be done through the interface below.
     toml_path: PathBuf,
@@ -73,11 +79,12 @@ impl CrateDetails {
         }
 
         Ok(CrateDetails {
-            name,
+            name: name.clone(),
             version,
             deps,
             dev_deps,
             build_deps,
+            known_versions: CrateVersions::new(name),
             toml_path: path,
         })
     }
@@ -105,11 +112,16 @@ impl CrateDetails {
     }
 
     /// Set any references to the dependency provided to the version given.
-    pub fn write_dependency_version(&self, dependency: &str, version: &Version) -> anyhow::Result<bool> {
+    pub fn write_dependency_version(
+        &self,
+        dependency: &str,
+        version: &Version,
+    ) -> anyhow::Result<bool> {
         if !self.build_deps.contains(dependency)
-        && !self.dev_deps.contains(dependency)
-        && !self.deps.contains(dependency) {
-            return Ok(false)
+            && !self.dev_deps.contains(dependency)
+            && !self.deps.contains(dependency)
+        {
+            return Ok(false);
         }
 
         let mut toml = self.read_toml()?;
@@ -117,12 +129,12 @@ impl CrateDetails {
         fn do_set(item: &mut toml_edit::Item, version: &Version, dependency: &str) {
             let table = match item.as_table_like_mut() {
                 Some(table) => table,
-                None => return
+                None => return,
             };
 
             let dep = match table.get_mut(dependency) {
                 Some(dep) => dep,
-                None => return
+                None => return,
             };
 
             if dep.is_str() {
@@ -136,15 +148,15 @@ impl CrateDetails {
             }
         }
 
-        edit_all_dependency_sections(&mut toml, "build-dependencies",
-            |item| do_set(item, version, dependency)
-        );
-        edit_all_dependency_sections(&mut toml, "dev-dependencies",
-            |item| do_set(item, version, dependency)
-        );
-        edit_all_dependency_sections(&mut toml, "dependencies",
-            |item| do_set(item, version, dependency)
-        );
+        edit_all_dependency_sections(&mut toml, "build-dependencies", |item| {
+            do_set(item, version, dependency)
+        });
+        edit_all_dependency_sections(&mut toml, "dev-dependencies", |item| {
+            do_set(item, version, dependency)
+        });
+        edit_all_dependency_sections(&mut toml, "dependencies", |item| {
+            do_set(item, version, dependency)
+        });
 
         self.write_toml(&toml)?;
 
@@ -179,7 +191,10 @@ impl CrateDetails {
     /// Publish the current code for this crate as-is. You may want to run
     /// [`CrateDetails::strip_dev_deps()`] first.
     pub fn publish(&self) -> anyhow::Result<()> {
-        let parent = self.toml_path.parent().expect("parent of toml path should exist");
+        let parent = self
+            .toml_path
+            .parent()
+            .expect("parent of toml path should exist");
         external::cargo::publish_crate(parent, &self.name)
     }
 
@@ -198,25 +213,27 @@ impl CrateDetails {
                 // crate at current version doesn't exist; this def needs publishing, then.
                 // Especially useful since when we bump the version we'll end up in this branch
                 // which will be quicker.
-                return Ok(true)
+                return Ok(true);
             }
         };
 
         // Crates on crates.io are gzipped tar files, so uncompress before decoding the archive.
         let crate_bytes = flate2::read::GzDecoder::new(Cursor::new(crate_bytes));
         let mut archive = tar::Archive::new(crate_bytes);
-        let entries = archive.entries()
+        let entries = archive
+            .entries()
             .with_context(|| format!("Could not read files in published crate {name}"))?;
 
         // Root path on disk to compare with.
         let crate_root = self.toml_path.parent().expect("should always exist");
 
         for entry in entries {
-            let entry = entry
-                .with_context(|| format!("Could not read files in published crate {name}"))?;
+            let entry =
+                entry.with_context(|| format!("Could not read files in published crate {name}"))?;
 
             // Get the path of the current archive entry
-            let path = entry.path()
+            let path = entry
+                .path()
                 .with_context(|| format!("Could not read path for crate {name}"))?
                 .into_owned();
 
@@ -233,12 +250,12 @@ impl CrateDetails {
 
             // Ignore the auto-generated "Cargo.toml" file in the crate
             if path.ends_with("Cargo.toml") {
-                continue
+                continue;
             }
 
             // Ignore this auto-generated file, too
             if path.ends_with(".cargo_vcs_info.json") {
-                continue
+                continue;
             }
 
             // Compare the file Cargo.toml.orig against our Cargo.toml
@@ -249,15 +266,17 @@ impl CrateDetails {
             let file = match std::fs::File::open(&path) {
                 // Can't find file that's in crate? needs publishing.
                 Err(_e) => {
-                    log::debug!("{name}: a file at {path:?} is published but does not exist locally");
-                    return Ok(true)
+                    log::debug!(
+                        "{name}: a file at {path:?} is published but does not exist locally"
+                    );
+                    return Ok(true);
                 }
-                Ok(f) => f
+                Ok(f) => f,
             };
 
             if !are_contents_equal(file, entry)? {
                 log::debug!("{name}: the file at {path:?} is different from the published version");
-                return Ok(true)
+                return Ok(true);
             }
         }
 
@@ -268,15 +287,15 @@ impl CrateDetails {
     }
 
     /// Does this create need a version bump in order to be published?
-    pub fn needs_version_bump_to_publish(&self) -> anyhow::Result<bool> {
+    pub fn needs_version_bump_to_publish(&mut self) -> anyhow::Result<bool> {
         if self.version.pre != semver::Prerelease::EMPTY {
             // If prerelease eg `-dev`, we'll want to bump.
-            return Ok(true)
+            return Ok(true);
         }
 
         // Does the current version of this crate exist on crates.io?
         // If so, we need to bump the current version.
-        let known_versions = external::crates_io::get_known_crate_versions(&self.name)?;
+        let known_versions = self.known_versions.get()?;
         Ok(known_versions.contains(&self.version))
     }
 
@@ -286,7 +305,7 @@ impl CrateDetails {
 
     fn write_toml(&self, toml: &toml_edit::Document) -> anyhow::Result<()> {
         let name = &self.name;
-        std::fs::write(&self.toml_path, &toml.to_string())
+        std::fs::write(&self.toml_path, toml.to_string())
             .with_context(|| format!("Cannot save the updated Cargo.toml for {name}"))?;
         Ok(())
     }
@@ -294,7 +313,10 @@ impl CrateDetails {
 
 /// An iterator that hands back all "dependencies"/"dev-dependencies"/"build-dependencies" (according to the
 /// label provided), by looking in the top level `[label]` section as well as any `[target.'foo'.label]` sections.
-fn get_all_dependency_sections<'a>(document: &'a toml_edit::Document, label: &'a str) -> impl Iterator<Item = &'a toml_edit::Item> + 'a {
+fn get_all_dependency_sections<'a>(
+    document: &'a toml_edit::Document,
+    label: &'a str,
+) -> impl Iterator<Item = &'a toml_edit::Item> + 'a {
     let target = document
         .get("target")
         .and_then(|t| t.as_table_like())
@@ -302,18 +324,18 @@ fn get_all_dependency_sections<'a>(document: &'a toml_edit::Document, label: &'a
         .flat_map(|t| {
             // For each item of the "target" table, see if we can find a `label` section in it.
             t.iter()
-             .flat_map(|(_name, item)| item.as_table_like())
-             .flat_map(|t| t.get(label))
+                .flat_map(|(_name, item)| item.as_table_like())
+                .flat_map(|t| t.get(label))
         });
 
-    document
-        .get(label)
-        .into_iter()
-        .chain(target)
+    document.get(label).into_iter().chain(target)
 }
 
 /// Similar to `get_all_dependencies`, but mutable iterates over just `[target.'foo'.label]` sections.
-fn get_target_dependency_sections_mut<'a>(document: &'a mut toml_edit::Document, label: &'a str) -> impl Iterator<Item = &'a mut toml_edit::Item> + 'a {
+fn get_target_dependency_sections_mut<'a>(
+    document: &'a mut toml_edit::Document,
+    label: &'a str,
+) -> impl Iterator<Item = &'a mut toml_edit::Item> + 'a {
     document
         .get_mut("target")
         .and_then(|t| t.as_table_like_mut())
@@ -321,14 +343,18 @@ fn get_target_dependency_sections_mut<'a>(document: &'a mut toml_edit::Document,
         .flat_map(|t| {
             // For each item of the "target" table, see if we can find a `label` section in it.
             t.iter_mut()
-             .flat_map(|(_name, item)| item.as_table_like_mut())
-             .flat_map(|t| t.get_mut(label))
+                .flat_map(|(_name, item)| item.as_table_like_mut())
+                .flat_map(|t| t.get_mut(label))
         })
 }
 
 /// Allows a function to be provided that is passed each mutable `Item` we find when searching for
 /// "dependencies"/"dev-dependencies"/"build-dependencies".
-fn edit_all_dependency_sections<F: FnMut(&mut toml_edit::Item)>(document: &mut toml_edit::Document, label: &str, mut f: F) {
+fn edit_all_dependency_sections<F: FnMut(&mut toml_edit::Item)>(
+    document: &mut toml_edit::Document,
+    label: &str,
+    mut f: F,
+) {
     if let Some(item) = document.get_mut(label) {
         f(item);
     }
@@ -341,7 +367,8 @@ fn edit_all_dependency_sections<F: FnMut(&mut toml_edit::Item)>(document: &mut t
 fn read_toml(path: &Path) -> anyhow::Result<toml_edit::Document> {
     let toml_string = std::fs::read_to_string(path)
         .with_context(|| format!("Cannot read the Cargo.toml at {path:?}"))?;
-    let toml = toml_string.parse::<toml_edit::Document>()
+    let toml = toml_string
+        .parse::<toml_edit::Document>()
         .with_context(|| format!("Cannot parse the Cargo.toml at {path:?}"))?;
     Ok(toml)
 }
@@ -351,7 +378,7 @@ fn read_toml(path: &Path) -> anyhow::Result<toml_edit::Document> {
 fn filter_workspace_dependencies(val: &toml_edit::Item) -> anyhow::Result<HashSet<String>> {
     let arr = match val.as_table() {
         Some(arr) => arr,
-        None => return Err(anyhow!("dependencies should be a TOML table."))
+        None => return Err(anyhow!("dependencies should be a TOML table.")),
     };
 
     let mut deps = HashSet::new();
@@ -361,19 +388,18 @@ fn filter_workspace_dependencies(val: &toml_edit::Item) -> anyhow::Result<HashSe
         // so skip over it.
         let props = match props.as_table_like() {
             Some(props) => props,
-            None => continue
+            None => continue,
         };
 
         // Ignore any dependency without a "path" (not a workspace dep
         // if it doesn't point to another crate via a path).
         let path = match props.get("path") {
             Some(path) => path,
-            None => continue
+            None => continue,
         };
 
         // Expect path to be a string. Error if it's not.
-        path
-            .as_str()
+        path.as_str()
             .ok_or_else(|| anyhow!("{}.path is not a string.", name))?;
 
         // What is the actual package name?
@@ -409,4 +435,34 @@ fn are_contents_equal<A: Read, B: Read>(mut a: A, mut b: B) -> anyhow::Result<bo
     // }
 
     Ok(a_vec == b_vec)
+}
+
+#[derive(Debug, Clone)]
+pub struct CrateVersions {
+    name: String,
+    versions: RefCell<Option<HashSet<Version>>>,
+}
+
+impl CrateVersions {
+    pub fn new(name: String) -> Self {
+        CrateVersions {
+            name,
+            versions: Default::default(),
+        }
+    }
+
+    /// Get the versions from crates.io.
+    pub fn get(&self) -> anyhow::Result<Ref<'_, HashSet<Version>>> {
+        // Ensure the scope of `RefMut` does not overlap with `Ref` below.
+        {
+            let mut versions = self.versions.borrow_mut();
+            if versions.is_none() {
+                *versions = Some(external::crates_io::get_known_crate_versions(&self.name)?);
+            }
+        }
+
+        Ok(Ref::map(self.versions.borrow(), |opt| {
+            opt.as_ref().expect("versions populated above; qed")
+        }))
+    }
 }
