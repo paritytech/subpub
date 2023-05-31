@@ -42,6 +42,7 @@ pub fn publish_crate(root: &Path, package: &str) -> anyhow::Result<()> {
         .arg("publish")
         .arg("-p")
         .arg(package)
+        .arg("--allow-dirty")
         .status()?;
 
     Ok(())
