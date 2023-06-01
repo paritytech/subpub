@@ -26,6 +26,7 @@ use cargo_metadata::{DependencyKind, Package};
 use crates_io::CratesIoCrateVersion;
 use semver::Version;
 use tempfile::TempDir;
+use toml_edit::{Array, Document};
 use tracing::{info, span, Level};
 
 use crate::{
@@ -144,6 +145,53 @@ impl CrateDetails {
             )?;
         }
         Ok(())
+    }
+
+    // strip the features that point to dev deps so we don't get errors when we strip the dev deps
+    fn strip_dev_features(&self, toml: &mut Document) {
+        let feature_names = toml
+            .get("features")
+            .and_then(|item| item.as_table())
+            .map(|item| {
+                item.iter()
+                    .map(|entry| entry.0.to_string())
+                    .collect::<HashSet<_>>()
+            });
+
+        let Some(feature_names) = feature_names else {
+            return;
+        };
+
+        let features = toml
+            .get_mut("features")
+            .and_then(|item| item.as_table_mut());
+
+        let features = if let Some(features) = features {
+            features
+        } else {
+            return;
+        };
+
+        for values in features
+            .iter_mut()
+            .filter_map(|(_, values)| values.as_array_mut())
+        {
+            let stripped_values = values
+                .iter()
+                .filter_map(|value| value.as_str())
+                .map(|value| value.trim_start_matches("dep:").split('/').next().unwrap())
+                // keep features that point to a local features or depends
+                // we dont just blindly remove features that point to dev deps in case they're
+                // also build deps or something
+                .filter(|&value| {
+                    feature_names.contains(value)
+                        || self.deps.contains(value)
+                        || self.build_deps.contains(value)
+                })
+                .collect::<Array>();
+
+            *values = stripped_values;
+        }
     }
 
     pub fn tweak_deps_for_publishing(&self) -> anyhow::Result<()> {
@@ -278,6 +326,7 @@ impl CrateDetails {
         }
 
         if should_update_manifest {
+            self.strip_dev_features(&mut manifest);
             self.write_manifest(&manifest)?;
         }
 
