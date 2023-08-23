@@ -14,8 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with subpub.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::path::Path;
-use std::process::Command;
+use std::{path::Path, process::Command};
 
 /// Update the lockfile for dependencies given and any of their subdependencies.
 pub fn update_lockfile_for_crates<I, S>(root: &Path, deps: I) -> anyhow::Result<()>
@@ -38,7 +37,12 @@ where
 pub fn publish_crate(root: &Path, package: &str) -> anyhow::Result<()> {
 	let mut cmd = Command::new("cargo");
 
-	cmd.current_dir(root).arg("publish").arg("-p").arg(package).arg("--allow-dirty").status()?;
+	cmd.current_dir(root)
+		.arg("publish")
+		.arg("-p")
+		.arg(package)
+		.arg("--allow-dirty")
+		.status()?;
 
 	Ok(())
 }

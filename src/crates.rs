@@ -14,12 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with subpub.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::crate_details::CrateDetails;
-use crate::external;
-use crate::version::{bump_for_breaking_change, Version};
+use crate::{
+	crate_details::CrateDetails,
+	external,
+	version::{bump_for_breaking_change, Version},
+};
 use anyhow::anyhow;
-use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::{
+	collections::{HashMap, HashSet},
+	path::PathBuf,
+};
 use walkdir::WalkDir;
 
 #[derive(Debug, Clone)]
@@ -55,7 +59,9 @@ impl Crates {
 			for dep in &crate_details.deps {
 				if !details.contains_key(dep) {
 					let crate_name = &crate_details.name;
-					return Err(anyhow!("{crate_name} contains workspace dependency {dep} which cannot be found"));
+					return Err(anyhow!(
+						"{crate_name} contains workspace dependency {dep} which cannot be found"
+					))
 				}
 			}
 		}
@@ -66,13 +72,25 @@ impl Crates {
 			details.keys().map(|s| (s.clone(), Dependees::default())).collect();
 		for crate_details in details.values() {
 			for dep in &crate_details.deps {
-				dependees.entry(dep.clone()).or_default().deps.insert(crate_details.name.clone());
+				dependees
+					.entry(dep.clone())
+					.or_default()
+					.deps
+					.insert(crate_details.name.clone());
 			}
 			for dep in &crate_details.build_deps {
-				dependees.entry(dep.clone()).or_default().build_deps.insert(crate_details.name.clone());
+				dependees
+					.entry(dep.clone())
+					.or_default()
+					.build_deps
+					.insert(crate_details.name.clone());
 			}
 			for dep in &crate_details.dev_deps {
-				dependees.entry(dep.clone()).or_default().dev_deps.insert(crate_details.name.clone());
+				dependees
+					.entry(dep.clone())
+					.or_default()
+					.dev_deps
+					.insert(crate_details.name.clone());
 			}
 		}
 
@@ -115,7 +133,10 @@ impl Crates {
 	}
 
 	/// Does a crate need a version bump in order to publish?
-	pub fn does_crate_version_need_bumping_to_publish(&mut self, name: &str) -> anyhow::Result<bool> {
+	pub fn does_crate_version_need_bumping_to_publish(
+		&mut self,
+		name: &str,
+	) -> anyhow::Result<bool> {
 		let details = match self.details.get_mut(name) {
 			Some(details) => details,
 			None => anyhow::bail!("Crate '{name}' not found"),
@@ -126,7 +147,10 @@ impl Crates {
 
 	/// Bump the version of the crate given, and update it in all dependant crates as needed.
 	/// Return the old version and the new version.
-	pub fn bump_crate_version_for_breaking_change(&mut self, name: &str) -> anyhow::Result<(Version, Version)> {
+	pub fn bump_crate_version_for_breaking_change(
+		&mut self,
+		name: &str,
+	) -> anyhow::Result<(Version, Version)> {
 		let details = match self.details.get_mut(name) {
 			Some(details) => details,
 			None => anyhow::bail!("Crate '{name}' not found"),
@@ -252,7 +276,7 @@ impl Crates {
 
 			// Ignore things that we already know need publishing
 			if details.needs_publishing {
-				continue;
+				continue
 			}
 
 			// If the crate itself needs publishing, mark it and anything
@@ -287,7 +311,13 @@ fn crate_cargo_tomls(root: PathBuf) -> Vec<PathBuf> {
 	WalkDir::new(root)
 		.into_iter()
 		// Ignore hidden files and folders, and anything in "target" folders
-		.filter_entry(|entry| entry.file_name().to_str().map(|s| !s.starts_with('.') && s != "target").unwrap_or(false))
+		.filter_entry(|entry| {
+			entry
+				.file_name()
+				.to_str()
+				.map(|s| !s.starts_with('.') && s != "target")
+				.unwrap_or(false)
+		})
 		// Ignore errors
 		.filter_map(|entry| entry.ok())
 		// Keep files
