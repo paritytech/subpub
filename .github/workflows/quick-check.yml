@@ -1,0 +1,53 @@
+# This workflow runs on every push and checks whether everything looks good
+
+name: Quick check
+
+on:
+  push:
+    tags:
+      - "!v*"
+    branches:
+      - master
+  pull_request:
+    types: [assigned, opened, synchronize, reopened]
+
+jobs:
+  quick_check:
+    env:
+      CARGO_TERM_COLOR: always
+    strategy:
+      matrix:
+        os: ["ubuntu-latest"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Install Rust nightly toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          components: clippy, rustfmt
+
+      - name: Cache Dependencies & Build Outputs
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - uses: actions/checkout@v3
+
+      - name: Cargo fmt
+        uses: actions-rs/cargo@v1
+        with:
+          toolchain: nightly
+          command: fmt
+          args: --all -- --check
+
+      - name: Cargo clippy
+        uses: actions-rs/cargo@v1
+        with:
+          toolchain: nightly
+          command: clippy
+          args: --tests -- -D warnings

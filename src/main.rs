@@ -27,8 +27,8 @@ use std::path::PathBuf;
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
-    #[clap(subcommand)]
-    command: Command,
+	#[clap(subcommand)]
+	command: Command,
 }
 
 // Separate help text to preserve newlines.
@@ -54,122 +54,122 @@ Given some crates you'd like to publish, this will:
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    #[clap(long_about = PREPARE_FOR_PUBLISH_HELP)]
-    PrepareForPublish(CommonOpts),
-    #[clap(long_about = DO_PUBLISH_HELP)]
-    DoPublish(CommonOpts),
+	#[clap(long_about = PREPARE_FOR_PUBLISH_HELP)]
+	PrepareForPublish(CommonOpts),
+	#[clap(long_about = DO_PUBLISH_HELP)]
+	DoPublish(CommonOpts),
 }
 
 #[derive(Parser, Debug)]
 struct CommonOpts {
-    /// Path to the workspace root.
-    #[clap(long, default_value = ".")]
-    path: PathBuf,
+	/// Path to the workspace root.
+	#[clap(long, default_value = ".")]
+	path: PathBuf,
 
-    /// Crates you'd like to publish.
-    #[clap(short = 'c', long = "crate")]
-    crates: Vec<String>,
+	/// Crates you'd like to publish.
+	#[clap(short = 'c', long = "crate")]
+	crates: Vec<String>,
 }
 
 fn main() {
-    env_logger::init();
+	env_logger::init();
 
-    let args = Args::parse();
+	let args = Args::parse();
 
-    let res = match args.command {
-        Command::PrepareForPublish(opts) => prepare_for_publish(opts),
-        Command::DoPublish(opts) => do_publish(opts),
-    };
+	let res = match args.command {
+		Command::PrepareForPublish(opts) => prepare_for_publish(opts),
+		Command::DoPublish(opts) => do_publish(opts),
+	};
 
-    if let Err(e) = res {
-        log::error!("{e:?}");
-    }
+	if let Err(e) = res {
+		log::error!("{e:?}");
+	}
 }
 
 fn prepare_for_publish(opts: CommonOpts) -> anyhow::Result<()> {
-    // Run the logic first, and then print the various details, so that
-    // our logging is all nicely separated from our output.
-    let mut crates = Crates::load_crates_in_workspace(opts.path)?;
-    let publish_these = crates.what_needs_publishing(opts.crates.clone())?;
+	// Run the logic first, and then print the various details, so that
+	// our logging is all nicely separated from our output.
+	let mut crates = Crates::load_crates_in_workspace(opts.path)?;
+	let publish_these = crates.what_needs_publishing(opts.crates.clone())?;
 
-    let mut no_need_to_bump = vec![];
-    let mut bump_these = vec![];
-    for name in &publish_these {
-        if crates.does_crate_version_need_bumping_to_publish(name)? {
-            let (old_version, new_version) = crates.bump_crate_version_for_breaking_change(name)?;
-            bump_these.push((name, old_version, new_version));
-        } else {
-            no_need_to_bump.push(name);
-        }
-    }
+	let mut no_need_to_bump = vec![];
+	let mut bump_these = vec![];
+	for name in &publish_these {
+		if crates.does_crate_version_need_bumping_to_publish(name)? {
+			let (old_version, new_version) = crates.bump_crate_version_for_breaking_change(name)?;
+			bump_these.push((name, old_version, new_version));
+		} else {
+			no_need_to_bump.push(name);
+		}
+	}
 
-    crates.update_lockfile_for_crates(opts.crates.clone())?;
+	crates.update_lockfile_for_crates(opts.crates.clone())?;
 
-    println!("\nYou've said you'd like to publish these crates:\n");
-    for name in &opts.crates {
-        println!("  {name}");
-    }
+	println!("\nYou've said you'd like to publish these crates:\n");
+	for name in &opts.crates {
+		println!("  {name}");
+	}
 
-    println!("\nThe following crates need publishing (in this order) in order to do this:\n");
-    for name in &publish_these {
-        println!("  {name}");
-    }
+	println!("\nThe following crates need publishing (in this order) in order to do this:\n");
+	for name in &publish_these {
+		println!("  {name}");
+	}
 
-    if !bump_these.is_empty() {
-        println!("\nI'm bumping the following crate versions to accomodate this:\n");
-        for (name, old_version, new_version) in bump_these {
-            println!("  {name}: {old_version} -> {new_version}");
-        }
-    } else {
-        println!("\nNo crates needed a version bump to accomodate this\n");
-    }
+	if !bump_these.is_empty() {
+		println!("\nI'm bumping the following crate versions to accomodate this:\n");
+		for (name, old_version, new_version) in bump_these {
+			println!("  {name}: {old_version} -> {new_version}");
+		}
+	} else {
+		println!("\nNo crates needed a version bump to accomodate this\n");
+	}
 
-    if !no_need_to_bump.is_empty() {
-        println!("\nThese crates did not need a version bump in order to publish:\n");
-        for name in no_need_to_bump {
-            println!("  {name}");
-        }
-    }
+	if !no_need_to_bump.is_empty() {
+		println!("\nThese crates did not need a version bump in order to publish:\n");
+		for name in no_need_to_bump {
+			println!("  {name}");
+		}
+	}
 
-    println!("\nNow, you can create a release PR to have these version bumps merged");
-    Ok(())
+	println!("\nNow, you can create a release PR to have these version bumps merged");
+	Ok(())
 }
 
 fn do_publish(opts: CommonOpts) -> anyhow::Result<()> {
-    // Run the logic first, and then print the various details, so that
-    // our logging is all nicely separated from our output.
-    let mut crates = Crates::load_crates_in_workspace(opts.path)?;
-    let publish_these = crates.what_needs_publishing(opts.crates.clone())?;
+	// Run the logic first, and then print the various details, so that
+	// our logging is all nicely separated from our output.
+	let mut crates = Crates::load_crates_in_workspace(opts.path)?;
+	let publish_these = crates.what_needs_publishing(opts.crates.clone())?;
 
-    // Check that no versions need bumping.
-    let mut bump_these = vec![];
-    for name in &publish_these {
-        if crates.does_crate_version_need_bumping_to_publish(name)? {
-            bump_these.push(&**name);
-        }
-    }
+	// Check that no versions need bumping.
+	let mut bump_these = vec![];
+	for name in &publish_these {
+		if crates.does_crate_version_need_bumping_to_publish(name)? {
+			bump_these.push(&**name);
+		}
+	}
 
-    if !bump_these.is_empty() {
-        anyhow::bail!(
-            "The following crates need a version bump before they can be published: {}",
-            bump_these.join(", ")
-        );
-    }
+	if !bump_these.is_empty() {
+		anyhow::bail!(
+			"The following crates need a version bump before they can be published: {}",
+			bump_these.join(", ")
+		);
+	}
 
-    println!("\nYou've said you'd like to publish these crates:\n");
-    for name in &opts.crates {
-        println!("  {name}");
-    }
+	println!("\nYou've said you'd like to publish these crates:\n");
+	for name in &opts.crates {
+		println!("  {name}");
+	}
 
-    println!("\nThe following crates need publishing (in this order) in order to do this:\n");
-    for name in &publish_these {
-        println!("  {name}");
-    }
+	println!("\nThe following crates need publishing (in this order) in order to do this:\n");
+	for name in &publish_these {
+		println!("  {name}");
+	}
 
-    println!("\nNote: This will strip dev dependencies from crates being published! Remember to revert those changes after publishing.");
+	println!("\nNote: This will strip dev dependencies from crates being published! Remember to revert those changes after publishing.");
 
-    for name in publish_these {
-        crates.strip_dev_deps_and_publish(&name)?;
-    }
-    Ok(())
+	for name in publish_these {
+		crates.strip_dev_deps_and_publish(&name)?;
+	}
+	Ok(())
 }
